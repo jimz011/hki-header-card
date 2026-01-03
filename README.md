@@ -3,6 +3,10 @@
 # HKI Header Card
 Full-width customizable header for Home Assistant with automatic kiosk mode detection, Jinja2 template support, and advanced badge positioning.
 
+<img src="https://github.com/jimz011/hki-header-card/blob/main/screenshots/header-with-badges.png?raw=true" width="600" alt="HKI Header Card Example">
+
+***You can find more screenshots at the bottom of this page***
+
 ## Features
 - 🎨 Full-width fixed header with customizable background (images, gradients, colors)
 - 📱 Automatic kiosk mode detection - adjusts position when HA header is hidden
@@ -96,6 +100,8 @@ Create a new full-width section at the top of your dashboard. Badge positioning 
 | `badges_offset_unpinned` | number | `100` | Vertical offset in pixels when badges are unpinned (only visible when `badges_fixed` is `false`) |
 | `badges_gap` | number | `0` | Gap in pixels under badges. Auto-adjusts: -48px when pinned, +48px in kiosk mode |
 
+> **⚠️ Important:** Currently Title/Subtitle alignment settings **ONLY** works correct on a phone screen!
+
 ### Example Configuration
 ```yaml
 type: custom:hki-header-card
@@ -128,6 +134,9 @@ badges_fixed: false
 badges_offset_unpinned: 100
 badges_gap: 0
 ```
+
+## Recommended Header Section Settings
+
 
 ## Jinja2 Templates
 
@@ -248,3 +257,9 @@ Created by [jimz011](https://github.com/jimz011) with aid of ChatGPT and ClaudeA
 ## License
 
 MIT License - see LICENSE file for details
+
+## More Screenshots
+<img src="https://github.com/jimz011/hki-header-card/blob/main/screenshots/header-no-badges.png?raw=true" width="600" alt="HKI Header Card Example 2"><br>
+<img src="https://github.com/jimz011/hki-header-card/blob/main/screenshots/header-with-centered-badges.png?raw=true" width="600" alt="HKI Header Card Example 3"><br>
+<img src="https://github.com/jimz011/hki-header-card/blob/main/screenshots/header-in-full-view.png?raw=true" width="600" alt="HKI Header Card Example 4"><br>
+<img src="https://github.com/jimz011/hki-header-card/blob/main/screenshots/header-wide-with-badges.png?raw=true" width="600" alt="HKI Header Card Example 5"><br>
