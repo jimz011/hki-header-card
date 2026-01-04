@@ -89,6 +89,12 @@ class HkiHeaderCard extends LitElement {
     this._rafMeasure = 0;
     this._rafBadges = 0;
     this._kioskCheckInterval = null;
+    this._kioskMutationObserver = null;
+    this._urlChangeHandler = null;
+    this._cachedHeader = null;
+    this._visibilityHandler = null;
+    this._focusHandler = null;
+    this._initialCheckTimer = null;
 
     this._tpl = {
       timer: 0,
@@ -204,6 +210,12 @@ class HkiHeaderCard extends LitElement {
     `;
   }
 
+  connectedCallback() {
+    super.connectedCallback();
+    // Immediate detection when element is added to DOM
+    this._detectKioskMode();
+  }
+
   disconnectedCallback() {
     super.disconnectedCallback();
 
@@ -231,6 +243,27 @@ class HkiHeaderCard extends LitElement {
       clearInterval(this._kioskCheckInterval);
       this._kioskCheckInterval = null;
     }
+    if (this._kioskMutationObserver) {
+      this._kioskMutationObserver.disconnect();
+      this._kioskMutationObserver = null;
+    }
+    if (this._urlChangeHandler) {
+      window.removeEventListener("popstate", this._urlChangeHandler);
+      window.removeEventListener("hashchange", this._urlChangeHandler);
+      this._urlChangeHandler = null;
+    }
+    if (this._visibilityHandler) {
+      document.removeEventListener("visibilitychange", this._visibilityHandler);
+      this._visibilityHandler = null;
+    }
+    if (this._focusHandler) {
+      window.removeEventListener("focus", this._focusHandler);
+      this._focusHandler = null;
+    }
+    if (this._initialCheckTimer) {
+      clearTimeout(this._initialCheckTimer);
+      this._initialCheckTimer = null;
+    }
 
     this._unsubscribeTemplate("title");
     this._unsubscribeTemplate("subtitle");
@@ -253,10 +286,61 @@ class HkiHeaderCard extends LitElement {
     });
     this._ro.observe(this);
 
-    // Check for kiosk mode periodically
+    // Set up MutationObserver for instant kiosk mode class detection
+    this._kioskMutationObserver = new MutationObserver(() => {
+      this._detectKioskMode();
+    });
+    this._kioskMutationObserver.observe(document.body, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    this._kioskMutationObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
+    // Listen for URL changes (for ?kiosk parameter)
+    this._urlChangeHandler = () => {
+      this._detectKioskMode();
+    };
+    window.addEventListener("popstate", this._urlChangeHandler);
+    window.addEventListener("hashchange", this._urlChangeHandler);
+
+    // Page Visibility API - detect when page becomes visible (crucial for mobile apps)
+    this._visibilityHandler = () => {
+      if (!document.hidden) {
+        // Clear header cache when page becomes visible to force re-detection
+        this._cachedHeader = null;
+        this._detectKioskMode();
+        // Extra check shortly after to ensure header has rendered
+        setTimeout(() => this._detectKioskMode(), 100);
+        setTimeout(() => this._detectKioskMode(), 300);
+      }
+    };
+    document.addEventListener("visibilitychange", this._visibilityHandler);
+
+    // Window focus detection - for when app/tab regains focus
+    this._focusHandler = () => {
+      this._cachedHeader = null;
+      this._detectKioskMode();
+      setTimeout(() => this._detectKioskMode(), 100);
+    };
+    window.addEventListener("focus", this._focusHandler);
+
+    // Aggressive initial checking - run multiple checks in first few seconds
+    // This ensures kiosk mode is detected even if the header hasn't fully rendered yet
+    const initialChecks = [50, 150, 300, 600, 1000, 2000];
+    initialChecks.forEach(delay => {
+      setTimeout(() => {
+        this._cachedHeader = null;
+        this._detectKioskMode();
+      }, delay);
+    });
+
+    // Fallback polling check (reduced frequency, only for header visibility detection)
     this._kioskCheckInterval = setInterval(() => {
       this._detectKioskMode();
-    }, 2000);
+    }, 5000); // Reduced from 2000ms to 5000ms since we now have event-based detection
 
     requestAnimationFrame(() => this._measure(true));
 
@@ -281,6 +365,9 @@ class HkiHeaderCard extends LitElement {
       if (nowReady && !this._hassReady) {
         this._hassReady = true;
         this._scheduleTemplateSetup(0);
+        // Detect kiosk mode when hass becomes ready (important for initial load)
+        this._cachedHeader = null;
+        this._detectKioskMode();
       }
 
       this._debouncedBadgesZIndex();
@@ -293,57 +380,88 @@ class HkiHeaderCard extends LitElement {
   }
 
   _detectKioskMode() {
-    // Check URL parameters
+    // Check URL parameters (highest priority - user explicitly set it)
     const urlParams = new URLSearchParams(window.location.search);
     const urlKiosk = urlParams.get("kiosk") === "true" || window.location.search.includes("kiosk");
     
+    // Check for kiosk-mode class (now detected instantly via MutationObserver)
+    const bodyKiosk = document.body.classList.contains("kiosk-mode") || 
+                      document.documentElement.classList.contains("kiosk-mode");
+    
+    // Quick check: if URL or class indicates kiosk, skip expensive header check
+    if (urlKiosk || bodyKiosk) {
+      if (!this._kioskMode) {
+        this._kioskMode = true;
+        this.requestUpdate();
+      }
+      return;
+    }
+    
     // Check if header is actually rendered (kiosk-mode hides it with injected CSS)
+    // This is the most expensive check, so we do it last and cache the header
     let headerHidden = false;
     try {
-      const findHeader = (root, depth = 0) => {
-        if (depth > 15) return null;
-        
-        const header = root.querySelector?.("app-header, mwc-top-app-bar-fixed, .toolbar, [slot='header']");
-        if (header) return header;
-        
-        const elements = root.querySelectorAll?.("*") || [];
-        for (const el of elements) {
-          if (el.shadowRoot) {
-            const found = findHeader(el.shadowRoot, depth + 1);
-            if (found) return found;
-          }
-        }
-        return null;
-      };
-      
-      const ha = document.querySelector("home-assistant");
-      if (ha?.shadowRoot) {
-        const header = findHeader(ha.shadowRoot);
-        if (header) {
-          const rect = header.getBoundingClientRect();
-          const offsetHeight = header.offsetHeight;
-          const clientHeight = header.clientHeight;
-          const style = window.getComputedStyle(header);
+      // Cache header element or search for it if not cached
+      if (!this._cachedHeader || !document.contains(this._cachedHeader)) {
+        const findHeader = (root, depth = 0) => {
+          if (depth > 10) return null; // Reduced from 15 to 10 for performance
           
-          headerHidden = 
-            rect.height === 0 || 
-            offsetHeight === 0 || 
-            clientHeight === 0 ||
-            rect.top < -100 ||
-            style.display === "none" || 
-            style.visibility === "hidden" || 
-            style.opacity === "0";
+          // Try multiple selectors to find the header
+          const selectors = [
+            "app-header",
+            "mwc-top-app-bar-fixed", 
+            ".toolbar",
+            "[slot='header']",
+            "ha-app-layout app-header",
+            "ha-tabs"
+          ];
+          
+          for (const selector of selectors) {
+            const header = root.querySelector?.(selector);
+            if (header) return header;
+          }
+          
+          // Recursively search shadow roots
+          const elements = root.querySelectorAll?.("*") || [];
+          for (const el of elements) {
+            if (el.shadowRoot) {
+              const found = findHeader(el.shadowRoot, depth + 1);
+              if (found) return found;
+            }
+          }
+          return null;
+        };
+        
+        const ha = document.querySelector("home-assistant");
+        if (ha?.shadowRoot) {
+          this._cachedHeader = findHeader(ha.shadowRoot);
         }
+        
+        // Fallback: try to find header in main document
+        if (!this._cachedHeader) {
+          this._cachedHeader = findHeader(document);
+        }
+      }
+      
+      // Check if header is hidden
+      if (this._cachedHeader) {
+        const rect = this._cachedHeader.getBoundingClientRect();
+        const style = window.getComputedStyle(this._cachedHeader);
+        
+        headerHidden = 
+          rect.height === 0 || 
+          this._cachedHeader.offsetHeight === 0 || 
+          this._cachedHeader.clientHeight === 0 ||
+          rect.top < -100 ||
+          style.display === "none" || 
+          style.visibility === "hidden" || 
+          style.opacity === "0";
       }
     } catch (e) {
       // Silent fail
     }
     
-    // Check for kiosk-mode class
-    const bodyKiosk = document.body.classList.contains("kiosk-mode") || 
-                      document.documentElement.classList.contains("kiosk-mode");
-    
-    const newKioskMode = urlKiosk || headerHidden || bodyKiosk;
+    const newKioskMode = headerHidden;
     
     if (newKioskMode !== this._kioskMode) {
       this._kioskMode = newKioskMode;
@@ -1099,14 +1217,7 @@ class HkiHeaderCardEditor extends LitElement {
       
       const currentValue = this._config[rootField] || {};
       
-      // Special handling for service_data - parse JSON
-      if (subField === "service_data" && value) {
-        try {
-          value = JSON.parse(value);
-        } catch (e) {
-          // If invalid JSON, keep as string for now
-        }
-      }
+      // Keep service_data as string (YAML format) - Home Assistant will parse it
       
       next = {
         ...this._config,
@@ -1147,6 +1258,53 @@ class HkiHeaderCardEditor extends LitElement {
     }
 
     return html`<ha-textfield label=${label} .value=${value} data-field=${field} textarea rows=${String(rows)} @input=${this._changed}></ha-textfield>`;
+  }
+
+  _renderServiceDataEditor(field, serviceData) {
+    // Always store as string (YAML format)
+    let value = "";
+    if (serviceData) {
+      if (typeof serviceData === 'string') {
+        value = serviceData;
+      } else {
+        // Convert object to YAML-like format
+        value = Object.entries(serviceData)
+          .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
+          .join('\n');
+      }
+    }
+    
+    const hasCodeEditor = !!customElements.get("ha-code-editor");
+
+    if (hasCodeEditor) {
+      return html`
+        <div class="code-wrap">
+          <div class="code-label">Service data (YAML)</div>
+          <ha-code-editor 
+            .hass=${this.hass} 
+            .value=${value} 
+            mode="yaml" 
+            data-field="${field}.service_data" 
+            @value-changed=${this._changed}>
+          </ha-code-editor>
+        </div>
+      `;
+    }
+
+    return html`
+      <ha-textfield 
+        label="Service data (YAML)" 
+        helper="Use YAML format with proper indentation. Press Shift+Enter for new line."
+        .value=${value} 
+        data-field="${field}.service_data" 
+        @input=${this._changed}
+        @keydown=${(e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.stopPropagation();
+          }
+        }}>
+      </ha-textfield>
+    `;
   }
 
   _renderActionEditor(label, field) {
@@ -1197,14 +1355,7 @@ class HkiHeaderCardEditor extends LitElement {
             data-field="${field}.service" 
             @input=${this._changed}>
           </ha-textfield>
-          <ha-textfield 
-            label="Service data (YAML)" 
-            .value=${action.service_data ? JSON.stringify(action.service_data) : ""} 
-            data-field="${field}.service_data" 
-            textarea
-            rows="3"
-            @input=${this._changed}>
-          </ha-textfield>
+          ${this._renderServiceDataEditor(field, action.service_data)}
         ` : ""}
         
         ${actionType === "more-info" || actionType === "toggle" ? html`
