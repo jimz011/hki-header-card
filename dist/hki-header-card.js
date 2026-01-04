@@ -66,6 +66,7 @@ class HkiHeaderCard extends LitElement {
 
       _renderedTitle: { type: String },
       _renderedSubtitle: { type: String },
+      _weatherState: { type: Object },
     };
   }
 
@@ -81,6 +82,7 @@ class HkiHeaderCard extends LitElement {
 
     this._renderedTitle = "";
     this._renderedSubtitle = "";
+    this._weatherState = null;
 
     this._resizeHandler = null;
     this._ro = null;
@@ -163,6 +165,41 @@ class HkiHeaderCard extends LitElement {
 
       .header-spacer {
         width: 100%;
+      }
+
+      .weather-container {
+        position: absolute;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--hki-header-text-color, #fff);
+        text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+        z-index: 2;
+      }
+
+      .weather-clickable {
+        cursor: pointer;
+        transition: opacity 0.2s;
+      }
+
+      .weather-clickable:hover {
+        opacity: 0.8;
+      }
+
+      .weather-icon {
+        --mdc-icon-size: var(--weather-icon-size, 32px);
+        width: var(--weather-icon-size, 32px);
+        height: var(--weather-icon-size, 32px);
+        color: var(--hki-header-text-color, #fff);
+        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
+      }
+
+      .weather-condition {
+        text-transform: capitalize;
+      }
+
+      .weather-temperature {
+        font-weight: 500;
       }
     `;
   }
@@ -725,6 +762,133 @@ class HkiHeaderCard extends LitElement {
     return null;
   }
 
+  _handleAction(action) {
+    if (!action || action.action === "none" || !this.hass) return;
+    
+    switch (action.action) {
+      case "navigate":
+        if (action.navigation_path) {
+          history.pushState(null, "", action.navigation_path);
+          const navEvent = new Event("location-changed", {
+            bubbles: true,
+            composed: true,
+          });
+          navEvent.detail = { replace: false };
+          window.dispatchEvent(navEvent);
+        }
+        break;
+        
+      case "url":
+        if (action.url_path) {
+          window.open(action.url_path, "_blank");
+        }
+        break;
+        
+      case "call-service":
+        if (action.service) {
+          const [domain, service] = action.service.split(".");
+          if (domain && service) {
+            this.hass.callService(domain, service, action.service_data || {});
+          }
+        }
+        break;
+        
+      case "more-info":
+        const entity = action.entity || this._config.weather_entity;
+        if (entity) {
+          const moreInfoEvent = new Event("hass-more-info", {
+            bubbles: true,
+            composed: true,
+          });
+          moreInfoEvent.detail = { entityId: entity };
+          this.dispatchEvent(moreInfoEvent);
+        }
+        break;
+        
+      case "toggle":
+        const toggleEntity = action.entity || this._config.weather_entity;
+        if (toggleEntity) {
+          this.hass.callService("homeassistant", "toggle", {
+            entity_id: toggleEntity,
+          });
+        }
+        break;
+    }
+  }
+
+  _renderWeather() {
+    if (!this._config.weather_entity || !this.hass) return html``;
+    
+    const weatherEntity = this.hass.states[this._config.weather_entity];
+    if (!weatherEntity) return html``;
+
+    const cfg = this._config;
+    const state = weatherEntity.state;
+    const temperature = weatherEntity.attributes.temperature;
+    const unit = this.hass.config.unit_system.temperature;
+    
+    // Map weather states to mdi icons
+    const iconMap = {
+      'clear-night': 'mdi:weather-night',
+      'cloudy': 'mdi:weather-cloudy',
+      'fog': 'mdi:weather-fog',
+      'hail': 'mdi:weather-hail',
+      'lightning': 'mdi:weather-lightning',
+      'lightning-rainy': 'mdi:weather-lightning-rainy',
+      'partlycloudy': 'mdi:weather-partly-cloudy',
+      'pouring': 'mdi:weather-pouring',
+      'rainy': 'mdi:weather-rainy',
+      'snowy': 'mdi:weather-snowy',
+      'snowy-rainy': 'mdi:weather-snowy-rainy',
+      'sunny': 'mdi:weather-sunny',
+      'windy': 'mdi:weather-windy',
+      'windy-variant': 'mdi:weather-windy-variant',
+      'exceptional': 'mdi:alert-circle-outline',
+    };
+    
+    const icon = iconMap[state] || 'mdi:weather-partly-cloudy';
+    
+    // Build weather styling similar to title/subtitle
+    const fontFamily = this._resolveFontFamily();
+    const fontStyle = cfg.font_style || "normal";
+    const weatherFontSize = cfg.weather_size_px || 12;
+    const weatherWeight = this._resolveWeight("weather_weight");
+    const weatherInline = `font-family:${fontFamily};font-style:${fontStyle};font-size:${weatherFontSize}px;font-weight:${weatherWeight};`;
+    
+    // Icon size scales with font size (2x for good proportion)
+    const iconSize = Math.round(weatherFontSize * 2);
+    
+    // Calculate weather position based on alignment
+    let weatherStyle = "";
+    const weatherOffsetX = cfg.weather_offset_x !== undefined ? cfg.weather_offset_x : 5;
+    const weatherOffsetY = cfg.weather_offset_y !== undefined ? cfg.weather_offset_y : 40;
+    
+    if (cfg.weather_align === "left") {
+      weatherStyle = `left:${weatherOffsetX}px;top:${weatherOffsetY}px;--weather-icon-size:${iconSize}px;`;
+    } else {
+      // Default to right
+      weatherStyle = `right:${weatherOffsetX}px;top:${weatherOffsetY}px;--weather-icon-size:${iconSize}px;`;
+    }
+    
+    const handleTap = (e) => {
+      e.stopPropagation();
+      if (cfg.weather_tap_action) {
+        this._handleAction(cfg.weather_tap_action);
+      }
+    };
+    
+    const hasAction = cfg.weather_tap_action && cfg.weather_tap_action.action !== "none";
+    const containerClass = hasAction ? "weather-container weather-clickable" : "weather-container";
+    
+    return html`
+      <div class="${containerClass}" style="${weatherStyle}${weatherInline}" @click=${handleTap}>
+        <ha-icon icon="${icon}" class="weather-icon"></ha-icon>
+        <span class="weather-condition">${state.replace('-', ' ')}</span>
+        <span class="weather-temperature">${Math.round(temperature)}${unit}</span>
+      </div>
+    `;
+  }
+
   render() {
     if (!this._config) return html``;
 
@@ -796,6 +960,7 @@ class HkiHeaderCard extends LitElement {
             <div class="title" style=${titleInline} role="heading" aria-level="1">${titleText}</div>
             ${subtitleVisible ? html`<div class="subtitle" style="${subtitleInline}${subtitleTransform}">${subtitleText}</div>` : html``}
           </div>
+          ${this._renderWeather()}
         </div>
       </ha-card>
     `;
@@ -842,6 +1007,13 @@ class HkiHeaderCard extends LitElement {
       subtitle_size_px: 15,
       title_weight: "bold",
       subtitle_weight: "medium",
+      weather_entity: "",
+      weather_align: "right",
+      weather_offset_x: 5,
+      weather_offset_y: 40,
+      weather_size_px: 12,
+      weather_weight: "medium",
+      weather_tap_action: { action: "more-info" },
     };
   }
 
@@ -903,7 +1075,12 @@ class HkiHeaderCardEditor extends LitElement {
 
     let value = this._val(ev);
 
-    const numeric = new Set(["height_vh", "min_height", "max_height", "blend_stop", "fixed_top", "title_offset_x", "title_offset_y", "subtitle_offset_x", "subtitle_offset_y", "title_size_px", "subtitle_size_px", "badges_offset_pinned", "badges_offset_unpinned", "badges_gap"]);
+    const numeric = new Set([
+      "height_vh", "min_height", "max_height", "blend_stop", "fixed_top", 
+      "title_offset_x", "title_offset_y", "subtitle_offset_x", "subtitle_offset_y", 
+      "title_size_px", "subtitle_size_px", "badges_offset_pinned", "badges_offset_unpinned", "badges_gap",
+      "weather_offset_x", "weather_offset_y", "weather_size_px"
+    ]);
     if (numeric.has(field)) {
       value = Number(value);
       if (!Number.isFinite(value)) return;
@@ -912,7 +1089,35 @@ class HkiHeaderCardEditor extends LitElement {
     const bools = new Set(["fixed", "badges_fixed"]);
     if (bools.has(field)) value = !!(ev.target?.checked ?? value);
 
-    const next = { ...this._config, [field]: value };
+    let next;
+    
+    // Handle nested fields (e.g., "weather_tap_action.action")
+    if (field.includes(".")) {
+      const parts = field.split(".");
+      const rootField = parts[0];
+      const subField = parts[1];
+      
+      const currentValue = this._config[rootField] || {};
+      
+      // Special handling for service_data - parse JSON
+      if (subField === "service_data" && value) {
+        try {
+          value = JSON.parse(value);
+        } catch (e) {
+          // If invalid JSON, keep as string for now
+        }
+      }
+      
+      next = {
+        ...this._config,
+        [rootField]: {
+          ...currentValue,
+          [subField]: value
+        }
+      };
+    } else {
+      next = { ...this._config, [field]: value };
+    }
     
     // When badges_fixed changes, update badges_offset default if it's currently at a default value
     if (field === "badges_fixed") {
@@ -944,6 +1149,77 @@ class HkiHeaderCardEditor extends LitElement {
     return html`<ha-textfield label=${label} .value=${value} data-field=${field} textarea rows=${String(rows)} @input=${this._changed}></ha-textfield>`;
   }
 
+  _renderActionEditor(label, field) {
+    const action = this._config?.[field] || { action: "more-info" };
+    const actionType = action.action || "more-info";
+    
+    return html`
+      <div class="code-wrap">
+        <div class="code-label">${label}</div>
+        <ha-select 
+          label="Action type" 
+          .value=${actionType} 
+          data-field="${field}.action" 
+          @selected=${this._changed} 
+          @closed=${this._changed} 
+          @value-changed=${this._changed}>
+          <mwc-list-item value="none">None</mwc-list-item>
+          <mwc-list-item value="navigate">Navigate</mwc-list-item>
+          <mwc-list-item value="url">URL</mwc-list-item>
+          <mwc-list-item value="call-service">Call service</mwc-list-item>
+          <mwc-list-item value="more-info">More info</mwc-list-item>
+          <mwc-list-item value="toggle">Toggle</mwc-list-item>
+        </ha-select>
+        
+        ${actionType === "navigate" ? html`
+          <ha-textfield 
+            label="Navigation path" 
+            .value=${action.navigation_path || ""} 
+            data-field="${field}.navigation_path" 
+            @input=${this._changed}>
+          </ha-textfield>
+        ` : ""}
+        
+        ${actionType === "url" ? html`
+          <ha-textfield 
+            label="URL" 
+            .value=${action.url_path || ""} 
+            data-field="${field}.url_path" 
+            @input=${this._changed}>
+          </ha-textfield>
+        ` : ""}
+        
+        ${actionType === "call-service" ? html`
+          <ha-textfield 
+            label="Service" 
+            helper="e.g., light.turn_on"
+            .value=${action.service || ""} 
+            data-field="${field}.service" 
+            @input=${this._changed}>
+          </ha-textfield>
+          <ha-textfield 
+            label="Service data (YAML)" 
+            .value=${action.service_data ? JSON.stringify(action.service_data) : ""} 
+            data-field="${field}.service_data" 
+            textarea
+            rows="3"
+            @input=${this._changed}>
+          </ha-textfield>
+        ` : ""}
+        
+        ${actionType === "more-info" || actionType === "toggle" ? html`
+          <ha-textfield 
+            label="Entity" 
+            helper="Leave empty to use weather entity"
+            .value=${action.entity || ""} 
+            data-field="${field}.entity" 
+            @input=${this._changed}>
+          </ha-textfield>
+        ` : ""}
+      </div>
+    `;
+  }
+
   render() {
     if (!this._config) return html``;
 
@@ -953,7 +1229,7 @@ class HkiHeaderCardEditor extends LitElement {
       <div class="card-config">
         <div class="disclaimer">
           <ha-alert alert-type="info" title="Documentation">
-            Please read the documentation at 
+            This card should be placed in the header section! Please read the documentation at 
             <a href="https://github.com/jimz011/hki-header-card" target="_blank" rel="noopener noreferrer">github.com/jimz011/hki-header-card</a>
             to set up this card. <br><br>
             This card may contain bugs. Use at your own risk!
@@ -980,6 +1256,35 @@ class HkiHeaderCardEditor extends LitElement {
           <ha-textfield label="Subtitle horizontal offset (px)" type="number" .value=${String(this._config.subtitle_offset_x)} data-field="subtitle_offset_x" @input=${this._changed}></ha-textfield>
           <ha-textfield label="Subtitle vertical offset (px)" type="number" .value=${String(this._config.subtitle_offset_y)} data-field="subtitle_offset_y" @input=${this._changed}></ha-textfield>
         </div>
+
+        <div class="section">Weather</div>
+        <ha-textfield label="Weather entity" helper="Optional: Add a weather entity to display forecast (e.g., weather.home)" .value=${this._config.weather_entity || ""} data-field="weather_entity" @input=${this._changed}></ha-textfield>
+
+        ${this._config.weather_entity ? html`
+          <ha-select label="Weather alignment" .value=${this._config.weather_align || "right"} data-field="weather_align" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+            <mwc-list-item value="left">Left</mwc-list-item>
+            <mwc-list-item value="right">Right</mwc-list-item>
+          </ha-select>
+
+          <div class="inline-fields-2">
+            <ha-textfield label="Weather horizontal offset (px)" type="number" .value=${String(this._config.weather_offset_x !== undefined ? this._config.weather_offset_x : 5)} data-field="weather_offset_x" @input=${this._changed}></ha-textfield>
+            <ha-textfield label="Weather vertical offset (px)" type="number" .value=${String(this._config.weather_offset_y !== undefined ? this._config.weather_offset_y : 40)} data-field="weather_offset_y" @input=${this._changed}></ha-textfield>
+          </div>
+
+          <div class="inline-fields-2">
+            <ha-textfield label="Weather size (px)" type="number" .value=${String(this._config.weather_size_px || 12)} data-field="weather_size_px" @input=${this._changed}></ha-textfield>
+            <ha-select label="Weather weight" .value=${this._config.weather_weight || "medium"} data-field="weather_weight" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+              <mwc-list-item value="light">Light</mwc-list-item>
+              <mwc-list-item value="regular">Regular</mwc-list-item>
+              <mwc-list-item value="medium">Medium</mwc-list-item>
+              <mwc-list-item value="semibold">Semi-bold</mwc-list-item>
+              <mwc-list-item value="bold">Bold</mwc-list-item>
+              <mwc-list-item value="black">Black</mwc-list-item>
+            </ha-select>
+          </div>
+
+          ${this._renderActionEditor("Weather tap action", "weather_tap_action")}
+        ` : html``}
 
         <div class="section">Background</div>
         <ha-textfield label="Background (color/gradient/url)" helper="Auto-wraps image paths in url() - just enter /local/image.jpg or color value" .value=${this._config.background} data-field="background" @input=${this._changed}></ha-textfield>
