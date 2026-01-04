@@ -1316,11 +1316,12 @@ class HkiHeaderCardEditor extends LitElement {
             @input=${this._changed}>
           </ha-textfield>
           <ha-textfield 
-            label="Service data (YAML)" 
-            .value=${action.service_data ? JSON.stringify(action.service_data) : ""} 
+            label="Service data" 
+            helper="YAML or JSON format supported. Use multiline YAML with proper indentation."
+            .value=${action.service_data ? (typeof action.service_data === 'string' ? action.service_data : JSON.stringify(action.service_data)) : ""} 
             data-field="${field}.service_data" 
             textarea
-            rows="3"
+            rows="4"
             @input=${this._changed}>
           </ha-textfield>
         ` : ""}
