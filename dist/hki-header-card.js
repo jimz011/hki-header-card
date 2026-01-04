@@ -89,6 +89,9 @@ class HkiHeaderCard extends LitElement {
     this._rafMeasure = 0;
     this._rafBadges = 0;
     this._kioskCheckInterval = null;
+    this._kioskMutationObserver = null;
+    this._urlChangeHandler = null;
+    this._cachedHeader = null;
 
     this._tpl = {
       timer: 0,
@@ -231,6 +234,15 @@ class HkiHeaderCard extends LitElement {
       clearInterval(this._kioskCheckInterval);
       this._kioskCheckInterval = null;
     }
+    if (this._kioskMutationObserver) {
+      this._kioskMutationObserver.disconnect();
+      this._kioskMutationObserver = null;
+    }
+    if (this._urlChangeHandler) {
+      window.removeEventListener("popstate", this._urlChangeHandler);
+      window.removeEventListener("hashchange", this._urlChangeHandler);
+      this._urlChangeHandler = null;
+    }
 
     this._unsubscribeTemplate("title");
     this._unsubscribeTemplate("subtitle");
@@ -253,10 +265,30 @@ class HkiHeaderCard extends LitElement {
     });
     this._ro.observe(this);
 
-    // Check for kiosk mode periodically
+    // Set up MutationObserver for instant kiosk mode class detection
+    this._kioskMutationObserver = new MutationObserver(() => {
+      this._detectKioskMode();
+    });
+    this._kioskMutationObserver.observe(document.body, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    this._kioskMutationObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
+    // Listen for URL changes (for ?kiosk parameter)
+    this._urlChangeHandler = () => {
+      this._detectKioskMode();
+    };
+    window.addEventListener("popstate", this._urlChangeHandler);
+    window.addEventListener("hashchange", this._urlChangeHandler);
+
+    // Fallback polling check (reduced frequency, only for header visibility detection)
     this._kioskCheckInterval = setInterval(() => {
       this._detectKioskMode();
-    }, 2000);
+    }, 5000); // Reduced from 2000ms to 5000ms since we now have event-based detection
 
     requestAnimationFrame(() => this._measure(true));
 
@@ -297,53 +329,66 @@ class HkiHeaderCard extends LitElement {
     const urlParams = new URLSearchParams(window.location.search);
     const urlKiosk = urlParams.get("kiosk") === "true" || window.location.search.includes("kiosk");
     
+    // Check for kiosk-mode class (now detected instantly via MutationObserver)
+    const bodyKiosk = document.body.classList.contains("kiosk-mode") || 
+                      document.documentElement.classList.contains("kiosk-mode");
+    
+    // Quick check: if URL or class indicates kiosk, skip expensive header check
+    if (urlKiosk || bodyKiosk) {
+      if (!this._kioskMode) {
+        this._kioskMode = true;
+        this.requestUpdate();
+      }
+      return;
+    }
+    
     // Check if header is actually rendered (kiosk-mode hides it with injected CSS)
+    // This is the most expensive check, so we do it last and cache the header
     let headerHidden = false;
     try {
-      const findHeader = (root, depth = 0) => {
-        if (depth > 15) return null;
-        
-        const header = root.querySelector?.("app-header, mwc-top-app-bar-fixed, .toolbar, [slot='header']");
-        if (header) return header;
-        
-        const elements = root.querySelectorAll?.("*") || [];
-        for (const el of elements) {
-          if (el.shadowRoot) {
-            const found = findHeader(el.shadowRoot, depth + 1);
-            if (found) return found;
-          }
-        }
-        return null;
-      };
-      
-      const ha = document.querySelector("home-assistant");
-      if (ha?.shadowRoot) {
-        const header = findHeader(ha.shadowRoot);
-        if (header) {
-          const rect = header.getBoundingClientRect();
-          const offsetHeight = header.offsetHeight;
-          const clientHeight = header.clientHeight;
-          const style = window.getComputedStyle(header);
+      // Cache header element or search for it if not cached
+      if (!this._cachedHeader || !document.contains(this._cachedHeader)) {
+        const findHeader = (root, depth = 0) => {
+          if (depth > 10) return null; // Reduced from 15 to 10 for performance
           
-          headerHidden = 
-            rect.height === 0 || 
-            offsetHeight === 0 || 
-            clientHeight === 0 ||
-            rect.top < -100 ||
-            style.display === "none" || 
-            style.visibility === "hidden" || 
-            style.opacity === "0";
+          const header = root.querySelector?.("app-header, mwc-top-app-bar-fixed, .toolbar, [slot='header']");
+          if (header) return header;
+          
+          const elements = root.querySelectorAll?.("*") || [];
+          for (const el of elements) {
+            if (el.shadowRoot) {
+              const found = findHeader(el.shadowRoot, depth + 1);
+              if (found) return found;
+            }
+          }
+          return null;
+        };
+        
+        const ha = document.querySelector("home-assistant");
+        if (ha?.shadowRoot) {
+          this._cachedHeader = findHeader(ha.shadowRoot);
         }
+      }
+      
+      // Check if header is hidden
+      if (this._cachedHeader) {
+        const rect = this._cachedHeader.getBoundingClientRect();
+        const style = window.getComputedStyle(this._cachedHeader);
+        
+        headerHidden = 
+          rect.height === 0 || 
+          this._cachedHeader.offsetHeight === 0 || 
+          this._cachedHeader.clientHeight === 0 ||
+          rect.top < -100 ||
+          style.display === "none" || 
+          style.visibility === "hidden" || 
+          style.opacity === "0";
       }
     } catch (e) {
       // Silent fail
     }
     
-    // Check for kiosk-mode class
-    const bodyKiosk = document.body.classList.contains("kiosk-mode") || 
-                      document.documentElement.classList.contains("kiosk-mode");
-    
-    const newKioskMode = urlKiosk || headerHidden || bodyKiosk;
+    const newKioskMode = headerHidden;
     
     if (newKioskMode !== this._kioskMode) {
       this._kioskMode = newKioskMode;
