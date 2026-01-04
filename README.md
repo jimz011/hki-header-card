@@ -65,7 +65,7 @@ Create a new full-width section at the top of your dashboard. Badge positioning 
 | **Content** |
 | `title` | string | `"Header"` | Title text. Supports Jinja2 templates with access to `user` and `config` variables |
 | `subtitle` | string | `""` | Subtitle text. Supports Jinja2 templates with access to `user` and `config` variables |
-| `text_align` | string | `"left"` | Text alignment: `left`, `center`, or `right` |
+| `text_align` | string | `"left"` | Text alignment: `left`, `center`, or `right`. To align text in the center, you **MUST** set the header layout to `centered` and the card layout to `center` *See badges section below. Most changes only reflect well on mobile phones! Use `left` or `center` for the best results |
 | **Title Position** |
 | `title_offset_x` | number | `5` | Horizontal offset in pixels from left (or right if right-aligned) |
 | `title_offset_y` | number | `32` | Vertical offset in pixels from top |
@@ -100,8 +100,6 @@ Create a new full-width section at the top of your dashboard. Badge positioning 
 | `badges_offset_unpinned` | number | `100` | Vertical offset in pixels when badges are unpinned (only visible when `badges_fixed` is `false`) |
 | `badges_gap` | number | `0` | Gap in pixels under badges. Auto-adjusts: -48px when pinned, +48px in kiosk mode |
 
-> **⚠️ Important:** Currently Title/Subtitle alignment settings **ONLY** works correct on a phone screen!
-
 ### Example Configuration
 ```yaml
 type: custom:hki-header-card
@@ -116,27 +114,9 @@ background_repeat: no-repeat
 background_size: cover
 min_height: 180
 max_height: 220
-blend_color: var(--primary-background-color)
-blend_stop: 95
-fixed: true
-fixed_top: 0
-title_offset_x: 5
-title_offset_y: 32
-subtitle_offset_x: 5
-subtitle_offset_y: 32
-font_family: roboto
-font_style: normal
-title_size_px: 36
-subtitle_size_px: 15
-title_weight: bold
-subtitle_weight: medium
-badges_fixed: false
-badges_offset_unpinned: 100
-badges_gap: 0
 ```
 
-## Recommended Header Section Settings
-
+> **⚠️ Important:** Currently Title/Subtitle alignment settings **ONLY** works correct on a phone screen!
 
 ## Jinja2 Templates
 
@@ -196,6 +176,11 @@ Add badges through Home Assistant's native badge interface when the header secti
 2. Click on the header area to select it
 3. Add badges using the "+ Add badge" button
 4. Configure badge positioning in the HKI Header Card settings
+
+### Badges Alignment
+It is recommended **NOT** to use `badges_position: top` 
+To align badges in the center, you **MUST** set the header layout to `centered`
+<img width="597" height="670" alt="image" src="https://github.com/user-attachments/assets/24dbcbd1-d1fc-4a54-9469-4f87b0d12693" />
 
 ## Tips & Tricks
 
