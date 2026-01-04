@@ -6,6 +6,7 @@ Full-width customizable header for Home Assistant with automatic kiosk mode dete
 <img src="https://github.com/jimz011/hki-header-card/blob/main/screenshots/header-with-badges.png?raw=true" width="600" alt="HKI Header Card Example">
 
 ***You can find more screenshots at the bottom of this page***
+***You may use any of the wallpapers on this repo for your own setup***
 
 ## Features
 - 🎨 Full-width fixed header with customizable background (images, gradients, colors)
@@ -15,6 +16,7 @@ Full-width customizable header for Home Assistant with automatic kiosk mode dete
 - 🏷️ Advanced badge positioning (pinned or scrolling with adjustable offsets)
 - 🎭 Gradient overlay with customizable blend
 - 📐 Responsive design with adjustable heights
+- 🌤️ Weather display with customizable positioning and tap actions
 
 ## Installation
 
@@ -85,6 +87,14 @@ Create a new full-width section at the top of your dashboard. Badge positioning 
 | **Subtitle Position** |
 | `subtitle_offset_x` | number | `5` | Horizontal offset in pixels (relative to title position) |
 | `subtitle_offset_y` | number | `32` | Vertical offset in pixels (relative to title position) |
+| **Weather** |
+| `weather_entity` | string | `""` | Weather entity ID (e.g., `weather.home`). Leave empty to hide weather display |
+| `weather_align` | string | `"right"` | Weather alignment: `left` or `right` |
+| `weather_offset_x` | number | `5` | Horizontal offset in pixels from left or right edge |
+| `weather_offset_y` | number | `40` | Vertical offset in pixels from top |
+| `weather_size_px` | number | `12` | Font size in pixels (icon scales automatically at 2x font size) |
+| `weather_weight` | string | `"medium"` | Font weight: `light`, `regular`, `medium`, `semibold`, `bold`, or `black` |
+| `weather_tap_action` | object | `{ action: "more-info" }` | Tap action configuration (see Weather Tap Actions below) |
 | **Background** |
 | `background` | string | *(GitHub image)* | CSS background value. Accepts colors, gradients, or image paths. Paths are automatically wrapped in `url()` - just enter `/local/image.jpg` |
 | `background_position` | string | `"center"` | Background position: `top`, `center`, `bottom`, `left`, or `right` |
@@ -113,6 +123,50 @@ Create a new full-width section at the top of your dashboard. Badge positioning 
 | `badges_offset_unpinned` | number | `100` | Vertical offset in pixels when badges are unpinned (only visible when `badges_fixed` is `false`) |
 | `badges_gap` | number | `0` | Gap in pixels under badges. Auto-adjusts: -48px when pinned, +48px in kiosk mode |
 
+### Weather Tap Actions
+
+The weather display supports tap actions that trigger when clicked:
+
+| Action Type | Additional Fields | Description |
+|-------------|------------------|-------------|
+| `more-info` | `entity` (optional) | Opens entity details dialog. Defaults to weather entity if not specified |
+| `navigate` | `navigation_path` (required) | Navigate to a different view (e.g., `/lovelace/weather`) |
+| `url` | `url_path` (required) | Open URL in new tab (e.g., `https://weather.com`) |
+| `call-service` | `service` (required), `service_data` (optional) | Execute a Home Assistant service |
+| `toggle` | `entity` (optional) | Toggle entity state. Defaults to weather entity if not specified |
+| `none` | - | No action on click |
+
+#### Weather Tap Action Examples
+
+**Open weather details (default):**
+```yaml
+weather_tap_action:
+  action: more-info
+```
+
+**Navigate to weather view:**
+```yaml
+weather_tap_action:
+  action: navigate
+  navigation_path: /lovelace/weather
+```
+
+**Open external weather site:**
+```yaml
+weather_tap_action:
+  action: url
+  url_path: https://weather.com
+```
+
+**Call a service:**
+```yaml
+weather_tap_action:
+  action: call-service
+  service: script.update_weather
+  service_data:
+    force_update: true
+```
+
 ### Example Configuration
 ```yaml
 type: custom:hki-header-card
@@ -127,9 +181,23 @@ background_repeat: no-repeat
 background_size: cover
 min_height: 180
 max_height: 220
+weather_entity: weather.home
+weather_tap_action:
+  action: more-info
 ```
 
-> **⚠️ Important:** Currently Title/Subtitle alignment settings **ONLY** works correct on a phone screen!
+## Weather Display
+
+The header card can display current weather conditions with customizable positioning and styling:
+
+- **Display format**: Shows weather icon, condition name, and temperature
+- **Dynamic icon sizing**: Icon automatically scales at 2x the font size for proper proportions
+- **Flexible positioning**: Position on left or right with precise offset controls
+- **Typography controls**: Customize font size and weight (inherits font family from main settings)
+- **Interactive**: Click to trigger actions like opening weather details, navigating to weather views, or calling services
+- **Conditional display**: Only appears when a weather entity is configured
+
+The weather display inherits the font family and style from the main header settings for visual consistency.
 
 ## Jinja2 Templates
 
@@ -242,6 +310,11 @@ The header uses viewport height (35vh by default) with min/max constraints:
 - Verify the image path is correct
 - Check browser console for 404 errors
 - Ensure image is accessible (not blocked by authentication)
+
+**Weather not displaying**
+- Verify the weather entity ID is correct
+- Check that the weather integration is working in Home Assistant
+- Ensure the weather entity provides temperature data
 
 ## Support
 
