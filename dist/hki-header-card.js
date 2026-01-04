@@ -92,6 +92,9 @@ class HkiHeaderCard extends LitElement {
     this._kioskMutationObserver = null;
     this._urlChangeHandler = null;
     this._cachedHeader = null;
+    this._visibilityHandler = null;
+    this._focusHandler = null;
+    this._initialCheckTimer = null;
 
     this._tpl = {
       timer: 0,
@@ -207,6 +210,12 @@ class HkiHeaderCard extends LitElement {
     `;
   }
 
+  connectedCallback() {
+    super.connectedCallback();
+    // Immediate detection when element is added to DOM
+    this._detectKioskMode();
+  }
+
   disconnectedCallback() {
     super.disconnectedCallback();
 
@@ -242,6 +251,18 @@ class HkiHeaderCard extends LitElement {
       window.removeEventListener("popstate", this._urlChangeHandler);
       window.removeEventListener("hashchange", this._urlChangeHandler);
       this._urlChangeHandler = null;
+    }
+    if (this._visibilityHandler) {
+      document.removeEventListener("visibilitychange", this._visibilityHandler);
+      this._visibilityHandler = null;
+    }
+    if (this._focusHandler) {
+      window.removeEventListener("focus", this._focusHandler);
+      this._focusHandler = null;
+    }
+    if (this._initialCheckTimer) {
+      clearTimeout(this._initialCheckTimer);
+      this._initialCheckTimer = null;
     }
 
     this._unsubscribeTemplate("title");
@@ -285,6 +306,37 @@ class HkiHeaderCard extends LitElement {
     window.addEventListener("popstate", this._urlChangeHandler);
     window.addEventListener("hashchange", this._urlChangeHandler);
 
+    // Page Visibility API - detect when page becomes visible (crucial for mobile apps)
+    this._visibilityHandler = () => {
+      if (!document.hidden) {
+        // Clear header cache when page becomes visible to force re-detection
+        this._cachedHeader = null;
+        this._detectKioskMode();
+        // Extra check shortly after to ensure header has rendered
+        setTimeout(() => this._detectKioskMode(), 100);
+        setTimeout(() => this._detectKioskMode(), 300);
+      }
+    };
+    document.addEventListener("visibilitychange", this._visibilityHandler);
+
+    // Window focus detection - for when app/tab regains focus
+    this._focusHandler = () => {
+      this._cachedHeader = null;
+      this._detectKioskMode();
+      setTimeout(() => this._detectKioskMode(), 100);
+    };
+    window.addEventListener("focus", this._focusHandler);
+
+    // Aggressive initial checking - run multiple checks in first few seconds
+    // This ensures kiosk mode is detected even if the header hasn't fully rendered yet
+    const initialChecks = [50, 150, 300, 600, 1000, 2000];
+    initialChecks.forEach(delay => {
+      setTimeout(() => {
+        this._cachedHeader = null;
+        this._detectKioskMode();
+      }, delay);
+    });
+
     // Fallback polling check (reduced frequency, only for header visibility detection)
     this._kioskCheckInterval = setInterval(() => {
       this._detectKioskMode();
@@ -313,6 +365,9 @@ class HkiHeaderCard extends LitElement {
       if (nowReady && !this._hassReady) {
         this._hassReady = true;
         this._scheduleTemplateSetup(0);
+        // Detect kiosk mode when hass becomes ready (important for initial load)
+        this._cachedHeader = null;
+        this._detectKioskMode();
       }
 
       this._debouncedBadgesZIndex();
@@ -325,7 +380,7 @@ class HkiHeaderCard extends LitElement {
   }
 
   _detectKioskMode() {
-    // Check URL parameters
+    // Check URL parameters (highest priority - user explicitly set it)
     const urlParams = new URLSearchParams(window.location.search);
     const urlKiosk = urlParams.get("kiosk") === "true" || window.location.search.includes("kiosk");
     
@@ -351,9 +406,22 @@ class HkiHeaderCard extends LitElement {
         const findHeader = (root, depth = 0) => {
           if (depth > 10) return null; // Reduced from 15 to 10 for performance
           
-          const header = root.querySelector?.("app-header, mwc-top-app-bar-fixed, .toolbar, [slot='header']");
-          if (header) return header;
+          // Try multiple selectors to find the header
+          const selectors = [
+            "app-header",
+            "mwc-top-app-bar-fixed", 
+            ".toolbar",
+            "[slot='header']",
+            "ha-app-layout app-header",
+            "ha-tabs"
+          ];
           
+          for (const selector of selectors) {
+            const header = root.querySelector?.(selector);
+            if (header) return header;
+          }
+          
+          // Recursively search shadow roots
           const elements = root.querySelectorAll?.("*") || [];
           for (const el of elements) {
             if (el.shadowRoot) {
@@ -367,6 +435,11 @@ class HkiHeaderCard extends LitElement {
         const ha = document.querySelector("home-assistant");
         if (ha?.shadowRoot) {
           this._cachedHeader = findHeader(ha.shadowRoot);
+        }
+        
+        // Fallback: try to find header in main document
+        if (!this._cachedHeader) {
+          this._cachedHeader = findHeader(document);
         }
       }
       
