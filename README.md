@@ -180,6 +180,7 @@ Add badges through Home Assistant's native badge interface when the header secti
 ### Badges Alignment
 It is recommended **NOT** to use `badges_position: top` 
 To align badges in the center, you **MUST** set the header layout to `centered`
+
 <img width="597" height="670" alt="image" src="https://github.com/user-attachments/assets/24dbcbd1-d1fc-4a54-9469-4f87b0d12693" />
 
 ## Tips & Tricks
