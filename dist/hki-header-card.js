@@ -1217,14 +1217,7 @@ class HkiHeaderCardEditor extends LitElement {
       
       const currentValue = this._config[rootField] || {};
       
-      // Special handling for service_data - parse JSON
-      if (subField === "service_data" && value) {
-        try {
-          value = JSON.parse(value);
-        } catch (e) {
-          // If invalid JSON, keep as string for now
-        }
-      }
+      // Keep service_data as string (YAML format) - Home Assistant will parse it
       
       next = {
         ...this._config,
@@ -1265,6 +1258,53 @@ class HkiHeaderCardEditor extends LitElement {
     }
 
     return html`<ha-textfield label=${label} .value=${value} data-field=${field} textarea rows=${String(rows)} @input=${this._changed}></ha-textfield>`;
+  }
+
+  _renderServiceDataEditor(field, serviceData) {
+    // Always store as string (YAML format)
+    let value = "";
+    if (serviceData) {
+      if (typeof serviceData === 'string') {
+        value = serviceData;
+      } else {
+        // Convert object to YAML-like format
+        value = Object.entries(serviceData)
+          .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
+          .join('\n');
+      }
+    }
+    
+    const hasCodeEditor = !!customElements.get("ha-code-editor");
+
+    if (hasCodeEditor) {
+      return html`
+        <div class="code-wrap">
+          <div class="code-label">Service data (YAML)</div>
+          <ha-code-editor 
+            .hass=${this.hass} 
+            .value=${value} 
+            mode="yaml" 
+            data-field="${field}.service_data" 
+            @value-changed=${this._changed}>
+          </ha-code-editor>
+        </div>
+      `;
+    }
+
+    return html`
+      <ha-textfield 
+        label="Service data (YAML)" 
+        helper="Use YAML format with proper indentation. Press Shift+Enter for new line."
+        .value=${value} 
+        data-field="${field}.service_data" 
+        @input=${this._changed}
+        @keydown=${(e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.stopPropagation();
+          }
+        }}>
+      </ha-textfield>
+    `;
   }
 
   _renderActionEditor(label, field) {
@@ -1315,15 +1355,7 @@ class HkiHeaderCardEditor extends LitElement {
             data-field="${field}.service" 
             @input=${this._changed}>
           </ha-textfield>
-          <ha-textfield 
-            label="Service data" 
-            helper="YAML or JSON format supported. Use multiline YAML with proper indentation."
-            .value=${action.service_data ? (typeof action.service_data === 'string' ? action.service_data : JSON.stringify(action.service_data)) : ""} 
-            data-field="${field}.service_data" 
-            textarea
-            rows="4"
-            @input=${this._changed}>
-          </ha-textfield>
+          ${this._renderServiceDataEditor(field, action.service_data)}
         ` : ""}
         
         ${actionType === "more-info" || actionType === "toggle" ? html`
