@@ -130,9 +130,9 @@ The weather display supports tap actions that trigger when clicked:
 | Action Type | Additional Fields | Description |
 |-------------|------------------|-------------|
 | `more-info` | `entity` (optional) | Opens entity details dialog. Defaults to weather entity if not specified |
-| `navigate` | `navigation_path` (required) | Navigate to a different view (e.g., `/lovelace/weather`) |
-| `url` | `url_path` (required) | Open URL in new tab (e.g., `https://weather.com`) |
-| `call-service` | `service` (required), `service_data` (optional) | Execute a Home Assistant service |
+| `navigate` | `navigation_path` (optional) | Navigate to a different view (e.g., `/lovelace/weather`) |
+| `url` | `url_path` (optional) | Open URL in new tab (e.g., `https://weather.com`) |
+| `call-service` | `service` (optional), `service_data` (optional) | Execute a Home Assistant service |
 | `toggle` | `entity` (optional) | Toggle entity state. Defaults to weather entity if not specified |
 | `none` | - | No action on click |
 
