@@ -24,6 +24,25 @@ const FONT_FAMILY_MAP = Object.freeze({
     "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
 });
 
+// Weather icon mapping with colors and animations
+const WEATHER_ICONS = Object.freeze({
+  'clear-night': { icon: '🌙', color: '#9ca3af', animation: 'pulse' },
+  'cloudy': { icon: '☁️', color: '#9ca3af', animation: 'float' },
+  'fog': { icon: '🌫️', color: '#9ca3af', animation: 'fade' },
+  'hail': { icon: '🧊', color: '#60a5fa', animation: 'bounce' },
+  'lightning': { icon: '⚡', color: '#fbbf24', animation: 'flash' },
+  'lightning-rainy': { icon: '⛈️', color: '#60a5fa', animation: 'flash' },
+  'partlycloudy': { icon: '⛅', color: '#fbbf24', animation: 'float' },
+  'pouring': { icon: '🌧️', color: '#60a5fa', animation: 'drip' },
+  'rainy': { icon: '🌦️', color: '#60a5fa', animation: 'drip' },
+  'snowy': { icon: '❄️', color: '#93c5fd', animation: 'fall' },
+  'snowy-rainy': { icon: '🌨️', color: '#60a5fa', animation: 'fall' },
+  'sunny': { icon: '☀️', color: '#fbbf24', animation: 'rotate' },
+  'windy': { icon: '💨', color: '#9ca3af', animation: 'drift' },
+  'windy-variant': { icon: '🌬️', color: '#9ca3af', animation: 'drift' },
+  'exceptional': { icon: '⚠️', color: '#ef4444', animation: 'pulse' },
+});
+
 function normalizeWeightKey(input, fallbackKey) {
   if (typeof input === "string" && WEIGHT_MAP[input]) return input;
   if (typeof input === "number" && Number.isFinite(input)) {
@@ -63,7 +82,6 @@ class HkiHeaderCard extends LitElement {
       _inPreview: { type: Boolean },
       _headerHeight: { type: Number },
       _kioskMode: { type: Boolean },
-      _isMobile: { type: Boolean },
 
       _renderedTitle: { type: String },
       _renderedSubtitle: { type: String },
@@ -80,7 +98,6 @@ class HkiHeaderCard extends LitElement {
     this._inPreview = false;
     this._headerHeight = 0;
     this._kioskMode = false;
-    this._isMobile = false;
 
     this._renderedTitle = "";
     this._renderedSubtitle = "";
@@ -180,9 +197,39 @@ class HkiHeaderCard extends LitElement {
         display: flex;
         align-items: center;
         gap: 8px;
-        color: var(--hki-header-text-color, #fff);
         text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
         z-index: 2;
+      }
+
+      .weather-pill {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 16px;
+        border-radius: 24px;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        transition: all 0.3s ease;
+      }
+
+      .weather-pill.rounded {
+        border-radius: 12px;
+      }
+
+      .weather-pill.square {
+        border-radius: 8px;
+      }
+
+      .weather-pill.compact {
+        padding: 6px 12px;
+      }
+
+      .weather-pill.comfortable {
+        padding: 10px 20px;
+      }
+
+      .weather-pill.spacious {
+        padding: 14px 24px;
       }
 
       .weather-clickable {
@@ -195,11 +242,24 @@ class HkiHeaderCard extends LitElement {
       }
 
       .weather-icon {
-        --mdc-icon-size: var(--weather-icon-size, 32px);
-        width: var(--weather-icon-size, 32px);
-        height: var(--weather-icon-size, 32px);
-        color: var(--hki-header-text-color, #fff);
+        font-size: var(--weather-icon-size, 32px);
+        line-height: 1;
         filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .weather-icon.animated {
+        animation-duration: 3s;
+        animation-iteration-count: infinite;
+        animation-timing-function: ease-in-out;
+      }
+
+      .weather-main-info {
+        display: flex;
+        align-items: center;
+        gap: 6px;
       }
 
       .weather-condition {
@@ -210,965 +270,654 @@ class HkiHeaderCard extends LitElement {
         font-weight: 500;
       }
 
-      @keyframes weather-pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.7; }
+      .weather-attributes {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 0.9em;
+        opacity: 0.95;
       }
 
-      .weather-icon-animated {
-        animation: weather-pulse 3s ease-in-out infinite;
+      .weather-attribute {
+        display: flex;
+        align-items: center;
+        gap: 4px;
       }
+
+      .weather-attribute-icon {
+        font-size: 0.9em;
+        opacity: 0.8;
+      }
+
+      /* Weather animations */
+      @keyframes pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.8; transform: scale(1.05); }
+      }
+
+      @keyframes float {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-5px); }
+      }
+
+      @keyframes fade {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
+      }
+
+      @keyframes bounce {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-8px); }
+      }
+
+      @keyframes flash {
+        0%, 50%, 100% { opacity: 1; }
+        25%, 75% { opacity: 0.4; }
+      }
+
+      @keyframes drip {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(3px); }
+      }
+
+      @keyframes fall {
+        0%, 100% { transform: translateY(0px) rotate(0deg); }
+        50% { transform: translateY(5px) rotate(5deg); }
+      }
+
+      @keyframes rotate {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+
+      @keyframes drift {
+        0%, 100% { transform: translateX(0px); }
+        50% { transform: translateX(5px); }
+      }
+
+      .animate-pulse { animation-name: pulse; }
+      .animate-float { animation-name: float; }
+      .animate-fade { animation-name: fade; }
+      .animate-bounce { animation-name: bounce; }
+      .animate-flash { animation-name: flash; }
+      .animate-drip { animation-name: drip; }
+      .animate-fall { animation-name: fall; }
+      .animate-rotate { animation-name: rotate; }
+      .animate-drift { animation-name: drift; }
     `;
   }
 
   connectedCallback() {
     super.connectedCallback();
-    this._detectKioskMode();
-    this._detectMobile();
+    this.scheduleKioskCheck();
+    this.startUrlChangeListener();
+    this._visibilityHandler = () => {
+      if (document.visibilityState === "visible") this.scheduleKioskCheck();
+    };
+    document.addEventListener("visibilitychange", this._visibilityHandler);
+    this._focusHandler = () => this.scheduleKioskCheck();
+    window.addEventListener("focus", this._focusHandler);
+    this._initialCheckTimer = setTimeout(() => this.scheduleKioskCheck(), 2000);
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
-
-    if (this._resizeHandler) {
-      window.removeEventListener("resize", this._resizeHandler);
-      this._resizeHandler = null;
-    }
-    if (this._ro) {
-      this._ro.disconnect();
-      this._ro = null;
-    }
-    if (this._rafMeasure) {
-      cancelAnimationFrame(this._rafMeasure);
-      this._rafMeasure = 0;
-    }
-    if (this._rafBadges) {
-      cancelAnimationFrame(this._rafBadges);
-      this._rafBadges = 0;
-    }
-    if (this._tpl.timer) {
-      clearTimeout(this._tpl.timer);
-      this._tpl.timer = 0;
-    }
-    if (this._kioskCheckInterval) {
-      clearInterval(this._kioskCheckInterval);
-      this._kioskCheckInterval = null;
-    }
-    if (this._kioskMutationObserver) {
-      this._kioskMutationObserver.disconnect();
-      this._kioskMutationObserver = null;
-    }
-    if (this._urlChangeHandler) {
-      window.removeEventListener("popstate", this._urlChangeHandler);
-      window.removeEventListener("hashchange", this._urlChangeHandler);
-      this._urlChangeHandler = null;
-    }
-    if (this._visibilityHandler) {
+    this.stopResizeObserver();
+    this.stopKioskCheck();
+    this.stopUrlChangeListener();
+    if (this._rafMeasure) cancelAnimationFrame(this._rafMeasure);
+    if (this._rafBadges) cancelAnimationFrame(this._rafBadges);
+    if (this._tpl.title.unsub) this._tpl.title.unsub();
+    if (this._tpl.subtitle.unsub) this._tpl.subtitle.unsub();
+    if (this._visibilityHandler)
       document.removeEventListener("visibilitychange", this._visibilityHandler);
-      this._visibilityHandler = null;
-    }
-    if (this._focusHandler) {
-      window.removeEventListener("focus", this._focusHandler);
-      this._focusHandler = null;
-    }
-    if (this._initialCheckTimer) {
-      clearTimeout(this._initialCheckTimer);
-      this._initialCheckTimer = null;
-    }
-
-    this._unsubscribeTemplate("title");
-    this._unsubscribeTemplate("subtitle");
-    this._resetBadgesZIndex();
+    if (this._focusHandler) window.removeEventListener("focus", this._focusHandler);
+    if (this._initialCheckTimer) clearTimeout(this._initialCheckTimer);
   }
 
   firstUpdated() {
-    this._detectPreview();
-    this._detectKioskMode();
-    this._detectMobile();
-
-    this._resizeHandler = () => {
-      this._debouncedMeasure(true);
-      this._debouncedBadgesZIndex();
-      this._detectMobile();
-    };
-    window.addEventListener("resize", this._resizeHandler, { passive: true });
-
-    this._ro = new ResizeObserver(() => {
-      this._debouncedMeasure(true);
-      this._debouncedBadgesZIndex();
-    });
-    this._ro.observe(this);
-
-    this._kioskMutationObserver = new MutationObserver(() => {
-      this._detectKioskMode();
-    });
-    this._kioskMutationObserver.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-    this._kioskMutationObserver.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-
-    this._urlChangeHandler = () => {
-      this._detectKioskMode();
-    };
-    window.addEventListener("popstate", this._urlChangeHandler);
-    window.addEventListener("hashchange", this._urlChangeHandler);
-
-    this._visibilityHandler = () => {
-      if (!document.hidden) {
-        this._cachedHeader = null;
-        this._detectKioskMode();
-        setTimeout(() => this._detectKioskMode(), 100);
-        setTimeout(() => this._detectKioskMode(), 300);
-      }
-    };
-    document.addEventListener("visibilitychange", this._visibilityHandler);
-
-    this._focusHandler = () => {
-      this._cachedHeader = null;
-      this._detectKioskMode();
-      setTimeout(() => this._detectKioskMode(), 100);
-    };
-    window.addEventListener("focus", this._focusHandler);
-
-    const initialChecks = [50, 150, 300, 600, 1000, 2000];
-    initialChecks.forEach(delay => {
-      setTimeout(() => {
-        this._cachedHeader = null;
-        this._detectKioskMode();
-      }, delay);
-    });
-
-    this._kioskCheckInterval = setInterval(() => {
-      this._detectKioskMode();
-    }, 5000);
-
-    requestAnimationFrame(() => this._measure(true));
-
-    this._scheduleTemplateSetup(0);
-    this._debouncedBadgesZIndex();
+    this.startResizeObserver();
+    this.requestUpdate();
   }
 
-  updated(changed) {
-    if (changed.has("_config")) {
-      this._detectPreview();
-      this._debouncedMeasure(true);
-      this._scheduleTemplateSetup(80);
-      this._debouncedBadgesZIndex();
-      return;
-    }
+  setConfig(cfg) {
+    if (!cfg) throw new Error("Invalid configuration");
 
-    if (changed.has("hass")) {
-      this._detectPreview();
-      this._debouncedMeasure(true);
-
-      const nowReady = !!this.hass?.connection && typeof this.hass?.callWS === "function";
-      if (nowReady && !this._hassReady) {
-        this._hassReady = true;
-        this._scheduleTemplateSetup(0);
-        this._cachedHeader = null;
-        this._detectKioskMode();
-      }
-
-      this._debouncedBadgesZIndex();
-    }
-
-    if (changed.has("_kioskMode")) {
-      this._debouncedMeasure(true);
-      this._debouncedBadgesZIndex();
-    }
-  }
-
-  _detectMobile() {
-    const wasMobile = this._isMobile;
-    this._isMobile = window.innerWidth <= 768;
-    if (wasMobile !== this._isMobile) {
-      this.requestUpdate();
-    }
-  }
-
-  _detectKioskMode() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlKiosk = urlParams.get("kiosk") === "true" || window.location.search.includes("kiosk");
-    
-    const bodyKiosk = document.body.classList.contains("kiosk-mode") || 
-                      document.documentElement.classList.contains("kiosk-mode");
-    
-    if (urlKiosk || bodyKiosk) {
-      if (!this._kioskMode) {
-        this._kioskMode = true;
-        this.requestUpdate();
-      }
-      return;
-    }
-    
-    let headerHidden = false;
-    try {
-      if (!this._cachedHeader || !document.contains(this._cachedHeader)) {
-        const findHeader = (root, depth = 0) => {
-          if (depth > 10) return null;
-          
-          const selectors = [
-            "app-header",
-            "mwc-top-app-bar-fixed", 
-            ".toolbar",
-            "[slot='header']",
-            "ha-app-layout app-header",
-            "ha-tabs"
-          ];
-          
-          for (const selector of selectors) {
-            const header = root.querySelector?.(selector);
-            if (header) return header;
-          }
-          
-          const elements = root.querySelectorAll?.("*") || [];
-          for (const el of elements) {
-            if (el.shadowRoot) {
-              const found = findHeader(el.shadowRoot, depth + 1);
-              if (found) return found;
-            }
-          }
-          return null;
-        };
-        
-        const ha = document.querySelector("home-assistant");
-        if (ha?.shadowRoot) {
-          this._cachedHeader = findHeader(ha.shadowRoot);
-        }
-        
-        if (!this._cachedHeader) {
-          this._cachedHeader = findHeader(document);
-        }
-      }
-      
-      if (this._cachedHeader) {
-        const rect = this._cachedHeader.getBoundingClientRect();
-        const style = window.getComputedStyle(this._cachedHeader);
-        
-        headerHidden = 
-          rect.height === 0 || 
-          this._cachedHeader.offsetHeight === 0 || 
-          this._cachedHeader.clientHeight === 0 ||
-          rect.top < -100 ||
-          style.display === "none" || 
-          style.visibility === "hidden" || 
-          style.opacity === "0";
-      }
-    } catch (e) {
-      console.warn("Header detection failed:", e);
-    }
-    
-    const newKiosk = headerHidden;
-    if (this._kioskMode !== newKiosk) {
-      this._kioskMode = newKiosk;
-      this.requestUpdate();
-    }
-  }
-
-  _detectPreview() {
-    let node = this;
-    for (let i = 0; i < 5; i++) {
-      if (!node) break;
-      if (node.tagName === "HUI-CARD-PREVIEW" || node.classList?.contains("card-preview")) {
-        this._inPreview = true;
-        return;
-      }
-      node = node.parentElement || node.getRootNode?.()?.host;
-    }
-    this._inPreview = false;
-  }
-
-  _debouncedMeasure(force = false) {
-    if (!force && this._rafMeasure) return;
-    if (this._rafMeasure) cancelAnimationFrame(this._rafMeasure);
-    this._rafMeasure = requestAnimationFrame(() => {
-      this._rafMeasure = 0;
-      this._measure();
-    });
-  }
-
-  _measure(updateHeader = false) {
-    const oldOffsetLeft = this._offsetLeft;
-    const oldViewportWidth = this._viewportWidth;
-    const oldContentWidth = this._contentWidth;
-    const oldHeaderHeight = this._headerHeight;
-
-    const container = this.shadowRoot?.querySelector("ha-card.header");
-    this._headerHeight = container?.offsetHeight ?? 0;
-
-    if (this._inPreview) {
-      const rect = this.getBoundingClientRect();
-      this._offsetLeft = 0;
-      this._viewportWidth = rect.width;
-      this._contentWidth = rect.width;
-    } else {
-      this._offsetLeft = this.getBoundingClientRect().left;
-      this._viewportWidth = window.innerWidth;
-      this._contentWidth = this._viewportWidth - 2 * this._offsetLeft;
-    }
-
-    if (
-      updateHeader ||
-      oldOffsetLeft !== this._offsetLeft ||
-      oldViewportWidth !== this._viewportWidth ||
-      oldContentWidth !== this._contentWidth ||
-      oldHeaderHeight !== this._headerHeight
-    ) {
-      this.requestUpdate();
-    }
-  }
-
-  setConfig(config) {
-    const defaults = {
+    const c = {
       title: "",
+      title_x: 0,
+      title_y: 90,
+      title_size_px: 28,
+      title_weight: "bold",
       title_color: "",
+
       subtitle: "",
+      subtitle_x: 0,
+      subtitle_y: 0,
+      subtitle_size_px: 16,
+      subtitle_weight: "medium",
       subtitle_color: "",
-      text_align: "left",
+
+      weather: "",
+      weather_x: 0,
+      weather_y: 0,
+      weather_mobile_x: null,
+      weather_mobile_y: null,
+      weather_size_px: 12,
+      weather_weight: "medium",
+      weather_color: "",
+      weather_show_icon: true,
+      weather_show_condition: true,
+      weather_show_temperature: true,
+      weather_use_pill: false,
+      weather_pill_style: "pill",
+      weather_pill_size: "comfortable",
+      weather_pill_background: "rgba(0,0,0,0.3)",
+      weather_show_humidity: false,
+      weather_show_pressure: false,
+      weather_show_wind_speed: false,
+      weather_show_wind_bearing: false,
+      weather_animated_icons: true,
+      weather_colored_icons: true,
+
+      weather_tap_action: { action: "more-info" },
+
       background: "",
       background_position: "center",
       background_repeat: "no-repeat",
       background_size: "cover",
-      height_vh: 35,
       min_height: 180,
       max_height: 340,
-      blend_color: "var(--primary-background-color)",
-      blend_stop: 95,
-      fixed: true,
-      fixed_top: 0,
-      title_offset_x: 5,
-      title_offset_y: 32,
-      title_offset_x_mobile: null,
-      title_offset_y_mobile: null,
-      subtitle_offset_x: 5,
-      subtitle_offset_y: 32,
-      subtitle_offset_x_mobile: null,
-      subtitle_offset_y_mobile: null,
-      badges_offset_pinned: 48,
-      badges_offset_unpinned: 100,
-      badges_gap: 0,
-      badges_fixed: false,
+
+      blend_color: "rgba(0,0,0,0.45)",
+      blend_stop: 70,
+
       font_family: "inherit",
       font_family_custom: "",
       font_style: "normal",
-      title_size_px: 36,
-      subtitle_size_px: 15,
-      title_weight: "bold",
-      subtitle_weight: "medium",
-      weather_entity: "",
-      weather_align: "right",
-      weather_offset_x: 5,
-      weather_offset_y: 40,
-      weather_offset_x_mobile: null,
-      weather_offset_y_mobile: null,
-      weather_size_px: 12,
-      weather_weight: "medium",
-      weather_color: "",
-      weather_tap_action: { action: "more-info" },
-      weather_show_icon: true,
-      weather_show_condition: true,
-      weather_show_temperature: true,
-      weather_show_humidity: false,
-      weather_animated: true,
-      weather_pill_enabled: false,
-      weather_pill_background: "rgba(0, 0, 0, 0.3)",
-      weather_pill_border_radius: 20,
-      weather_pill_opacity: 0.8,
-      badges_offset: 0,
+
+      fixed: false,
+      fixed_top: 0,
+
+      badges_fixed: false,
+      badges_offset_pinned: -30,
+      badges_offset_unpinned: 0,
       badges_gap: 0,
+
+      ...cfg,
     };
 
-    const m = { ...defaults, ...config };
+    this._config = c;
 
-    m.height_vh = clamp(Number(m.height_vh), 10, 100);
-    m.min_height = clamp(Number(m.min_height), 60, 2000);
-    m.max_height = clamp(Number(m.max_height), m.min_height, 4000);
-    m.blend_stop = clamp(Number(m.blend_stop), 0, 100);
+    if (c.title !== this._tpl.title.raw) {
+      this._setupTemplate("title", c.title);
+    }
+    if (c.subtitle !== this._tpl.subtitle.raw) {
+      this._setupTemplate("subtitle", c.subtitle);
+    }
 
-    m.fixed = !!m.fixed;
-    m.fixed_top = Number.isFinite(+m.fixed_top) ? +m.fixed_top : 0;
-
-    m.title_offset_x = Number.isFinite(+m.title_offset_x) ? +m.title_offset_x : 5;
-    m.title_offset_y = Number.isFinite(+m.title_offset_y) ? +m.title_offset_y : 32;
-    m.subtitle_offset_x = Number.isFinite(+m.subtitle_offset_x) ? +m.subtitle_offset_x : 5;
-    m.subtitle_offset_y = Number.isFinite(+m.subtitle_offset_y) ? +m.subtitle_offset_y : 32;
-
-    m.badges_offset_pinned = Number.isFinite(+m.badges_offset_pinned) ? +m.badges_offset_pinned : 48;
-    m.badges_offset_unpinned = Number.isFinite(+m.badges_offset_unpinned) ? +m.badges_offset_unpinned : 100;
-    m.badges_gap = Number.isFinite(+m.badges_gap) ? +m.badges_gap : 0;
-
-    m.font_family =
-      ["inherit", "system", "roboto", "inter", "arial", "georgia", "mono", "custom"].includes(
-        m.font_family
-      )
-        ? m.font_family
-        : "inherit";
-    m.font_family_custom = typeof m.font_family_custom === "string" ? m.font_family_custom : "";
-    m.font_style = ["normal", "italic"].includes(m.font_style) ? m.font_style : "normal";
-    m.title_size_px = clamp(Number(m.title_size_px ?? 36), 8, 256);
-    m.subtitle_size_px = clamp(Number(m.subtitle_size_px ?? 15), 8, 128);
-    m.title_weight = normalizeWeightKey(m.title_weight ?? "bold", "bold");
-    m.subtitle_weight = normalizeWeightKey(m.subtitle_weight ?? "medium", "medium");
-
-    m.weather_pill_border_radius = Number.isFinite(+m.weather_pill_border_radius) ? +m.weather_pill_border_radius : 20;
-    m.weather_pill_opacity = clamp(Number(m.weather_pill_opacity ?? 0.8), 0, 1);
-
-    this._config = m;
-    this._scheduleTemplateSetup(0);
-    this._debouncedBadgesZIndex();
+    this.requestUpdate();
   }
 
-  _isTemplateString(s) {
-    if (typeof s !== "string") return false;
-    const t = s.trim();
-    return t.includes("{{") || t.includes("{%") || t.includes("{#");
-  }
+  _setupTemplate(field, rawValue) {
+    if (this._tpl[field].unsub) {
+      this._tpl[field].unsub();
+      this._tpl[field].unsub = null;
+    }
 
-  _getUserVariable() {
-    const u = this.hass?.user;
-    return u?.name || u?.username || u?.id || "";
-  }
+    const sig = cacheKey(rawValue, null);
+    if (this._tpl[field].sig === sig) return;
 
-  _buildTemplateVariables() {
-    return {
-      config: this._config ?? {},
-      user: this._getUserVariable(),
-    };
-  }
+    this._tpl[field] = { raw: rawValue, sig, seq: 0, unsub: null };
 
-  _scheduleTemplateSetup(delayMs = 0) {
-    if (this._tpl.timer) clearTimeout(this._tpl.timer);
-    this._tpl.timer = setTimeout(() => {
-      this._tpl.timer = 0;
-      this._setupTemplates();
-    }, Math.max(0, delayMs));
-  }
-
-  _setupTemplates() {
-    const titleRaw = this._config?.title ?? "";
-    const subtitleRaw = this._config?.subtitle ?? "";
-    this._setupTemplateKey("title", titleRaw);
-    this._setupTemplateKey("subtitle", subtitleRaw);
-  }
-
-  _setupTemplateKey(key, raw) {
-    const isTpl = this._isTemplateString(raw);
-
-    if (!isTpl) {
-      this._unsubscribeTemplate(key);
-      this._tpl[key].raw = raw;
-      this._tpl[key].sig = "";
-      this._setRendered(key, raw);
+    if (!this._hassReady || !rawValue) {
+      if (field === "title") this._renderedTitle = rawValue;
+      if (field === "subtitle") this._renderedSubtitle = rawValue;
       return;
     }
 
-    this._setRendered(key, raw);
-
-    const vars = this._buildTemplateVariables();
-    const sig = cacheKey(raw, vars);
-    const state = this._tpl[key];
-
-    this._unsubscribeTemplate(key);
-    state.raw = raw;
-    state.sig = sig;
-    state.seq += 1;
-    const seq = state.seq;
-
-    const hadCache = this._applyCachedTemplate(key, sig);
-
-    if (!this._inPreview && this.hass?.connection?.subscribeMessage) {
-      this._subscribeTemplateImmediate(key, seq, raw, vars, sig);
-    } else if (this.hass?.callWS && !hadCache) {
-      this._renderTemplateOnce(key, seq, raw, vars, sig);
-    }
+    this._renderTemplate(field, rawValue);
   }
 
-  _applyCachedTemplate(key, sig) {
-    try {
-      const cached = sessionStorage.getItem(sig);
-      if (cached != null && cached !== "") {
-        this._setRendered(key, cached);
-        return true;
-      }
-    } catch (_) {}
-    return false;
-  }
-
-  async _renderTemplateOnce(key, seq, raw, vars, sig) {
-    if (!this.hass?.callWS) return;
+  _renderTemplate(field, rawValue) {
+    const localSeq = ++this._tpl[field].seq;
 
     try {
-      const res = await this.hass.callWS({
-        type: "render_template",
-        template: raw,
-        variables: vars,
-        strict: false,
-      });
-
-      const st = this._tpl[key];
-      if (st.seq !== seq) return;
-
-      const text = res?.result == null ? "" : String(res.result);
-      this._setRendered(key, text);
-      this._storeTemplateCache(sig, text);
-    } catch (err) {
-      console.warn(`Template render failed for ${key}:`, err);
-    }
-  }
-
-  async _subscribeTemplateImmediate(key, seq, raw, vars, sig) {
-    if (!this.hass?.connection?.subscribeMessage) return;
-
-    try {
-      const unsub = await this.hass.connection.subscribeMessage(
-        (msg) => this._onTemplateMsg(key, seq, raw, sig, msg),
-        {
-          type: "render_template",
-          template: raw,
-          variables: vars,
-          strict: false,
-          report_errors: false,
-        }
+      const unsub = this.hass.connection.subscribeMessage(
+        (msg) => {
+          if (localSeq !== this._tpl[field].seq) return;
+          if (field === "title") this._renderedTitle = msg.result || "";
+          if (field === "subtitle") this._renderedSubtitle = msg.result || "";
+        },
+        { type: "render_template", template: rawValue }
       );
 
-      const st = this._tpl[key];
-      if (st.seq !== seq) {
-        unsub?.();
-        return;
-      }
-      st.unsub = unsub;
+      this._tpl[field].unsub = () => {
+        unsub.then((u) => u()).catch(() => {});
+      };
     } catch (err) {
-      console.warn(`Template subscription failed for ${key}:`, err);
-      this._renderTemplateOnce(key, seq, raw, vars, sig);
+      console.warn(`[HkiHeaderCard] Template render error (${field}):`, err);
+      if (field === "title") this._renderedTitle = rawValue;
+      if (field === "subtitle") this._renderedSubtitle = rawValue;
     }
   }
 
-  _onTemplateMsg(key, seq, raw, sig, msg) {
-    const st = this._tpl[key];
-    if (st.seq !== seq) return;
-    if (msg?.error) {
-      console.warn(`Template update error for ${key}:`, msg.error);
-      return;
-    }
-
-    const text = msg?.result == null ? "" : String(msg.result);
-    this._setRendered(key, text);
-    this._storeTemplateCache(sig, text);
-  }
-
-  _storeTemplateCache(sig, value) {
-    try {
-      sessionStorage.setItem(sig, value);
-    } catch (_) {}
-  }
-
-  _setRendered(key, value) {
-    const v = value == null ? "" : String(value);
-    if (key === "title") {
-      if (this._renderedTitle !== v) {
-        this._renderedTitle = v;
-        this.requestUpdate();
+  updated(changedProps) {
+    super.updated(changedProps);
+    if (changedProps.has("hass")) {
+      if (this.hass && !this._hassReady) {
+        this._hassReady = true;
+        if (this._tpl.title.raw) this._renderTemplate("title", this._tpl.title.raw);
+        if (this._tpl.subtitle.raw) this._renderTemplate("subtitle", this._tpl.subtitle.raw);
       }
-    } else {
-      if (this._renderedSubtitle !== v) {
-        this._renderedSubtitle = v;
-        this.requestUpdate();
+
+      if (this._config.weather && this.hass && this.hass.states) {
+        const weatherEntity = this.hass.states[this._config.weather];
+        if (weatherEntity) {
+          this._weatherState = weatherEntity;
+        }
       }
     }
   }
 
-  _unsubscribeTemplate(key) {
-    const st = this._tpl[key];
-    if (!st) return;
-    if (st.unsub) {
-      try {
-        st.unsub();
-      } catch (_) {}
+  scheduleKioskCheck() {
+    if (this._kioskCheckInterval) return;
+    this._kioskCheckInterval = setInterval(() => {
+      this.checkKioskMode();
+    }, 1000);
+    this.checkKioskMode();
+  }
+
+  stopKioskCheck() {
+    if (this._kioskCheckInterval) clearInterval(this._kioskCheckInterval);
+    this._kioskCheckInterval = null;
+    if (this._kioskMutationObserver) this._kioskMutationObserver.disconnect();
+    this._kioskMutationObserver = null;
+  }
+
+  checkKioskMode() {
+    let panelContainer = null;
+    let el = this;
+    while (el && el !== document.body) {
+      if (el.matches && el.matches("hui-panel-view, hui-masonry-view, hui-sections-view")) {
+        panelContainer = el;
+        break;
+      }
+      el = el.parentElement || el.getRootNode().host;
     }
-    st.unsub = null;
-  }
 
-  _resolveFontFamily() {
-    const k = this._config?.font_family ?? "inherit";
-    if (k === "custom") return (this._config?.font_family_custom || "").trim() || "inherit";
-    return FONT_FAMILY_MAP[k] ?? "inherit";
-  }
-
-  _resolveWeight(key) {
-    const k = this._config?.[key];
-    return WEIGHT_MAP[k] ?? 400;
-  }
-
-  _resolveBackground(bg) {
-    if (!bg || typeof bg !== "string") return bg;
-    const trimmed = bg.trim();
-    
-    if (trimmed.startsWith("url(") || trimmed.startsWith("linear-gradient(") || trimmed.startsWith("radial-gradient(")) {
-      return trimmed;
+    const now = !!panelContainer?.classList?.contains("kiosk");
+    if (now !== this._kioskMode) {
+      this._kioskMode = now;
+      this.requestUpdate();
     }
-    
-    const isPath = trimmed.startsWith("/") || 
-                   trimmed.startsWith("./") || 
-                   trimmed.startsWith("../") ||
-                   trimmed.startsWith("http://") || 
-                   trimmed.startsWith("https://") ||
-                   /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(trimmed);
-    
-    return isPath ? `url('${trimmed}')` : trimmed;
   }
 
-  _debouncedBadgesZIndex() {
-    if (this._rafBadges) return;
-    this._rafBadges = requestAnimationFrame(() => {
-      this._rafBadges = 0;
-      this._applyBadgesZIndex();
+  startUrlChangeListener() {
+    this._urlChangeHandler = () => this.checkKioskMode();
+    window.addEventListener("location-changed", this._urlChangeHandler);
+  }
+
+  stopUrlChangeListener() {
+    if (this._urlChangeHandler)
+      window.removeEventListener("location-changed", this._urlChangeHandler);
+    this._urlChangeHandler = null;
+  }
+
+  startResizeObserver() {
+    if (!this.shadowRoot) return;
+    const card = this.shadowRoot.querySelector("ha-card.header");
+    if (!card) return;
+
+    if (this._ro) this._ro.disconnect();
+    this._ro = new ResizeObserver(() => this.scheduleLayoutMeasure());
+    this._ro.observe(card);
+
+    this.scheduleLayoutMeasure();
+  }
+
+  stopResizeObserver() {
+    if (this._ro) this._ro.disconnect();
+    this._ro = null;
+  }
+
+  scheduleLayoutMeasure() {
+    if (this._rafMeasure) return;
+    this._rafMeasure = requestAnimationFrame(() => {
+      this._rafMeasure = 0;
+      this._measureLayout();
     });
   }
 
-  _applyBadgesZIndex() {
-    const cfg = this._config || {};
-    const effectiveFixed = !!cfg.fixed && !this._inPreview;
+  _measureLayout() {
+    if (!this.shadowRoot) return;
+    const card = this.shadowRoot.querySelector("ha-card.header");
+    if (!card) return;
 
-    if (!effectiveFixed) {
-      this._resetBadgesZIndex();
-      return;
+    const vw = window.innerWidth;
+    const rect = card.getBoundingClientRect();
+    const offL = rect.left;
+    const cw = rect.width;
+    const hh = rect.height;
+
+    if (this._offsetLeft !== offL) {
+      this._offsetLeft = offL;
+      this.style.setProperty("--hki-offset-left", `${offL}px`);
+    }
+    if (this._viewportWidth !== vw) {
+      this._viewportWidth = vw;
+      this.style.setProperty("--hki-viewport-width", `${vw}px`);
+    }
+    if (this._contentWidth !== cw) {
+      this._contentWidth = cw;
+      this.style.setProperty("--hki-content-width", `${cw}px`);
+    }
+    if (this._headerHeight !== hh) {
+      this._headerHeight = hh;
+      this.style.setProperty("--hki-header-height", `${hh}px`);
     }
 
-    const el = this._findHaBadgesElement();
-    if (!el) {
-      this._resetBadgesZIndex();
-      return;
-    }
-
-    if (el !== this._badgesEl) {
-      this._resetBadgesZIndex();
-      this._badgesEl = el;
-    }
-
-    const kioskAdjustment = this._kioskMode ? 0 : 48;
-    const badgesOffset = cfg.badges_fixed ? (cfg.badges_offset_pinned || 48) : (cfg.badges_offset_unpinned || 100);
-    const topPosition = Math.max(0, (this._headerHeight || 0) - badgesOffset + (cfg.fixed_top || 0) + kioskAdjustment);
-
-    if (cfg.badges_fixed) {
-      el.style.position = "fixed";
-      el.style.top = `${topPosition}px`;
-      el.style.left = `${this._offsetLeft}px`;
-      el.style.width = `${this._contentWidth}px`;
-      el.style.zIndex = "2";
-      el.style.marginBottom = "";
-    } else {
-      el.style.position = "relative";
-      el.style.left = "";
-      el.style.width = "";
-      el.style.zIndex = "0";
-      const kioskGapAdjustment = this._kioskMode ? 48 : 0;
-      const effectiveGap = (cfg.badges_gap || 0) + kioskGapAdjustment;
-      el.style.marginBottom = `${effectiveGap}px`;
-    }
+    this.scheduleBadgePosition();
   }
 
-  _resetBadgesZIndex() {
-    if (this._badgesEl) {
-      try {
-        this._badgesEl.style.position = "";
-        this._badgesEl.style.top = "";
-        this._badgesEl.style.left = "";
-        this._badgesEl.style.width = "";
-        this._badgesEl.style.right = "";
-        this._badgesEl.style.zIndex = "";
-        this._badgesEl.style.marginBottom = "";
-      } catch (_) {}
-      this._badgesEl = null;
-    }
+  scheduleBadgePosition() {
+    if (this._rafBadges) return;
+    this._rafBadges = requestAnimationFrame(() => {
+      this._rafBadges = 0;
+      this._updateBadgePosition();
+    });
   }
 
-  _findHaBadgesElement() {
-    const selectors = "hui-badges, ha-badges, .badges, .header-badges";
-    let node = this;
-    for (let i = 0; i < 12; i++) {
-      const root = node.getRootNode?.();
-      if (!root || root === document) break;
-      const host = root.host;
-      if (!host) break;
+  _updateBadgePosition() {
+    if (!this._badgesEl) this._badgesEl = this.findBadgesElement();
+    if (!this._badgesEl) return;
 
-      const sr = host.shadowRoot;
-      const hit = (sr && sr.querySelector?.(selectors)) || host.querySelector?.(selectors);
-      if (hit) return hit;
+    const cf = this._config;
+    const fixed = !!cf.badges_fixed;
+    const gap = Number(cf.badges_gap) || 0;
 
-      node = host;
+    let adjGap = gap;
+    if (fixed) adjGap -= 48;
+    if (this._kioskMode) adjGap += 48;
+
+    let off = fixed ? Number(cf.badges_offset_pinned) || -30 : Number(cf.badges_offset_unpinned) || 0;
+
+    this._badgesEl.style.position = fixed ? "sticky" : "";
+    this._badgesEl.style.top = fixed ? `${off}px` : "";
+    this._badgesEl.style.marginBottom = `${adjGap}px`;
+    this._badgesEl.style.zIndex = fixed ? "3" : "";
+  }
+
+  findBadgesElement() {
+    let current = this;
+    while (current && current !== document.body) {
+      const next = current.parentElement || current.getRootNode().host;
+      if (next && next.tagName === "HUI-VIEW") {
+        const badges = next.shadowRoot?.querySelector("hui-badges");
+        if (badges) return badges;
+      }
+      current = next;
     }
     return null;
   }
 
-  _handleAction(action) {
-    if (!action || action.action === "none" || !this.hass) return;
-    
-    switch (action.action) {
-      case "navigate":
-        if (action.navigation_path) {
-          history.pushState(null, "", action.navigation_path);
-          const navEvent = new Event("location-changed", {
-            bubbles: true,
-            composed: true,
-          });
-          navEvent.detail = { replace: false };
-          window.dispatchEvent(navEvent);
-        }
-        break;
-        
-      case "url":
-        if (action.url_path) {
-          window.open(action.url_path, "_blank");
-        }
-        break;
-        
-      case "call-service":
-        if (action.service) {
-          const [domain, service] = action.service.split(".");
-          if (domain && service) {
-            this.hass.callService(domain, service, action.service_data || {});
-          }
-        }
-        break;
-        
-      case "more-info":
-        const entity = action.entity || this._config.weather_entity;
-        if (entity) {
-          const moreInfoEvent = new Event("hass-more-info", {
-            bubbles: true,
-            composed: true,
-          });
-          moreInfoEvent.detail = { entityId: entity };
-          this.dispatchEvent(moreInfoEvent);
-        }
-        break;
-        
-      case "toggle":
-        const toggleEntity = action.entity || this._config.weather_entity;
-        if (toggleEntity) {
-          this.hass.callService("homeassistant", "toggle", {
-            entity_id: toggleEntity,
-          });
-        }
-        break;
-    }
-  }
+  _handleWeatherClick(e) {
+    e.stopPropagation();
+    if (!this._config.weather || !this.hass) return;
 
-  _getWeatherIconColor(state) {
-    const colorMap = {
-      'clear-night': '#4A90E2',
-      'cloudy': '#95A5A6',
-      'fog': '#BDC3C7',
-      'hail': '#7F8C8D',
-      'lightning': '#F39C12',
-      'lightning-rainy': '#E67E22',
-      'partlycloudy': '#5DADE2',
-      'pouring': '#2980B9',
-      'rainy': '#3498DB',
-      'snowy': '#ECF0F1',
-      'snowy-rainy': '#85C1E9',
-      'sunny': '#F1C40F',
-      'windy': '#9B59B6',
-      'windy-variant': '#8E44AD',
-      'exceptional': '#E74C3C',
-    };
-    return colorMap[state] || '#5DADE2';
+    const action = this._config.weather_tap_action || { action: "more-info" };
+
+    if (action.action === "more-info") {
+      const ev = new Event("hass-more-info", {
+        composed: true,
+        bubbles: true,
+        cancelable: false,
+      });
+      ev.detail = { entityId: this._config.weather };
+      this.dispatchEvent(ev);
+    } else if (action.action === "toggle") {
+      this.hass.callService("homeassistant", "toggle", {
+        entity_id: this._config.weather,
+      });
+    } else if (action.action === "navigate" && action.navigation_path) {
+      window.history.pushState(null, "", action.navigation_path);
+      const navEv = new Event("location-changed", {
+        composed: true,
+        bubbles: false,
+        cancelable: false,
+      });
+      window.dispatchEvent(navEv);
+    } else if (action.action === "url" && action.url_path) {
+      window.open(action.url_path);
+    } else if (action.action === "call-service") {
+      const [domain, service] = (action.service || "").split(".", 2);
+      if (domain && service) {
+        this.hass.callService(domain, service, action.service_data || {});
+      }
+    }
   }
 
   _renderWeather() {
-    if (!this._config.weather_entity || !this.hass) return html``;
-    
-    const weatherEntity = this.hass.states[this._config.weather_entity];
-    if (!weatherEntity) return html``;
+    const cf = this._config;
+    if (!cf.weather || !this._weatherState) return html``;
 
-    const cfg = this._config;
-    const state = weatherEntity.state;
-    const temperature = weatherEntity.attributes.temperature;
-    const humidity = weatherEntity.attributes.humidity;
-    const unit = this.hass.config.unit_system.temperature;
-    
-    const iconMap = {
-      'clear-night': 'mdi:weather-night',
-      'cloudy': 'mdi:weather-cloudy',
-      'fog': 'mdi:weather-fog',
-      'hail': 'mdi:weather-hail',
-      'lightning': 'mdi:weather-lightning',
-      'lightning-rainy': 'mdi:weather-lightning-rainy',
-      'partlycloudy': 'mdi:weather-partly-cloudy',
-      'pouring': 'mdi:weather-pouring',
-      'rainy': 'mdi:weather-rainy',
-      'snowy': 'mdi:weather-snowy',
-      'snowy-rainy': 'mdi:weather-snowy-rainy',
-      'sunny': 'mdi:weather-sunny',
-      'windy': 'mdi:weather-windy',
-      'windy-variant': 'mdi:weather-windy-variant',
-      'exceptional': 'mdi:alert-circle-outline',
-    };
-    
-    const icon = iconMap[state] || 'mdi:weather-partly-cloudy';
-    
-    const fontFamily = this._resolveFontFamily();
-    const fontStyle = cfg.font_style || "normal";
-    const weatherFontSize = cfg.weather_size_px || 12;
-    const weatherWeight = this._resolveWeight("weather_weight");
-    let weatherInline = `font-family:${fontFamily};font-style:${fontStyle};font-size:${weatherFontSize}px;font-weight:${weatherWeight};`;
-    
-    if (cfg.weather_color) {
-      weatherInline += `color:${cfg.weather_color};`;
-    }
-    
-    const iconSize = Math.round(weatherFontSize * 2);
-    
-    // Use mobile offsets if set and on mobile, otherwise use desktop offsets
-    const weatherOffsetX = this._isMobile && cfg.weather_offset_x_mobile !== null 
-      ? cfg.weather_offset_x_mobile 
-      : (cfg.weather_offset_x !== undefined ? cfg.weather_offset_x : 5);
-    const weatherOffsetY = this._isMobile && cfg.weather_offset_y_mobile !== null 
-      ? cfg.weather_offset_y_mobile 
-      : (cfg.weather_offset_y !== undefined ? cfg.weather_offset_y : 40);
-    
-    let weatherStyle = "";
-    if (cfg.weather_align === "left") {
-      weatherStyle = `left:${weatherOffsetX}px;top:${weatherOffsetY}px;--weather-icon-size:${iconSize}px;`;
-    } else {
-      weatherStyle = `right:${weatherOffsetX}px;top:${weatherOffsetY}px;--weather-icon-size:${iconSize}px;`;
-    }
+    const state = this._weatherState;
+    const attrs = state.attributes || {};
 
-    // Add pill background styling
-    if (cfg.weather_pill_enabled) {
-      const pillBg = cfg.weather_pill_background || "rgba(0, 0, 0, 0.3)";
-      const pillRadius = cfg.weather_pill_border_radius || 20;
-      const pillOpacity = cfg.weather_pill_opacity !== undefined ? cfg.weather_pill_opacity : 0.8;
-      weatherStyle += `background:${pillBg};border-radius:${pillRadius}px;opacity:${pillOpacity};`;
-    }
+    // Determine if mobile
+    const isMobile = this._viewportWidth > 0 && this._viewportWidth < 768;
     
-    const handleTap = (e) => {
-      e.stopPropagation();
-      if (cfg.weather_tap_action) {
-        this._handleAction(cfg.weather_tap_action);
-      }
-    };
+    // Use mobile-specific offsets if available, otherwise fall back to desktop
+    const weatherX = isMobile && cf.weather_mobile_x !== null ? cf.weather_mobile_x : cf.weather_x;
+    const weatherY = isMobile && cf.weather_mobile_y !== null ? cf.weather_mobile_y : cf.weather_y;
+
+    const showIcon = cf.weather_show_icon !== false;
+    const showCondition = cf.weather_show_condition !== false;
+    const showTemperature = cf.weather_show_temperature !== false;
+    const usePill = cf.weather_use_pill || false;
+    const pillStyle = cf.weather_pill_style || "pill";
+    const pillSize = cf.weather_pill_size || "comfortable";
+    const pillBackground = cf.weather_pill_background || "rgba(0,0,0,0.3)";
+    const animatedIcons = cf.weather_animated_icons !== false;
+    const coloredIcons = cf.weather_colored_icons !== false;
+
+    const showHumidity = cf.weather_show_humidity || false;
+    const showPressure = cf.weather_show_pressure || false;
+    const showWindSpeed = cf.weather_show_wind_speed || false;
+    const showWindBearing = cf.weather_show_wind_bearing || false;
+
+    const condition = state.state || "";
+    const temp = attrs.temperature;
+    const unit = this.hass?.config?.unit_system?.temperature || "°C";
     
-    const hasAction = cfg.weather_tap_action && cfg.weather_tap_action.action !== "none";
-    const containerClass = hasAction ? "weather-container weather-clickable" : "weather-container";
-    
-    const iconColor = cfg.weather_animated ? this._getWeatherIconColor(state) : (cfg.weather_color || "var(--hki-header-text-color, #fff)");
-    const iconClass = cfg.weather_animated ? "weather-icon weather-icon-animated" : "weather-icon";
-    const iconStyle = `color:${iconColor};`;
-    
+    const weatherInfo = WEATHER_ICONS[condition] || { icon: '🌡️', color: '#9ca3af', animation: 'pulse' };
+    const iconColor = coloredIcons ? weatherInfo.color : (cf.weather_color || 'var(--hki-header-text-color, #fff)');
+    const animationClass = animatedIcons ? `animate-${weatherInfo.animation}` : '';
+
+    const styles = `
+      left: calc(50% + ${weatherX}px);
+      bottom: ${weatherY}px;
+      transform: translateX(-50%);
+      color: ${cf.weather_color || 'var(--hki-header-text-color, #fff)'};
+      font-size: ${cf.weather_size_px || 12}px;
+      font-weight: ${WEIGHT_MAP[normalizeWeightKey(cf.weather_weight, "medium")]};
+    `;
+
+    const pillStyles = usePill ? `background: ${pillBackground};` : '';
+
+    const mainContent = html`
+      <div class="weather-main-info">
+        ${showIcon ? html`
+          <div 
+            class="weather-icon ${animatedIcons ? 'animated' : ''} ${animationClass}" 
+            style="color: ${iconColor}; font-size: ${(cf.weather_size_px || 12) * 2.5}px;"
+          >
+            ${weatherInfo.icon}
+          </div>
+        ` : ''}
+        ${showCondition ? html`<div class="weather-condition">${condition}</div>` : ''}
+        ${showTemperature && temp != null ? html`<div class="weather-temperature">${temp}${unit}</div>` : ''}
+      </div>
+    `;
+
+    const hasAttributes = showHumidity || showPressure || showWindSpeed || showWindBearing;
+    const attributesContent = hasAttributes ? html`
+      <div class="weather-attributes">
+        ${showHumidity && attrs.humidity != null ? html`
+          <div class="weather-attribute">
+            <span class="weather-attribute-icon">💧</span>
+            <span>${attrs.humidity}%</span>
+          </div>
+        ` : ''}
+        ${showPressure && attrs.pressure != null ? html`
+          <div class="weather-attribute">
+            <span class="weather-attribute-icon">🔽</span>
+            <span>${attrs.pressure} ${attrs.pressure_unit || 'hPa'}</span>
+          </div>
+        ` : ''}
+        ${showWindSpeed && attrs.wind_speed != null ? html`
+          <div class="weather-attribute">
+            <span class="weather-attribute-icon">💨</span>
+            <span>${attrs.wind_speed} ${attrs.wind_speed_unit || 'km/h'}</span>
+          </div>
+        ` : ''}
+        ${showWindBearing && attrs.wind_bearing != null ? html`
+          <div class="weather-attribute">
+            <span class="weather-attribute-icon">🧭</span>
+            <span>${this._getWindDirection(attrs.wind_bearing)}</span>
+          </div>
+        ` : ''}
+      </div>
+    ` : '';
+
+    const content = hasAttributes ? html`
+      ${mainContent}
+      ${attributesContent}
+    ` : mainContent;
+
     return html`
-      <div class="${containerClass}" style="${weatherStyle}${weatherInline}" @click=${handleTap}>
-        ${cfg.weather_show_icon ? html`<ha-icon icon="${icon}" class="${iconClass}" style="${iconStyle}"></ha-icon>` : html``}
-        ${cfg.weather_show_condition ? html`<span class="weather-condition">${state.replace('-', ' ')}</span>` : html``}
-        ${cfg.weather_show_temperature && temperature !== undefined ? html`<span class="weather-temperature">${Math.round(temperature)}${unit}</span>` : html``}
-        ${cfg.weather_show_humidity && humidity !== undefined ? html`<span class="weather-humidity">${humidity}%</span>` : html``}
+      <div
+        class="weather-container weather-clickable"
+        style="${styles}"
+        @click=${this._handleWeatherClick}
+      >
+        ${usePill ? html`
+          <div class="weather-pill ${pillStyle} ${pillSize}" style="${pillStyles}">
+            ${content}
+          </div>
+        ` : content}
       </div>
     `;
   }
 
+  _getWindDirection(bearing) {
+    const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    const index = Math.round(bearing / 45) % 8;
+    return directions[index];
+  }
+
   render() {
-    if (!this._config) return html``;
+    const cf = this._config;
+    const hasWeather = cf.weather && this._weatherState;
 
-    const cfg = this._config;
-    const effectiveFixed = !!cfg.fixed && !this._inPreview;
+    const titleX = Number(cf.title_x) || 0;
+    const titleY = Number(cf.title_y) || 90;
+    const titleSizePx = clamp(Number(cf.title_size_px) || 28, 10, 100);
+    const titleWeight = normalizeWeightKey(cf.title_weight, "bold");
+    const titleColor = cf.title_color || '';
 
-    const titleText = this._isTemplateString(cfg.title) ? (this._renderedTitle ?? "") : (cfg.title ?? "");
-    const subtitleText = this._isTemplateString(cfg.subtitle) ? (this._renderedSubtitle ?? "") : (cfg.subtitle ?? "");
-    const subtitleVisible = !!String(subtitleText || "").trim();
+    const subtitleX = Number(cf.subtitle_x) || 0;
+    const subtitleY = Number(cf.subtitle_y) || 0;
+    const subtitleSizePx = clamp(Number(cf.subtitle_size_px) || 16, 8, 60);
+    const subtitleWeight = normalizeWeightKey(cf.subtitle_weight, "medium");
+    const subtitleColor = cf.subtitle_color || '';
 
-    const cardWidth = this._inPreview ? "100%" : "100vw";
+    const fontFamily =
+      cf.font_family === "custom" && cf.font_family_custom
+        ? cf.font_family_custom
+        : FONT_FAMILY_MAP[cf.font_family] || FONT_FAMILY_MAP.inherit;
+    const fontStyle = cf.font_style || "normal";
 
-    const resolvedBackground = this._resolveBackground(cfg.background);
-
-    const cardStyle = [
-      `width:${cardWidth}`,
-      `height:${cfg.height_vh}vh`,
-      `min-height:${cfg.min_height}px`,
-      `max-height:${cfg.max_height}px`,
-      resolvedBackground ? `background:${resolvedBackground}` : "",
-      cfg.background_position ? `background-position:${cfg.background_position}` : "",
-      cfg.background_repeat ? `background-repeat:${cfg.background_repeat}` : "",
-      cfg.background_size ? `background-size:${cfg.background_size}` : "",
-    ].filter(Boolean).join(";");
-
-    const overlayStyle = `background:linear-gradient(to bottom, transparent 0%, ${cfg.blend_color} ${cfg.blend_stop}%, ${cfg.blend_color} 100%);`;
-    const contentStyle = `margin-left:${this._offsetLeft}px;width:${this._contentWidth}px;`;
-
-    const fontFamily = this._resolveFontFamily();
-    const fontStyle = cfg.font_style || "normal";
-    
-    let titleInline = `font-family:${fontFamily};font-style:${fontStyle};font-size:${cfg.title_size_px}px;font-weight:${this._resolveWeight("title_weight")};`;
-    if (cfg.title_color) {
-      titleInline += `color:${cfg.title_color};`;
-    }
-    
-    let subtitleInline = `font-family:${fontFamily};font-style:${fontStyle};font-size:${cfg.subtitle_size_px}px;font-weight:${this._resolveWeight("subtitle_weight")};`;
-    if (cfg.subtitle_color) {
-      subtitleInline += `color:${cfg.subtitle_color};`;
+    let bgVal = cf.background || "";
+    if (bgVal && !bgVal.includes("url(") && /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(bgVal)) {
+      bgVal = `url(${bgVal})`;
     }
 
-    // Use mobile offsets if set and on mobile, otherwise use desktop offsets
-    const titleOffsetX = this._isMobile && cfg.title_offset_x_mobile !== null 
-      ? cfg.title_offset_x_mobile 
-      : (cfg.title_offset_x || 0);
-    const titleOffsetY = this._isMobile && cfg.title_offset_y_mobile !== null 
-      ? cfg.title_offset_y_mobile 
-      : (cfg.title_offset_y || 0);
-    const subtitleOffsetX = this._isMobile && cfg.subtitle_offset_x_mobile !== null 
-      ? cfg.subtitle_offset_x_mobile 
-      : (cfg.subtitle_offset_x || 0);
-    const subtitleOffsetY = this._isMobile && cfg.subtitle_offset_y_mobile !== null 
-      ? cfg.subtitle_offset_y_mobile 
-      : (cfg.subtitle_offset_y || 0);
+    const bgPos = cf.background_position || "center";
+    const bgRep = cf.background_repeat || "no-repeat";
+    const bgSz = cf.background_size || "cover";
+    const minH = clamp(Number(cf.min_height), 100, 600);
+    const maxH = clamp(Number(cf.max_height), 100, 800);
 
-    const subtitleRelativeOffsetX = subtitleOffsetX - titleOffsetX;
-    const subtitleRelativeOffsetY = subtitleOffsetY - titleOffsetY;
-    const subtitleTransform = `transform:translate(${subtitleRelativeOffsetX}px, ${subtitleRelativeOffsetY}px);`;
+    const blendColor = cf.blend_color || "rgba(0,0,0,0.45)";
+    const blendStop = clamp(Number(cf.blend_stop) || 70, 0, 100);
 
-    let titleBlockStyle = "";
-    if (cfg.text_align === "right") titleBlockStyle = `left:auto;right:${titleOffsetX}px;top:${titleOffsetY}px;text-align:right;align-items:flex-end;`;
-    else if (cfg.text_align === "center") titleBlockStyle = `left:50%;top:${titleOffsetY}px;transform:translateX(-50%);text-align:center;align-items:center;`;
-    else titleBlockStyle = `left:${titleOffsetX}px;top:${titleOffsetY}px;text-align:left;align-items:flex-start;`;
+    const titleBlockStyle = `
+      left: calc(50% + ${titleX}px);
+      bottom: ${titleY}px;
+      transform: translateX(-50%);
+      font-family: ${fontFamily};
+      font-style: ${fontStyle};
+    `;
 
-    const topOffset = this._kioskMode ? (cfg.fixed_top || 0) : (cfg.fixed_top || 0) + 48;
-    const wrapperStyle = effectiveFixed ? `top:${topOffset}px;` : "";
-    
-    const badgesOffset = cfg.badges_fixed ? (cfg.badges_offset_pinned || 48) : (cfg.badges_offset_unpinned || 100);
-    
-    let spacerH = effectiveFixed 
-      ? Math.max(0, (this._headerHeight || 0) - badgesOffset + topOffset)
-      : 0;
-    
-    if (cfg.badges_fixed && effectiveFixed) {
-      const kioskGapAdjustment = this._kioskMode ? 48 : 0;
-      const pinnedGapAdjustment = -48;
-      const effectiveBadgesGap = (cfg.badges_gap || 0) + kioskGapAdjustment + pinnedGapAdjustment;
-      spacerH += effectiveBadgesGap;
-    }
+    const titleStyle = `
+      font-size: ${titleSizePx}px;
+      font-weight: ${WEIGHT_MAP[titleWeight]};
+      ${titleColor ? `color: ${titleColor};` : ''}
+    `;
 
-    const cardMarkup = html`
-      <ha-card class="header" style=${cardStyle} aria-label=${titleText || "Header"}>
-        <div class="overlay" style=${overlayStyle}></div>
-        <div class="content" style=${contentStyle}>
-          <div class="title-block" style=${titleBlockStyle}>
-            <div class="title" style=${titleInline} role="heading" aria-level="1">${titleText}</div>
-            ${subtitleVisible ? html`<div class="subtitle" style="${subtitleInline}${subtitleTransform}">${subtitleText}</div>` : html``}
+    const subtitleStyle = `
+      font-size: ${subtitleSizePx}px;
+      font-weight: ${WEIGHT_MAP[subtitleWeight]};
+      ${subtitleColor ? `color: ${subtitleColor};` : ''}
+    `;
+
+    const subtitleOffset = subtitleY ? `transform: translate(-50%, ${subtitleY}px);` : "";
+
+    const cardStyle = `
+      background: ${bgVal};
+      background-position: ${bgPos};
+      background-repeat: ${bgRep};
+      background-size: ${bgSz};
+      min-height: ${minH}px;
+      max-height: ${maxH}px;
+    `;
+
+    const overlayStyle = `
+      background: linear-gradient(180deg, transparent ${blendStop}%, ${blendColor} 100%);
+    `;
+
+    const weatherIconSize = (cf.weather_size_px || 12) * 2.5;
+    this.style.setProperty("--weather-icon-size", `${weatherIconSize}px`);
+
+    const cardContent = html`
+      <ha-card class="header" style="${cardStyle}">
+        <div class="overlay" style="${overlayStyle}"></div>
+        <div class="content">
+          <div class="title-block" style="${titleBlockStyle}">
+            ${this._renderedTitle ? html`<div class="title" style="${titleStyle}">${this._renderedTitle}</div>` : html``}
+            ${this._renderedSubtitle ? html`<div class="subtitle" style="${subtitleStyle} ${subtitleOffset}">${this._renderedSubtitle}</div>` : html``}
           </div>
-          ${this._renderWeather()}
+          ${hasWeather ? this._renderWeather() : html``}
         </div>
       </ha-card>
     `;
 
-    if (!effectiveFixed) return cardMarkup;
+    const spacerStyle = `height: ${this._headerHeight || minH}px;`;
 
-    return html`
-      <div class="header-fixed" style=${wrapperStyle}>${cardMarkup}</div>
-      <div class="header-spacer" style="height:${spacerH}px;"></div>
-    `;
+    if (cf.fixed) {
+      const fixedTop = Number(cf.fixed_top) || 0;
+      return html`
+        <div class="header-fixed" style="top: ${fixedTop}px;">${cardContent}</div>
+        <div class="header-spacer" style="${spacerStyle}"></div>
+      `;
+    } else {
+      return cardContent;
+    }
+  }
+
+  getCardSize() {
+    return 4;
   }
 
   static getConfigElement() {
@@ -1177,55 +926,10 @@ class HkiHeaderCard extends LitElement {
 
   static getStubConfig() {
     return {
-      title: "{% if is_state('sun.sun','above_horizon') %}Good day, {{ user }}{% else %}Good evening, {{ user }}{% endif %}",
-      subtitle: "{{ now().strftime('%A %H:%M') }}",
-      text_align: "left",
-      background: "https://github.com/jimz011/hki-header-card/blob/main/wallpapers/livingroom.jpg?raw=true",
-      background_position: "center",
-      background_repeat: "no-repeat",
-      background_size: "cover",
-      height_vh: 35,
-      min_height: 180,
-      max_height: 220,
-      blend_color: "var(--primary-background-color)",
-      blend_stop: 95,
-      fixed: true,
-      fixed_top: 0,
-      title_offset_x: 5,
-      title_offset_y: 32,
-      subtitle_offset_x: 5,
-      subtitle_offset_y: 32,
-      badges_offset_pinned: 48,
-      badges_offset_unpinned: 100,
-      badges_gap: 0,
-      badges_fixed: false,
-      font_family: "roboto",
-      font_style: "normal",
-      title_size_px: 36,
-      subtitle_size_px: 15,
-      title_weight: "bold",
-      subtitle_weight: "medium",
-      weather_entity: "",
-      weather_align: "right",
-      weather_offset_x: 5,
-      weather_offset_y: 40,
-      weather_size_px: 12,
-      weather_weight: "medium",
-      weather_tap_action: { action: "more-info" },
-      weather_show_icon: true,
-      weather_show_condition: true,
-      weather_show_temperature: true,
-      weather_show_humidity: false,
-      weather_animated: true,
-      weather_pill_enabled: false,
-      weather_pill_background: "rgba(0, 0, 0, 0.3)",
-      weather_pill_border_radius: 20,
-      weather_pill_opacity: 0.8,
+      title: "Welcome Home",
+      subtitle: "{{ now().strftime('%A, %B %d') }}",
+      background: "/local/header-bg.jpg",
     };
-  }
-
-  static getCardSize() {
-    return 3;
   }
 }
 
@@ -1233,232 +937,76 @@ customElements.define("hki-header-card", HkiHeaderCard);
 
 class HkiHeaderCardEditor extends LitElement {
   static get properties() {
-    return { hass: {}, _config: { attribute: false } };
-  }
-
-  setConfig(config) {
-    this._config = {
-      title: "",
-      title_color: "",
-      subtitle: "",
-      subtitle_color: "",
-      text_align: "left",
-      background: "https://github.com/jimz011/hki-header-card/blob/main/wallpapers/livingroom.jpg?raw=true",
-      background_position: "center",
-      background_repeat: "no-repeat",
-      background_size: "cover",
-      height_vh: 35,
-      min_height: 180,
-      max_height: 220,
-      blend_color: "var(--primary-background-color)",
-      blend_stop: 95,
-      fixed: true,
-      fixed_top: 0,
-      title_offset_x: 5,
-      title_offset_y: 32,
-      title_offset_x_mobile: null,
-      title_offset_y_mobile: null,
-      subtitle_offset_x: 5,
-      subtitle_offset_y: 32,
-      subtitle_offset_x_mobile: null,
-      subtitle_offset_y_mobile: null,
-      badges_offset_pinned: 48,
-      badges_offset_unpinned: 100,
-      badges_gap: 0,
-      badges_fixed: false,
-      font_family: "inherit",
-      font_family_custom: "",
-      font_style: "normal",
-      title_size_px: 36,
-      subtitle_size_px: 15,
-      title_weight: "bold",
-      subtitle_weight: "medium",
-      ...config,
+    return {
+      hass: {},
+      _config: {},
     };
   }
 
-  _val(ev) {
-    return ev.detail?.value ?? ev.target?.value;
+  setConfig(cfg) {
+    this._config = cfg || {};
   }
 
-  _changed(ev) {
-    ev.stopPropagation();
-    const field = ev.target?.dataset?.field;
-    if (!field || !this._config) return;
+  _changed(e) {
+    if (!this._config || !this.hass) return;
 
-    let value = this._val(ev);
+    const target = e.target;
+    const field = target.dataset.field;
+    if (!field) return;
 
-    const numeric = new Set([
-      "height_vh", "min_height", "max_height", "blend_stop", "fixed_top", 
-      "title_offset_x", "title_offset_y", "title_offset_x_mobile", "title_offset_y_mobile",
-      "subtitle_offset_x", "subtitle_offset_y", "subtitle_offset_x_mobile", "subtitle_offset_y_mobile",
-      "title_size_px", "subtitle_size_px", "badges_offset_pinned", "badges_offset_unpinned", "badges_gap",
-      "weather_offset_x", "weather_offset_y", "weather_offset_x_mobile", "weather_offset_y_mobile",
-      "weather_size_px", "weather_pill_border_radius", "weather_pill_opacity"
-    ]);
-    if (numeric.has(field)) {
-      value = Number(value);
-      if (!Number.isFinite(value)) return;
-    }
-
-    const bools = new Set(["fixed", "badges_fixed", "weather_show_icon", "weather_show_condition", 
-                            "weather_show_temperature", "weather_show_humidity", "weather_animated", "weather_pill_enabled"]);
-    if (bools.has(field)) value = !!(ev.target?.checked ?? value);
-
-    let next;
-    
-    if (field.includes(".")) {
-      const parts = field.split(".");
-      const rootField = parts[0];
-      const subField = parts[1];
-      
-      const currentValue = this._config[rootField] || {};
-      
-      next = {
-        ...this._config,
-        [rootField]: {
-          ...currentValue,
-          [subField]: value
-        }
-      };
+    let val;
+    if (target.type === "checkbox" || target.tagName === "HA-SWITCH") {
+      val = target.checked;
+    } else if (target.type === "number") {
+      val = target.value === "" ? undefined : Number(target.value);
+    } else if (target.tagName === "HA-SELECT") {
+      val = target.value;
     } else {
-      next = { ...this._config, [field]: value };
+      val = target.value || undefined;
     }
-    
-    if (field === "badges_fixed") {
-      const currentOffset = this._config.badges_offset;
-      if (currentOffset === 48 || currentOffset === 100 || currentOffset === 0) {
-        next.badges_offset = value ? 48 : 100;
-      }
-    }
-    
-    this._config = next;
 
-    this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: next } }));
+    const newCfg = { ...this._config };
+
+    if (val === undefined || val === "") {
+      delete newCfg[field];
+    } else {
+      newCfg[field] = val;
+    }
+
+    this._config = newCfg;
+
+    const ev = new CustomEvent("config-changed", {
+      detail: { config: newCfg },
+      bubbles: true,
+      composed: true,
+    });
+    this.dispatchEvent(ev);
   }
 
-  _renderTemplateEditor(label, field, rows = 6) {
-    const value = this._config?.[field] ?? "";
-    const hasCodeEditor = !!customElements.get("ha-code-editor");
-
-    if (hasCodeEditor) {
-      return html`
-        <div class="code-wrap">
-          <div class="code-label">${label}</div>
-          <ha-code-editor .hass=${this.hass} .value=${value} mode="jinja2" data-field=${field} @value-changed=${this._changed}></ha-code-editor>
-        </div>
-      `;
-    }
-
-    return html`<ha-textfield label=${label} .value=${value} data-field=${field} textarea rows=${String(rows)} @input=${this._changed}></ha-textfield>`;
+  _actionChanged(e, actionKey) {
+    if (!this._config || !this.hass) return;
+    const newCfg = { ...this._config };
+    newCfg[actionKey] = e.detail.value;
+    this._config = newCfg;
+    const ev = new CustomEvent("config-changed", {
+      detail: { config: newCfg },
+      bubbles: true,
+      composed: true,
+    });
+    this.dispatchEvent(ev);
   }
 
-  _renderServiceDataEditor(field, serviceData) {
-    let value = "";
-    if (serviceData) {
-      if (typeof serviceData === 'string') {
-        value = serviceData;
-      } else {
-        value = Object.entries(serviceData)
-          .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
-          .join('\n');
-      }
-    }
-    
-    const hasCodeEditor = !!customElements.get("ha-code-editor");
-
-    if (hasCodeEditor) {
-      return html`
-        <div class="code-wrap">
-          <div class="code-label">Service data (YAML)</div>
-          <ha-code-editor 
-            .hass=${this.hass} 
-            .value=${value} 
-            mode="yaml" 
-            data-field="${field}.service_data" 
-            @value-changed=${this._changed}>
-          </ha-code-editor>
-        </div>
-      `;
-    }
-
-    return html`
-      <ha-textfield 
-        label="Service data (YAML)" 
-        helper="Use YAML format with proper indentation. Press Shift+Enter for new line."
-        .value=${value} 
-        data-field="${field}.service_data" 
-        @input=${this._changed}
-        @keydown=${(e) => {
-          if (e.key === 'Enter' && !e.shiftKey) {
-            e.stopPropagation();
-          }
-        }}>
-      </ha-textfield>
-    `;
-  }
-
-  _renderActionEditor(label, field) {
-    const action = this._config?.[field] || { action: "more-info" };
-    const actionType = action.action || "more-info";
-    
+  _renderActionEditor(label, actionKey) {
+    const action = this._config[actionKey] || { action: "more-info" };
     return html`
       <div class="code-wrap">
         <div class="code-label">${label}</div>
-        <ha-select 
-          label="Action type" 
-          .value=${actionType} 
-          data-field="${field}.action" 
-          @selected=${this._changed} 
-          @closed=${this._changed} 
-          @value-changed=${this._changed}>
-          <mwc-list-item value="none">None</mwc-list-item>
-          <mwc-list-item value="navigate">Navigate</mwc-list-item>
-          <mwc-list-item value="url">URL</mwc-list-item>
-          <mwc-list-item value="call-service">Call service</mwc-list-item>
-          <mwc-list-item value="more-info">More info</mwc-list-item>
-          <mwc-list-item value="toggle">Toggle</mwc-list-item>
-        </ha-select>
-        
-        ${actionType === "navigate" ? html`
-          <ha-textfield 
-            label="Navigation path" 
-            .value=${action.navigation_path || ""} 
-            data-field="${field}.navigation_path" 
-            @input=${this._changed}>
-          </ha-textfield>
-        ` : ""}
-        
-        ${actionType === "url" ? html`
-          <ha-textfield 
-            label="URL" 
-            .value=${action.url_path || ""} 
-            data-field="${field}.url_path" 
-            @input=${this._changed}>
-          </ha-textfield>
-        ` : ""}
-        
-        ${actionType === "call-service" ? html`
-          <ha-textfield 
-            label="Service" 
-            helper="e.g., light.turn_on"
-            .value=${action.service || ""} 
-            data-field="${field}.service" 
-            @input=${this._changed}>
-          </ha-textfield>
-          ${this._renderServiceDataEditor(field, action.service_data)}
-        ` : ""}
-        
-        ${actionType === "more-info" || actionType === "toggle" ? html`
-          <ha-entity-picker
-            .hass=${this.hass}
-            .value=${action.entity || ""}
-            .label=${"Entity (leave empty to use weather entity)"}
-            data-field="${field}.entity"
-            @value-changed=${this._changed}
-            allow-custom-entity>
-          </ha-entity-picker>
-        ` : ""}
+        <ha-selector
+          .hass=${this.hass}
+          .selector=${{ action: {} }}
+          .value=${action}
+          @value-changed=${(e) => this._actionChanged(e, actionKey)}
+        ></ha-selector>
       </div>
     `;
   }
@@ -1467,123 +1015,119 @@ class HkiHeaderCardEditor extends LitElement {
     if (!this._config) return html``;
 
     const showCustomFont = this._config.font_family === "custom";
-    const weatherEntityExists = this._config.weather_entity && 
-                                 this._config.weather_entity.trim() !== "" && 
-                                 this.hass?.states?.[this._config.weather_entity];
 
     return html`
       <div class="card-config">
         <div class="disclaimer">
-          <ha-alert alert-type="info" title="Documentation">
-            This card should be placed in the header section! Please read the documentation at 
-            <a href="https://github.com/jimz011/hki-header-card" target="_blank" rel="noopener noreferrer">github.com/jimz011/hki-header-card</a>
-            to set up this card. <br><br>
-            This card may contain bugs. Use at your own risk!
+          <ha-alert alert-type="info">
+            This card is designed to be placed in the <strong>header slot</strong> of your Lovelace view or section for optimal integration with Home Assistant's layout system.
+            <br /><br />
+            For comprehensive documentation, visit the 
+            <a href="https://github.com/jimz011/hki-header-card" target="_blank" rel="noopener noreferrer">
+              HKI Header Card GitHub repository
+            </a>.
           </ha-alert>
         </div>
 
-        ${this._renderTemplateEditor("Title (Accepts jinja2 templates)", "title", 8)}
-        <ha-textfield 
-          label="Title color (CSS)" 
-          helper="Optional: Set custom color for title (e.g., #ffffff, rgb(255,255,255))"
-          .value=${this._config.title_color || ""} 
-          data-field="title_color" 
-          @input=${this._changed}>
-        </ha-textfield>
-
-        ${this._renderTemplateEditor("Subtitle (Accepts jinja2 templates)", "subtitle", 6)}
-        <ha-textfield 
-          label="Subtitle color (CSS)" 
-          helper="Optional: Set custom color for subtitle"
-          .value=${this._config.subtitle_color || ""} 
-          data-field="subtitle_color" 
-          @input=${this._changed}>
-        </ha-textfield>
-
-        <ha-select label="Text alignment" .value=${this._config.text_align} data-field="text_align" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-          <mwc-list-item value="left">Left</mwc-list-item>
-          <mwc-list-item value="center">Center</mwc-list-item>
-          <mwc-list-item value="right">Right</mwc-list-item>
-        </ha-select>
-
-        <div class="section">Title position (Desktop)</div>
-        <div class="inline-fields-2">
-          <ha-textfield label="Horizontal offset (px)" type="number" .value=${String(this._config.title_offset_x)} data-field="title_offset_x" @input=${this._changed}></ha-textfield>
-          <ha-textfield label="Vertical offset (px)" type="number" .value=${String(this._config.title_offset_y)} data-field="title_offset_y" @input=${this._changed}></ha-textfield>
+        <div class="section">Title</div>
+        <div class="code-wrap">
+          <div class="code-label">Title text (supports templates)</div>
+          <ha-code-editor mode="jinja2" .hass=${this.hass} .value=${this._config.title || ""} @value-changed=${(e) => {
+            const newCfg = { ...this._config, title: e.detail.value };
+            this._config = newCfg;
+            const ev = new CustomEvent("config-changed", { detail: { config: newCfg }, bubbles: true, composed: true });
+            this.dispatchEvent(ev);
+          }}></ha-code-editor>
         </div>
 
-        <div class="section">Title position (Mobile override)</div>
         <div class="inline-fields-2">
-          <ha-textfield label="Horizontal offset (px)" helper="Leave empty to use desktop offset" type="number" .value=${this._config.title_offset_x_mobile !== null ? String(this._config.title_offset_x_mobile) : ""} data-field="title_offset_x_mobile" @input=${this._changed}></ha-textfield>
-          <ha-textfield label="Vertical offset (px)" helper="Leave empty to use desktop offset" type="number" .value=${this._config.title_offset_y_mobile !== null ? String(this._config.title_offset_y_mobile) : ""} data-field="title_offset_y_mobile" @input=${this._changed}></ha-textfield>
+          <ha-textfield label="Title X offset (px)" type="number" .value=${String(this._config.title_x || 0)} data-field="title_x" @input=${this._changed}></ha-textfield>
+          <ha-textfield label="Title Y offset (px)" type="number" .value=${String(this._config.title_y || 90)} data-field="title_y" @input=${this._changed}></ha-textfield>
         </div>
 
-        <div class="section">Subtitle position (Desktop)</div>
         <div class="inline-fields-2">
-          <ha-textfield label="Horizontal offset (px)" type="number" .value=${String(this._config.subtitle_offset_x)} data-field="subtitle_offset_x" @input=${this._changed}></ha-textfield>
-          <ha-textfield label="Vertical offset (px)" type="number" .value=${String(this._config.subtitle_offset_y)} data-field="subtitle_offset_y" @input=${this._changed}></ha-textfield>
+          <ha-textfield label="Title size (px)" type="number" .value=${String(this._config.title_size_px || 28)} data-field="title_size_px" @input=${this._changed}></ha-textfield>
+          <ha-select label="Title weight" .value=${this._config.title_weight || "bold"} data-field="title_weight" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+            <mwc-list-item value="light">Light</mwc-list-item>
+            <mwc-list-item value="regular">Regular</mwc-list-item>
+            <mwc-list-item value="medium">Medium</mwc-list-item>
+            <mwc-list-item value="semibold">Semi-bold</mwc-list-item>
+            <mwc-list-item value="bold">Bold</mwc-list-item>
+            <mwc-list-item value="black">Black</mwc-list-item>
+          </ha-select>
         </div>
 
-        <div class="section">Subtitle position (Mobile override)</div>
-        <div class="inline-fields-2">
-          <ha-textfield label="Horizontal offset (px)" helper="Leave empty to use desktop offset" type="number" .value=${this._config.subtitle_offset_x_mobile !== null ? String(this._config.subtitle_offset_x_mobile) : ""} data-field="subtitle_offset_x_mobile" @input=${this._changed}></ha-textfield>
-          <ha-textfield label="Vertical offset (px)" helper="Leave empty to use desktop offset" type="number" .value=${this._config.subtitle_offset_y_mobile !== null ? String(this._config.subtitle_offset_y_mobile) : ""} data-field="subtitle_offset_y_mobile" @input=${this._changed}></ha-textfield>
+        <ha-textfield label="Title color (CSS)" helper="Leave empty to use default header text color" .value=${this._config.title_color || ""} data-field="title_color" @input=${this._changed}></ha-textfield>
+
+        <div class="section">Subtitle</div>
+        <div class="code-wrap">
+          <div class="code-label">Subtitle text (supports templates)</div>
+          <ha-code-editor mode="jinja2" .hass=${this.hass} .value=${this._config.subtitle || ""} @value-changed=${(e) => {
+            const newCfg = { ...this._config, subtitle: e.detail.value };
+            this._config = newCfg;
+            const ev = new CustomEvent("config-changed", { detail: { config: newCfg }, bubbles: true, composed: true });
+            this.dispatchEvent(ev);
+          }}></ha-code-editor>
         </div>
+
+        <div class="inline-fields-2">
+          <ha-textfield label="Subtitle X offset (px)" type="number" .value=${String(this._config.subtitle_x || 0)} data-field="subtitle_x" @input=${this._changed}></ha-textfield>
+          <ha-textfield label="Subtitle Y offset (px)" type="number" .value=${String(this._config.subtitle_y || 0)} data-field="subtitle_y" @input=${this._changed}></ha-textfield>
+        </div>
+
+        <div class="inline-fields-2">
+          <ha-textfield label="Subtitle size (px)" type="number" .value=${String(this._config.subtitle_size_px || 16)} data-field="subtitle_size_px" @input=${this._changed}></ha-textfield>
+          <ha-select label="Subtitle weight" .value=${this._config.subtitle_weight || "medium"} data-field="subtitle_weight" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+            <mwc-list-item value="light">Light</mwc-list-item>
+            <mwc-list-item value="regular">Regular</mwc-list-item>
+            <mwc-list-item value="medium">Medium</mwc-list-item>
+            <mwc-list-item value="semibold">Semi-bold</mwc-list-item>
+            <mwc-list-item value="bold">Bold</mwc-list-item>
+            <mwc-list-item value="black">Black</mwc-list-item>
+          </ha-select>
+        </div>
+
+        <ha-textfield label="Subtitle color (CSS)" helper="Leave empty to use default header text color" .value=${this._config.subtitle_color || ""} data-field="subtitle_color" @input=${this._changed}></ha-textfield>
 
         <div class="section">Weather</div>
         <ha-entity-picker
           .hass=${this.hass}
-          .value=${this._config.weather_entity || ""}
+          .value=${this._config.weather || ""}
           .label=${"Weather entity"}
-          .helper=${"Optional: Add a weather entity to display forecast"}
-          include-domains='["weather"]'
-          data-field="weather_entity"
-          @value-changed=${this._changed}
-          allow-custom-entity>
-        </ha-entity-picker>
+          .includeDomains=${["weather"]}
+          @value-changed=${(e) => {
+            const newCfg = { ...this._config, weather: e.detail.value };
+            this._config = newCfg;
+            const ev = new CustomEvent("config-changed", { detail: { config: newCfg }, bubbles: true, composed: true });
+            this.dispatchEvent(ev);
+          }}
+        ></ha-entity-picker>
 
-        ${weatherEntityExists ? html`
-          <ha-select label="Weather alignment" .value=${this._config.weather_align || "right"} data-field="weather_align" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-            <mwc-list-item value="left">Left</mwc-list-item>
-            <mwc-list-item value="right">Right</mwc-list-item>
-          </ha-select>
-
-          <div class="section">Weather position (Desktop)</div>
+        ${this._config.weather ? html`
           <div class="inline-fields-2">
-            <ha-textfield label="Horizontal offset (px)" type="number" .value=${String(this._config.weather_offset_x !== undefined ? this._config.weather_offset_x : 5)} data-field="weather_offset_x" @input=${this._changed}></ha-textfield>
-            <ha-textfield label="Vertical offset (px)" type="number" .value=${String(this._config.weather_offset_y !== undefined ? this._config.weather_offset_y : 40)} data-field="weather_offset_y" @input=${this._changed}></ha-textfield>
+            <ha-textfield label="Weather X offset (px)" type="number" .value=${String(this._config.weather_x || 0)} data-field="weather_x" @input=${this._changed}></ha-textfield>
+            <ha-textfield label="Weather Y offset (px)" type="number" .value=${String(this._config.weather_y || 0)} data-field="weather_y" @input=${this._changed}></ha-textfield>
           </div>
 
-          <div class="section">Weather position (Mobile override)</div>
           <div class="inline-fields-2">
-            <ha-textfield label="Horizontal offset (px)" helper="Leave empty to use desktop offset" type="number" .value=${this._config.weather_offset_x_mobile !== null ? String(this._config.weather_offset_x_mobile) : ""} data-field="weather_offset_x_mobile" @input=${this._changed}></ha-textfield>
-            <ha-textfield label="Vertical offset (px)" helper="Leave empty to use desktop offset" type="number" .value=${this._config.weather_offset_y_mobile !== null ? String(this._config.weather_offset_y_mobile) : ""} data-field="weather_offset_y_mobile" @input=${this._changed}></ha-textfield>
+            <ha-textfield 
+              label="Mobile X offset (px)" 
+              helper="Leave empty to use desktop X offset"
+              type="number" 
+              .value=${this._config.weather_mobile_x !== null && this._config.weather_mobile_x !== undefined ? String(this._config.weather_mobile_x) : ""} 
+              data-field="weather_mobile_x" 
+              @input=${this._changed}>
+            </ha-textfield>
+            <ha-textfield 
+              label="Mobile Y offset (px)" 
+              helper="Leave empty to use desktop Y offset"
+              type="number" 
+              .value=${this._config.weather_mobile_y !== null && this._config.weather_mobile_y !== undefined ? String(this._config.weather_mobile_y) : ""} 
+              data-field="weather_mobile_y" 
+              @input=${this._changed}>
+            </ha-textfield>
           </div>
 
-          <div class="section">Weather display options</div>
-          <div class="switch-row">
-            <ha-formfield label="Show icon">
-              <ha-switch .checked=${this._config.weather_show_icon !== false} data-field="weather_show_icon" @change=${this._changed}></ha-switch>
-            </ha-formfield>
-            <ha-formfield label="Show condition">
-              <ha-switch .checked=${this._config.weather_show_condition !== false} data-field="weather_show_condition" @change=${this._changed}></ha-switch>
-            </ha-formfield>
-          </div>
-          <div class="switch-row">
-            <ha-formfield label="Show temperature">
-              <ha-switch .checked=${this._config.weather_show_temperature !== false} data-field="weather_show_temperature" @change=${this._changed}></ha-switch>
-            </ha-formfield>
-            <ha-formfield label="Show humidity">
-              <ha-switch .checked=${!!this._config.weather_show_humidity} data-field="weather_show_humidity" @change=${this._changed}></ha-switch>
-            </ha-formfield>
-          </div>
-          <div class="switch-row">
-            <ha-formfield label="Animated & colored icons">
-              <ha-switch .checked=${this._config.weather_animated !== false} data-field="weather_animated" @change=${this._changed}></ha-switch>
-            </ha-formfield>
-          </div>
-
-          <div class="section">Weather styling</div>
           <div class="inline-fields-2">
             <ha-textfield label="Weather size (px)" type="number" .value=${String(this._config.weather_size_px || 12)} data-field="weather_size_px" @input=${this._changed}></ha-textfield>
             <ha-select label="Weather weight" .value=${this._config.weather_weight || "medium"} data-field="weather_weight" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
@@ -1596,34 +1140,72 @@ class HkiHeaderCardEditor extends LitElement {
             </ha-select>
           </div>
 
-          <ha-textfield 
-            label="Weather text color (CSS)" 
-            helper="Optional: Set custom color for weather text (overridden by animated colors if enabled)"
-            .value=${this._config.weather_color || ""} 
-            data-field="weather_color" 
-            @input=${this._changed}>
-          </ha-textfield>
+          <ha-textfield label="Weather color (CSS)" helper="Leave empty to use default header text color" .value=${this._config.weather_color || ""} data-field="weather_color" @input=${this._changed}></ha-textfield>
 
-          <div class="section">Weather pill background</div>
           <div class="switch-row">
-            <ha-formfield label="Enable pill/circle background">
-              <ha-switch .checked=${!!this._config.weather_pill_enabled} data-field="weather_pill_enabled" @change=${this._changed}></ha-switch>
+            <ha-formfield label="Show weather icon">
+              <ha-switch .checked=${this._config.weather_show_icon !== false} data-field="weather_show_icon" @change=${this._changed}></ha-switch>
+            </ha-formfield>
+            <ha-formfield label="Show condition text">
+              <ha-switch .checked=${this._config.weather_show_condition !== false} data-field="weather_show_condition" @change=${this._changed}></ha-switch>
             </ha-formfield>
           </div>
 
-          ${this._config.weather_pill_enabled ? html`
-            <ha-textfield 
-              label="Pill background color" 
-              helper="CSS color value (e.g., rgba(0, 0, 0, 0.3), #000000)"
-              .value=${this._config.weather_pill_background || "rgba(0, 0, 0, 0.3)"} 
-              data-field="weather_pill_background" 
-              @input=${this._changed}>
-            </ha-textfield>
+          <div class="switch-row">
+            <ha-formfield label="Show temperature">
+              <ha-switch .checked=${this._config.weather_show_temperature !== false} data-field="weather_show_temperature" @change=${this._changed}></ha-switch>
+            </ha-formfield>
+            <ha-formfield label="Animated icons">
+              <ha-switch .checked=${this._config.weather_animated_icons !== false} data-field="weather_animated_icons" @change=${this._changed}></ha-switch>
+            </ha-formfield>
+          </div>
 
-            <div class="inline-fields-2">
-              <ha-textfield label="Border radius (px)" helper="Higher = more circular" type="number" .value=${String(this._config.weather_pill_border_radius || 20)} data-field="weather_pill_border_radius" @input=${this._changed}></ha-textfield>
-              <ha-textfield label="Opacity" helper="0.0 to 1.0" type="number" step="0.1" min="0" max="1" .value=${String(this._config.weather_pill_opacity !== undefined ? this._config.weather_pill_opacity : 0.8)} data-field="weather_pill_opacity" @input=${this._changed}></ha-textfield>
-            </div>
+          <div class="switch-row">
+            <ha-formfield label="Colored icons">
+              <ha-switch .checked=${this._config.weather_colored_icons !== false} data-field="weather_colored_icons" @change=${this._changed}></ha-switch>
+            </ha-formfield>
+          </div>
+
+          <div class="section">Weather Attributes</div>
+          <div class="switch-row">
+            <ha-formfield label="Show humidity">
+              <ha-switch .checked=${!!this._config.weather_show_humidity} data-field="weather_show_humidity" @change=${this._changed}></ha-switch>
+            </ha-formfield>
+            <ha-formfield label="Show pressure">
+              <ha-switch .checked=${!!this._config.weather_show_pressure} data-field="weather_show_pressure" @change=${this._changed}></ha-switch>
+            </ha-formfield>
+          </div>
+
+          <div class="switch-row">
+            <ha-formfield label="Show wind speed">
+              <ha-switch .checked=${!!this._config.weather_show_wind_speed} data-field="weather_show_wind_speed" @change=${this._changed}></ha-switch>
+            </ha-formfield>
+            <ha-formfield label="Show wind bearing">
+              <ha-switch .checked=${!!this._config.weather_show_wind_bearing} data-field="weather_show_wind_bearing" @change=${this._changed}></ha-switch>
+            </ha-formfield>
+          </div>
+
+          <div class="section">Weather Pill Background</div>
+          <div class="switch-row">
+            <ha-formfield label="Use pill background">
+              <ha-switch .checked=${!!this._config.weather_use_pill} data-field="weather_use_pill" @change=${this._changed}></ha-switch>
+            </ha-formfield>
+          </div>
+
+          ${this._config.weather_use_pill ? html`
+            <ha-select label="Pill style" .value=${this._config.weather_pill_style || "pill"} data-field="weather_pill_style" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+              <mwc-list-item value="pill">Pill (fully rounded)</mwc-list-item>
+              <mwc-list-item value="rounded">Rounded</mwc-list-item>
+              <mwc-list-item value="square">Square</mwc-list-item>
+            </ha-select>
+
+            <ha-select label="Pill size" .value=${this._config.weather_pill_size || "comfortable"} data-field="weather_pill_size" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+              <mwc-list-item value="compact">Compact</mwc-list-item>
+              <mwc-list-item value="comfortable">Comfortable</mwc-list-item>
+              <mwc-list-item value="spacious">Spacious</mwc-list-item>
+            </ha-select>
+
+            <ha-textfield label="Pill background (CSS)" helper="e.g., rgba(0,0,0,0.3) or linear-gradient(...)" .value=${this._config.weather_pill_background || "rgba(0,0,0,0.3)"} data-field="weather_pill_background" @input=${this._changed}></ha-textfield>
           ` : html``}
 
           ${this._renderActionEditor("Weather tap action", "weather_tap_action")}
@@ -1680,31 +1262,6 @@ class HkiHeaderCardEditor extends LitElement {
           <mwc-list-item value="normal">Normal</mwc-list-item>
           <mwc-list-item value="italic">Italic</mwc-list-item>
         </ha-select>
-
-        <div class="inline-fields-2">
-          <ha-textfield label="Title size (px)" type="number" .value=${String(this._config.title_size_px)} data-field="title_size_px" @input=${this._changed}></ha-textfield>
-          <ha-textfield label="Subtitle size (px)" type="number" .value=${String(this._config.subtitle_size_px)} data-field="subtitle_size_px" @input=${this._changed}></ha-textfield>
-        </div>
-
-        <div class="inline-fields-2">
-          <ha-select label="Title weight" .value=${this._config.title_weight} data-field="title_weight" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-            <mwc-list-item value="light">Light</mwc-list-item>
-            <mwc-list-item value="regular">Regular</mwc-list-item>
-            <mwc-list-item value="medium">Medium</mwc-list-item>
-            <mwc-list-item value="semibold">Semi-bold</mwc-list-item>
-            <mwc-list-item value="bold">Bold</mwc-list-item>
-            <mwc-list-item value="black">Black</mwc-list-item>
-          </ha-select>
-
-          <ha-select label="Subtitle weight" .value=${this._config.subtitle_weight} data-field="subtitle_weight" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-            <mwc-list-item value="light">Light</mwc-list-item>
-            <mwc-list-item value="regular">Regular</mwc-list-item>
-            <mwc-list-item value="medium">Medium</mwc-list-item>
-            <mwc-list-item value="semibold">Semi-bold</mwc-list-item>
-            <mwc-list-item value="bold">Bold</mwc-list-item>
-            <mwc-list-item value="black">Black</mwc-list-item>
-          </ha-select>
-        </div>
 
         <div class="section">Fixed header</div>
         <div class="switch-row">
@@ -1777,7 +1334,6 @@ class HkiHeaderCardEditor extends LitElement {
         display: flex;
         align-items: center;
         gap: 12px;
-        flex-wrap: wrap;
       }
 
       .inline-fields-2 {
@@ -1793,8 +1349,7 @@ class HkiHeaderCardEditor extends LitElement {
       }
 
       ha-textfield,
-      ha-select,
-      ha-entity-picker {
+      ha-select {
         width: 100%;
       }
 
