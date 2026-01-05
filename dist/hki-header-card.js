@@ -1,4 +1,4 @@
-// HKI Header Card - Enhanced Version
+// HKI Header Card
 
 import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?module";
 
@@ -183,8 +183,6 @@ class HkiHeaderCard extends LitElement {
         color: var(--hki-header-text-color, #fff);
         text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
         z-index: 2;
-        padding: 8px 12px;
-        box-sizing: border-box;
       }
 
       .weather-clickable {
