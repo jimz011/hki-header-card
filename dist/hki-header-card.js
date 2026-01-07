@@ -1674,7 +1674,8 @@ class HkiHeaderCardEditor extends LitElement {
       }
     }
     
-    // Forced usage of ha-code-editor with autocomplete (no fallback)
+    // Forced usage of ha-code-editor with autocomplete attributes
+    // Added both property binding and attribute as requested
     return html`
       <div class="code-wrap">
         <div class="code-label">Service data (YAML)</div>
@@ -1682,8 +1683,8 @@ class HkiHeaderCardEditor extends LitElement {
           .hass=${this.hass} 
           .value=${value} 
           mode="yaml" 
-          .autocomplete_entities=${true}
-          .autocomplete_icons=${true}
+          ?autocomplete-entities=${true}
+          ?autocomplete-icons=${true}
           data-field="${field}.service_data" 
           @value-changed=${this._changed}>
         </ha-code-editor>
@@ -1733,6 +1734,7 @@ class HkiHeaderCardEditor extends LitElement {
         
         ${actionType === "call-service" ? html`
           <ha-service-picker
+            style="width: 100%; display: block;"
             .hass=${this.hass}
             .value=${action.service || ""}
             @value-changed=${(ev) => this._changed(ev, `${field}.service`)}
