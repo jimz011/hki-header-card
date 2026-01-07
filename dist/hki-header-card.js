@@ -255,44 +255,6 @@ class HkiHeaderCard extends LitElement {
         font-weight: 500;
       }
 
-      /* Edit-mode placeholder */
-      .header-spacer.edit-spacer {
-        position: relative;
-        z-index: 0;
-        min-height: 120px !important; /* Ensure visibility for clicking */
-        background: transparent;
-      }
-
-      ha-card.edit-placeholder-card {
-        position: relative;
-        width: 100%;
-        height: 100%;
-        min-height: 120px;
-        box-sizing: border-box;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        text-align: center;
-        padding: 20px;
-        border: 2px dashed var(--primary-color);
-        background: rgba(var(--rgb-primary-color), 0.1);
-        color: var(--primary-text-color);
-        cursor: pointer;
-        user-select: none;
-      }
-
-      .edit-placeholder-title {
-        font-weight: 700;
-        font-size: 18px;
-        margin-bottom: 8px;
-      }
-
-      .edit-placeholder-subtitle {
-        opacity: 0.8;
-        font-size: 14px;
-      }
-
       /* Weather pill */
       .weather-pill {
         background: var(--hki-weather-pill-background, rgba(0, 0, 0, 0.25));
@@ -700,7 +662,6 @@ class HkiHeaderCard extends LitElement {
       title_color: "",
       subtitle_color: "",
       weather_color: "",
-      edit_placeholder: true,
       background: "https://github.com/jimz011/hki-header-card/blob/main/wallpapers/livingroom.jpg?raw=true",
       background_position: "center",
       background_repeat: "no-repeat",
@@ -737,7 +698,7 @@ class HkiHeaderCard extends LitElement {
       weather_icon_color_mode: "state",
       weather_icon_color: "",
       weather_animate_icon: "none",
-      weather_icon_pack_path: "", // New config option for SVG icons
+      weather_icon_pack_path: "", 
       weather_pill: false,
       weather_pill_background: "rgba(0,0,0,0.25)",
       weather_pill_padding_x: 10,
@@ -765,8 +726,6 @@ class HkiHeaderCard extends LitElement {
     m.badges_offset_pinned = Number.isFinite(+m.badges_offset_pinned) ? +m.badges_offset_pinned : 48;
     m.badges_offset_unpinned = Number.isFinite(+m.badges_offset_unpinned) ? +m.badges_offset_unpinned : 100;
     m.badges_gap = Number.isFinite(+m.badges_gap) ? +m.badges_gap : 0;
-
-    m.edit_placeholder = m.edit_placeholder !== false;
 
     m.weather_offset_x = Number.isFinite(+m.weather_offset_x) ? +m.weather_offset_x : 5;
     m.weather_offset_y = Number.isFinite(+m.weather_offset_y) ? +m.weather_offset_y : 40;
@@ -1397,23 +1356,9 @@ class HkiHeaderCard extends LitElement {
 
     if (!effectiveFixed) return cardMarkup;
 
-    // We use a broader check here. If edit mode is on OR we are inside the preview wrapper, show placeholder.
-    const showPlaceholder = (!!cfg.edit_placeholder && !!this._editMode) || this._inPreview;
-
     return html`
       <div class="header-fixed" style=${wrapperStyle}>${cardMarkup}</div>
-      <div class="header-spacer ${showPlaceholder ? "edit-spacer" : ""}" style="height:${spacerH}px;">
-        ${showPlaceholder
-          ? html`
-              <ha-card class="edit-placeholder-card">
-                <div class="edit-placeholder-title">HKI Header Card</div>
-                <div class="edit-placeholder-subtitle">
-                  Fixed-position header active<br>Click here to edit settings
-                </div>
-              </ha-card>
-            `
-          : html``}
-      </div>
+      <div class="header-spacer" style="height:${spacerH}px;"></div>
     `;
   }
 
@@ -1437,7 +1382,6 @@ class HkiHeaderCard extends LitElement {
       blend_stop: 95,
       fixed: true,
       fixed_top: 0,
-      edit_placeholder: true,
       title_color: "",
       subtitle_color: "",
       weather_color: "",
@@ -1497,26 +1441,12 @@ class HkiHeaderCardEditor extends LitElement {
     return {
       hass: {},
       _config: { attribute: false },
-      _navItems: { attribute: false },
-      _navLoading: { type: Boolean },
     };
   }
 
   constructor() {
     super();
     this._config = {};
-    this._navItems = [];
-    this._navLoading = false;
-  }
-
-  firstUpdated() {
-    this._loadNavigationItems();
-  }
-
-  updated(changedProps) {
-    if (changedProps.has("hass")) {
-      this._loadNavigationItems();
-    }
   }
 
   setConfig(config) {
@@ -1528,7 +1458,6 @@ class HkiHeaderCardEditor extends LitElement {
       subtitle_color: "",
       weather_color: "",
 
-      edit_placeholder: true,
       background: "https://github.com/jimz011/hki-header-card/blob/main/wallpapers/livingroom.jpg?raw=true",
       background_position: "center",
       background_repeat: "no-repeat",
@@ -1588,132 +1517,31 @@ class HkiHeaderCardEditor extends LitElement {
     };
   }
 
-  async _loadNavigationItems() {
-    if (!this.hass || this._navLoading) return;
-    this._navLoading = true;
-
-    try {
-      const panels = this.hass.panels || {};
-      const items = [];
-
-      Object.values(panels).forEach((panel) => {
-        if (!panel || !panel.url_path) return;
-        const value = `/${panel.url_path}`;
-        const label = panel.title ? `${panel.title}` : value;
-        items.push({ label, value });
-      });
-
-      const lovelacePanels = Object.values(panels).filter((p) => p?.component_name === "lovelace");
-
-      for (const panel of lovelacePanels) {
-        const base = panel?.url_path ? `/${panel.url_path}` : "/lovelace";
-        let cfg = null;
-        try {
-          cfg = await this.hass.callWS({ type: "lovelace/config", url_path: panel.url_path });
-        } catch (e) {
-          if (panel.url_path === "lovelace") {
-            try {
-              cfg = await this.hass.callWS({ type: "lovelace/config" });
-            } catch (_) {
-              cfg = null;
-            }
-          }
-        }
-
-        const views = cfg?.views || [];
-        views.forEach((v) => {
-          const viewPath = v?.path ?? "";
-          const title = v?.title || viewPath || "View";
-          const value = viewPath ? `${base}/${viewPath}` : base;
-          items.push({ label: `${panel.title || base} · ${title}`, value });
-        });
-      }
-
-      const seen = new Set();
-      this._navItems = items
-        .filter((it) => {
-          if (!it?.value) return false;
-          if (seen.has(it.value)) return false;
-          seen.add(it.value);
-          return true;
-        })
-        .sort((a, b) => a.label.localeCompare(b.label));
-    } catch (_) {
-      this._navItems = [];
-    } finally {
-      this._navLoading = false;
-    }
-  }
-
   _renderEntityPicker(label, field, value, helper = "") {
-    // Prefer native HA entity picker
-    const el = customElements.get("ha-entity-picker");
-    if (el) {
-      return html`
-        <ha-entity-picker
-          .hass=${this.hass}
-          .label=${label}
-          .value=${value || ""}
-          .helper=${helper}
-          @value-changed=${(ev) => this._changed(ev, field)}
-          allow-custom-entity
-        ></ha-entity-picker>
-      `;
-    }
-
+    // Strictly use ha-entity-picker
     return html`
-      <ha-textfield
-        label=${label}
+      <ha-entity-picker
+        .hass=${this.hass}
+        .label=${label}
         .value=${value || ""}
-        data-field=${field}
         .helper=${helper}
-        @input=${this._changed}
-      ></ha-textfield>
+        @value-changed=${(ev) => this._changed(ev, field)}
+        allow-custom-entity
+      ></ha-entity-picker>
     `;
   }
 
   _renderNavigationPicker(label, field, value, helper = "") {
-    // Prefer native HA navigation picker (Selector) if available, otherwise fallback
-    const selector = customElements.get("ha-selector");
-    if (selector) {
-      return html`
-        <ha-selector
-          .hass=${this.hass}
-          .selector=${{ navigation: {} }}
-          .value=${value || ""}
-          .label=${label}
-          .helper=${helper}
-          @value-changed=${(ev) => this._changed(ev, field)}
-        ></ha-selector>
-      `;
-    }
-
-    // Old school picker
-    const navEl = customElements.get("ha-navigation-picker");
-    if (navEl) {
-      return html`
-        <ha-navigation-picker
-          .hass=${this.hass}
-          .label=${label}
-          .value=${value || ""}
-          .helper=${helper}
-          @value-changed=${(ev) => this._changed(ev, field)}
-        ></ha-navigation-picker>
-      `;
-    }
-
+    // Strictly use ha-selector with navigation type
     return html`
-      <ha-combo-box
-        label=${label}
-        .items=${this._navItems || []}
-        item-label-path="label"
-        item-value-path="value"
+      <ha-selector
+        .hass=${this.hass}
+        .selector=${{ navigation: {} }}
         .value=${value || ""}
-        allow-custom-value
-        data-field=${field}
-        @value-changed=${this._changed}
-      ></ha-combo-box>
-      ${helper ? html`<div class="helper-text">${helper}</div>` : html``}
+        .label=${label}
+        .helper=${helper}
+        @value-changed=${(ev) => this._changed(ev, field)}
+      ></ha-selector>
     `;
   }
 
@@ -1772,7 +1600,6 @@ class HkiHeaderCardEditor extends LitElement {
     const bools = new Set([
       "fixed",
       "badges_fixed",
-      "edit_placeholder",
       "weather_show_icon",
       "weather_show_condition",
       "weather_show_temperature",
@@ -1855,6 +1682,7 @@ class HkiHeaderCardEditor extends LitElement {
     const hasCodeEditor = !!customElements.get("ha-code-editor");
 
     if (hasCodeEditor) {
+      // Enable autocomplete features
       return html`
         <div class="code-wrap">
           <div class="code-label">Service data (YAML)</div>
@@ -1862,6 +1690,8 @@ class HkiHeaderCardEditor extends LitElement {
             .hass=${this.hass} 
             .value=${value} 
             mode="yaml" 
+            .autocomplete_entities=${true}
+            .autocomplete_icons=${true}
             data-field="${field}.service_data" 
             @value-changed=${this._changed}>
           </ha-code-editor>
@@ -1926,13 +1756,11 @@ class HkiHeaderCardEditor extends LitElement {
         ` : ""}
         
         ${actionType === "call-service" ? html`
-          <ha-textfield 
-            label="Service" 
-            helper="e.g., light.turn_on"
-            .value=${action.service || ""} 
-            data-field="${field}.service" 
-            @input=${this._changed}>
-          </ha-textfield>
+          <ha-service-picker
+            .hass=${this.hass}
+            .value=${action.service || ""}
+            @value-changed=${(ev) => this._changed(ev, `${field}.service`)}
+          ></ha-service-picker>
           ${this._renderServiceDataEditor(field, action.service_data)}
         ` : ""}
         
@@ -2168,14 +1996,6 @@ class HkiHeaderCardEditor extends LitElement {
           </ha-formfield>
         </div>
 
-        ${this._config.fixed ? html`
-          <div class="switch-row">
-            <ha-formfield label="Show placeholder in edit mode">
-              <ha-switch .checked=${this._config.edit_placeholder !== false} data-field="edit_placeholder" @change=${this._changed}></ha-switch>
-            </ha-formfield>
-          </div>
-        ` : html``}
-
         ${this._config.fixed ? html`<ha-textfield label="Fixed top offset (px)" type="number" .value=${String(this._config.fixed_top)} data-field="fixed_top" @input=${this._changed}></ha-textfield>` : html``}
 
         <div class="section">Badge positioning</div>
@@ -2259,7 +2079,8 @@ class HkiHeaderCardEditor extends LitElement {
       ha-combo-box,
       ha-navigation-picker,
       ha-entity-picker,
-      ha-selector {
+      ha-selector,
+      ha-service-picker {
         width: 100%;
       }
 
