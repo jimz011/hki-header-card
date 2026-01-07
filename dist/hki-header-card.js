@@ -4,6 +4,14 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 
 const clamp = (n, min, max) => (Number.isFinite(n) ? Math.min(Math.max(n, min), max) : min);
 
+const CARD_TYPE = "hki-header-card";
+const VERSION = "1.0.6";
+
+// Log version once
+console.log(`%c${CARD_TYPE} %cv${VERSION}`, 'color: #17a2b8', 'color: #999');
+const CARD_TAG = "hki-header-card";
+const EDITOR_TAG = "hki-header-card-editor";
+
 const WEIGHT_MAP = Object.freeze({
   light: 300,
   regular: 400,
@@ -2111,7 +2119,7 @@ customElements.define("hki-header-card-editor", HkiHeaderCardEditor);
 
 window.customCards = window.customCards || [];
 window.customCards.push({
-  type: "hki-header-card",
+  type: CARD_TYPE,
   name: "HKI Header Card",
   description: "Full Width Customizable Header.",
   preview: false,
