@@ -1,6 +1,6 @@
 # HKI Header Card
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/jimz011/hki-header-card)
+[![Release](https://img.shields.io/github/v/release/jimz011/hki-header-card.svg)](https://github.com/jimz011/hki-header-card/releases)
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Downloads](https://img.shields.io/github/downloads/jimz011/hki-header-card/total.svg)](https://github.com/jimz011/hki-header-card/releases)
