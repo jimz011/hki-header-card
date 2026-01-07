@@ -11,7 +11,9 @@ Full-width customizable header for Home Assistant with automatic kiosk mode dete
 <img src="https://github.com/jimz011/hki-header-card/blob/main/screenshots/header-with-badges.png?raw=true" width="600" alt="HKI Header Card Example">
 
 ***You can find more screenshots at the bottom of this page***
+
 ***You may use any of the wallpapers on this repo for your own setup***
+
 ***You may also want to check out the [HKI Navigation Card](https://github.com/jimz011/hki-navigation-card)***
 
 ## Features
