@@ -1,6 +1,11 @@
-[![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration) ![Maintenance](https://img.shields.io/maintenance/yes/2026.svg?style=plasticr) [![release](https://img.shields.io/github/v/release/jimz011/hki-header-card.svg)](https://github.com/jimz011/hki-header-card/releases) [![downloads](https://img.shields.io/github/downloads/jimz011/hki-header-card/total)](https://github.com/jimz011/hki-header-card/releases)
-
 # HKI Header Card
+
+[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/jimz011/hki-header-card)
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Downloads](https://img.shields.io/github/downloads/jimz011/hki-header-card/total.svg)](https://github.com/jimz011/hki-header-card/releases)
+[![Maintained](https://img.shields.io/badge/Maintained-Yes-green.svg)](https://github.com/jimz011/hki-navigation-card/graphs/commit-activity)
+
 Full-width customizable header for Home Assistant with automatic kiosk mode detection, Jinja2 template support, and advanced badge positioning.
 
 <img src="https://github.com/jimz011/hki-header-card/blob/main/screenshots/header-with-badges.png?raw=true" width="600" alt="HKI Header Card Example">
