@@ -12,6 +12,7 @@ Full-width customizable header for Home Assistant with automatic kiosk mode dete
 
 ***You can find more screenshots at the bottom of this page***
 ***You may use any of the wallpapers on this repo for your own setup***
+***You may also want to check out the [HKI Navigation Card](https://github.com/jimz011/hki-navigation-card).
 
 ## Features
 - 🎨 Full-width fixed header with customizable background (images, gradients, colors)
@@ -327,13 +328,46 @@ Found a bug or have a feature request?
 - [Open an issue](https://github.com/jimz011/hki-header-card/issues)
 - [Discussions](https://github.com/jimz011/hki-header-card/discussions)
 
-## Credits
+## ☕ Support the Project
 
-Created by [jimz011](https://github.com/jimz011) with aid of ChatGPT and ClaudeAI.
+If you find this card useful, consider supporting development:
 
-## License
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Support-yellow.svg)](https://www.buymeacoffee.com/w8Jnf6Hit)
+[![PayPal](https://img.shields.io/badge/PayPal-Donate-blue.svg)](https://paypal.me/JimmySchings)
 
-MIT License - see LICENSE file for details
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🙏 Credits
+
+Created by [jimz011](https://github.com/jimz011) with assistance from ChatGPT and Claude AI.
+
+### Inspiration
+This card was inspired by:
+- Material Design's Floating Action Button (FAB)
+- iOS bottom navigation patterns
+- The Homekit Infused project
+
+### Special Thanks
+- The Home Assistant community
+- HACS for making distribution easy
+- All contributors and testers
+
+---
+
+## 📱 Related Projects
+
+- [HKI Navigation Card](https://github.com/jimz011/hki-navigation-card) - Companion navigation card
+- [Homekit Infused](https://github.com/jimz011/homekit-infused) - Complete dashboard framework
+
+---
+
+**Made with ❤️ for the Home Assistant community**
 
 ## More Screenshots
 <img src="https://github.com/jimz011/hki-header-card/blob/main/screenshots/header-no-badges.png?raw=true" width="600" alt="HKI Header Card Example 2"><br>
