@@ -1193,7 +1193,11 @@ class HkiHeaderCard extends LitElement {
           ? "inherit"
           : WEATHER_COLOR_MAP[state] || "inherit";
 
-    const conditionText = String(state || "").replace(/-/g, " ");
+    // Use native HA translation helper if available
+    let conditionText = String(state || "").replace(/-/g, " ");
+    if (this.hass.formatEntityState) {
+      conditionText = this.hass.formatEntityState(weatherEntity);
+    }
 
     const temperature = attrs.temperature;
     const tempUnit = this.hass.config.unit_system.temperature;
