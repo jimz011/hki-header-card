@@ -1518,21 +1518,34 @@ class HkiHeaderCardEditor extends LitElement {
   }
 
   _renderEntityPicker(label, field, value, helper = "") {
-    // Strictly use ha-entity-picker
+    // If ha-entity-picker is available (modern HA), use it
+    if (customElements.get("ha-entity-picker")) {
+      return html`
+        <ha-entity-picker
+          .hass=${this.hass}
+          .label=${label}
+          .value=${value || ""}
+          .helper=${helper}
+          @value-changed=${(ev) => this._changed(ev, field)}
+          allow-custom-entity
+        ></ha-entity-picker>
+      `;
+    }
+    
+    // Fallback if not available
     return html`
-      <ha-entity-picker
-        .hass=${this.hass}
-        .label=${label}
+      <ha-textfield
+        label=${label}
         .value=${value || ""}
+        data-field=${field}
         .helper=${helper}
-        @value-changed=${(ev) => this._changed(ev, field)}
-        allow-custom-entity
-      ></ha-entity-picker>
+        @input=${this._changed}
+      ></ha-textfield>
     `;
   }
 
   _renderNavigationPicker(label, field, value, helper = "") {
-    // Strictly use ha-selector with navigation type
+    // Strictly use ha-selector with navigation type (as requested)
     return html`
       <ha-selector
         .hass=${this.hass}
@@ -1682,7 +1695,6 @@ class HkiHeaderCardEditor extends LitElement {
     const hasCodeEditor = !!customElements.get("ha-code-editor");
 
     if (hasCodeEditor) {
-      // Enable autocomplete features
       return html`
         <div class="code-wrap">
           <div class="code-label">Service data (YAML)</div>
@@ -1756,11 +1768,19 @@ class HkiHeaderCardEditor extends LitElement {
         ` : ""}
         
         ${actionType === "call-service" ? html`
-          <ha-service-picker
-            .hass=${this.hass}
-            .value=${action.service || ""}
-            @value-changed=${(ev) => this._changed(ev, `${field}.service`)}
-          ></ha-service-picker>
+          ${customElements.get("ha-service-picker") 
+            ? html`<ha-service-picker
+                .hass=${this.hass}
+                .value=${action.service || ""}
+                @value-changed=${(ev) => this._changed(ev, `${field}.service`)}
+              ></ha-service-picker>`
+            : html`<ha-textfield
+                label="Service"
+                .value=${action.service || ""}
+                data-field="${field}.service"
+                @input=${this._changed}
+              ></ha-textfield>`
+          }
           ${this._renderServiceDataEditor(field, action.service_data)}
         ` : ""}
         
