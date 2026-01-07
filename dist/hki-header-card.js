@@ -1517,35 +1517,22 @@ class HkiHeaderCardEditor extends LitElement {
     };
   }
 
-  _renderEntityPicker(label, field, value, helper = "") {
-    // If ha-entity-picker is available (modern HA), use it
-    if (customElements.get("ha-entity-picker")) {
-      return html`
-        <ha-entity-picker
-          .hass=${this.hass}
-          .label=${label}
-          .value=${value || ""}
-          .helper=${helper}
-          @value-changed=${(ev) => this._changed(ev, field)}
-          allow-custom-entity
-        ></ha-entity-picker>
-      `;
-    }
-    
-    // Fallback if not available
+  _renderEntityPicker(label, field, value, helper = "", domain = null) {
+    // Strictly use ha-selector with entity type for consistent dropdowns
     return html`
-      <ha-textfield
-        label=${label}
+      <ha-selector
+        .hass=${this.hass}
+        .selector=${{ entity: { domain: domain } }}
         .value=${value || ""}
-        data-field=${field}
+        .label=${label}
         .helper=${helper}
-        @input=${this._changed}
-      ></ha-textfield>
+        @value-changed=${(ev) => this._changed(ev, field)}
+      ></ha-selector>
     `;
   }
 
   _renderNavigationPicker(label, field, value, helper = "") {
-    // Strictly use ha-selector with navigation type (as requested)
+    // Strictly use ha-selector with navigation type
     return html`
       <ha-selector
         .hass=${this.hass}
@@ -1666,18 +1653,13 @@ class HkiHeaderCardEditor extends LitElement {
 
   _renderTemplateEditor(label, field, rows = 6) {
     const value = this._config?.[field] ?? "";
-    const hasCodeEditor = !!customElements.get("ha-code-editor");
-
-    if (hasCodeEditor) {
-      return html`
-        <div class="code-wrap">
-          <div class="code-label">${label}</div>
-          <ha-code-editor .hass=${this.hass} .value=${value} mode="jinja2" data-field=${field} @value-changed=${this._changed}></ha-code-editor>
-        </div>
-      `;
-    }
-
-    return html`<ha-textfield label=${label} .value=${value} data-field=${field} textarea rows=${String(rows)} @input=${this._changed}></ha-textfield>`;
+    // Forced usage of ha-code-editor (no fallback)
+    return html`
+      <div class="code-wrap">
+        <div class="code-label">${label}</div>
+        <ha-code-editor .hass=${this.hass} .value=${value} mode="jinja2" data-field=${field} @value-changed=${this._changed}></ha-code-editor>
+      </div>
+    `;
   }
 
   _renderServiceDataEditor(field, serviceData) {
@@ -1692,38 +1674,20 @@ class HkiHeaderCardEditor extends LitElement {
       }
     }
     
-    const hasCodeEditor = !!customElements.get("ha-code-editor");
-
-    if (hasCodeEditor) {
-      return html`
-        <div class="code-wrap">
-          <div class="code-label">Service data (YAML)</div>
-          <ha-code-editor 
-            .hass=${this.hass} 
-            .value=${value} 
-            mode="yaml" 
-            .autocomplete_entities=${true}
-            .autocomplete_icons=${true}
-            data-field="${field}.service_data" 
-            @value-changed=${this._changed}>
-          </ha-code-editor>
-        </div>
-      `;
-    }
-
+    // Forced usage of ha-code-editor with autocomplete (no fallback)
     return html`
-      <ha-textfield 
-        label="Service data (YAML)" 
-        helper="Use YAML format with proper indentation. Press Shift+Enter for new line."
-        .value=${value} 
-        data-field="${field}.service_data" 
-        @input=${this._changed}
-        @keydown=${(e) => {
-          if (e.key === 'Enter' && !e.shiftKey) {
-            e.stopPropagation();
-          }
-        }}>
-      </ha-textfield>
+      <div class="code-wrap">
+        <div class="code-label">Service data (YAML)</div>
+        <ha-code-editor 
+          .hass=${this.hass} 
+          .value=${value} 
+          mode="yaml" 
+          .autocomplete_entities=${true}
+          .autocomplete_icons=${true}
+          data-field="${field}.service_data" 
+          @value-changed=${this._changed}>
+        </ha-code-editor>
+      </div>
     `;
   }
 
@@ -1768,19 +1732,11 @@ class HkiHeaderCardEditor extends LitElement {
         ` : ""}
         
         ${actionType === "call-service" ? html`
-          ${customElements.get("ha-service-picker") 
-            ? html`<ha-service-picker
-                .hass=${this.hass}
-                .value=${action.service || ""}
-                @value-changed=${(ev) => this._changed(ev, `${field}.service`)}
-              ></ha-service-picker>`
-            : html`<ha-textfield
-                label="Service"
-                .value=${action.service || ""}
-                data-field="${field}.service"
-                @input=${this._changed}
-              ></ha-textfield>`
-          }
+          <ha-service-picker
+            .hass=${this.hass}
+            .value=${action.service || ""}
+            @value-changed=${(ev) => this._changed(ev, `${field}.service`)}
+          ></ha-service-picker>
           ${this._renderServiceDataEditor(field, action.service_data)}
         ` : ""}
         
@@ -1845,7 +1801,8 @@ class HkiHeaderCardEditor extends LitElement {
           "Weather entity",
           "weather_entity",
           this._config.weather_entity,
-          "Optional: Add a weather entity to display conditions (e.g., weather.home)"
+          "Optional: Add a weather entity to display conditions (e.g., weather.home)",
+          "weather"
         )}
 
         ${this._config.weather_entity ? html`
