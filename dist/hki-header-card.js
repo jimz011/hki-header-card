@@ -1692,10 +1692,13 @@ class HkiHeaderCardEditor extends LitElement {
     `;
   }
 
-  _renderActionEditor(label, field) {
+_renderActionEditor(label, field) {
     const action = this._config?.[field] || { action: "more-info" };
     const actionType = action.action || "more-info";
     
+    // Check if the native service picker is available in this context
+    const hasServicePicker = !!customElements.get("ha-service-picker");
+
     return html`
       <div class="code-wrap">
         <div class="code-label">${label}</div>
@@ -1733,12 +1736,23 @@ class HkiHeaderCardEditor extends LitElement {
         ` : ""}
         
         ${actionType === "call-service" ? html`
-          <ha-service-picker
-            style="width: 100%; display: block;"
-            .hass=${this.hass}
-            .value=${action.service || ""}
-            @value-changed=${(ev) => this._changed(ev, `${field}.service`)}
-          ></ha-service-picker>
+          ${hasServicePicker
+            ? html`
+                <ha-service-picker
+                  style="width: 100%; display: block;"
+                  .hass=${this.hass}
+                  .value=${action.service || ""}
+                  @value-changed=${(ev) => this._changed(ev, `${field}.service`)}
+                ></ha-service-picker>`
+            : html`
+                <ha-textfield 
+                  label="Service" 
+                  helper="e.g., light.turn_on"
+                  .value=${action.service || ""} 
+                  data-field="${field}.service" 
+                  @input=${this._changed}>
+                </ha-textfield>`
+          }
           ${this._renderServiceDataEditor(field, action.service_data)}
         ` : ""}
         
