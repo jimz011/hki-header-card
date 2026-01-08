@@ -14,7 +14,7 @@ Full-width customizable header for Home Assistant with automatic kiosk mode dete
 
 ***You may use any of the wallpapers on this repo for your own setup***
 
-***You may also want to check out the [HKI Navigation Card](https://github.com/jimz011/hki-navigation-card)***
+***You may also be interested in [HKI PostNL Card](https://github.com/jimz011/hki-postnl-card) and [HKI Navigation Card](https://github.com/jimz011/hki-navigation-card)***
 
 ## Features
 - 🎨 Full-width fixed header with customizable background (images, gradients, colors)
