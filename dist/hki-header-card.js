@@ -1,16 +1,17 @@
-// HKI Header Card
+// HKI Header Card - Optimized
 
 import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?module";
 
+const CARD_NAME = "hki-header-card";
+const VERSION = "1.0.7";
+
+console.log(`%c${CARD_NAME} %cv${VERSION}`, 'color: #17a2b8', 'color: #999');
+
 const clamp = (n, min, max) => (Number.isFinite(n) ? Math.min(Math.max(n, min), max) : min);
+const toNum = (v, fallback) => { const n = +v; return Number.isFinite(n) ? n : fallback; };
 
 const WEIGHT_MAP = Object.freeze({
-  light: 300,
-  regular: 400,
-  medium: 500,
-  semibold: 600,
-  bold: 700,
-  black: 900,
+  light: 300, regular: 400, medium: 500, semibold: 600, bold: 700, black: 900,
 });
 
 const FONT_FAMILY_MAP = Object.freeze({
@@ -20,11 +21,9 @@ const FONT_FAMILY_MAP = Object.freeze({
   inter: "Inter, system-ui, sans-serif",
   arial: "Arial, Helvetica, sans-serif",
   georgia: "Georgia, 'Times New Roman', serif",
-  mono:
-    "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+  mono: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
 });
 
-// Weather icons + default colors (colors can be overridden via theme vars)
 const WEATHER_ICON_MAP = Object.freeze({
   "clear-night": "mdi:weather-night",
   cloudy: "mdi:weather-cloudy",
@@ -61,32 +60,91 @@ const WEATHER_COLOR_MAP = Object.freeze({
   exceptional: "var(--hki-weather-color-exceptional, #ef9a9a)",
 });
 
+// Shared defaults - single source of truth
+const DEFAULTS = Object.freeze({
+  title: "Header",
+  subtitle: "",
+  text_align: "left",
+  title_color: "",
+  subtitle_color: "",
+  weather_color: "",
+  background: "https://github.com/jimz011/hki-header-card/blob/main/wallpapers/livingroom.jpg?raw=true",
+  background_position: "center",
+  background_repeat: "no-repeat",
+  background_size: "cover",
+  height_vh: 35,
+  min_height: 180,
+  max_height: 220,
+  blend_color: "var(--primary-background-color)",
+  blend_stop: 95,
+  fixed: true,
+  fixed_top: 0,
+  title_offset_x: 5,
+  title_offset_y: 32,
+  subtitle_offset_x: 5,
+  subtitle_offset_y: 32,
+  badges_offset_pinned: 48,
+  badges_offset_unpinned: 100,
+  badges_gap: 0,
+  badges_fixed: false,
+  font_family: "inherit",
+  font_family_custom: "",
+  font_style: "normal",
+  title_size_px: 36,
+  subtitle_size_px: 15,
+  title_weight: "bold",
+  subtitle_weight: "medium",
+  weather_entity: "",
+  weather_align: "right",
+  weather_offset_x: 5,
+  weather_offset_y: 40,
+  weather_offset_x_mobile: null,
+  weather_offset_y_mobile: null,
+  mobile_breakpoint: 768,
+  weather_size_px: 12,
+  weather_weight: "medium",
+  weather_show_icon: true,
+  weather_show_condition: true,
+  weather_show_temperature: true,
+  weather_show_humidity: false,
+  weather_show_wind: false,
+  weather_show_pressure: false,
+  weather_colored_icons: true,
+  weather_icon_color_mode: "state",
+  weather_icon_color: "",
+  weather_animate_icon: "none",
+  weather_icon_pack_path: "",
+  weather_pill: false,
+  weather_pill_background: "rgba(0,0,0,0.25)",
+  weather_pill_padding_x: 10,
+  weather_pill_padding_y: 6,
+  weather_pill_radius: 999,
+  weather_pill_blur: 0,
+  weather_tap_action: { action: "more-info" },
+});
+
 function normalizeWeightKey(input, fallbackKey) {
   if (typeof input === "string" && WEIGHT_MAP[input]) return input;
   if (typeof input === "number" && Number.isFinite(input)) {
-    let best = fallbackKey;
-    let bestDist = Infinity;
+    let best = fallbackKey, bestDist = Infinity;
     for (const [k, v] of Object.entries(WEIGHT_MAP)) {
       const d = Math.abs(v - input);
-      if (d < bestDist) {
-        best = k;
-        bestDist = d;
-      }
+      if (d < bestDist) { best = k; bestDist = d; }
     }
     return best;
   }
   return fallbackKey;
 }
 
-function hashStringDjb2(s) {
+// Simplified hash - djb2
+function hashStr(s) {
   let h = 5381;
   for (let i = 0; i < s.length; i++) h = (h * 33) ^ s.charCodeAt(i);
   return (h >>> 0).toString(16);
 }
 
 function cacheKey(raw, vars) {
-  const v = vars ? JSON.stringify(vars) : "";
-  return `hkiHeaderTpl:${hashStringDjb2(`${raw}::${v}`)}`;
+  return `hkiTpl:${hashStr(raw + (vars ? JSON.stringify(vars) : ""))}`;
 }
 
 class HkiHeaderCard extends LitElement {
@@ -101,10 +159,8 @@ class HkiHeaderCard extends LitElement {
       _headerHeight: { type: Number },
       _kioskMode: { type: Boolean },
       _editMode: { type: Boolean },
-
       _renderedTitle: { type: String },
       _renderedSubtitle: { type: String },
-      _weatherState: { type: Object },
     };
   }
 
@@ -118,11 +174,10 @@ class HkiHeaderCard extends LitElement {
     this._headerHeight = 0;
     this._kioskMode = false;
     this._editMode = false;
-
     this._renderedTitle = "";
     this._renderedSubtitle = "";
-    this._weatherState = null;
 
+    // Handlers & observers
     this._resizeHandler = null;
     this._ro = null;
     this._rafMeasure = 0;
@@ -133,7 +188,6 @@ class HkiHeaderCard extends LitElement {
     this._cachedHeader = null;
     this._visibilityHandler = null;
     this._focusHandler = null;
-    this._initialCheckTimer = null;
     this._editModeInterval = null;
 
     this._tpl = {
@@ -148,9 +202,7 @@ class HkiHeaderCard extends LitElement {
 
   static get styles() {
     return css`
-      :host {
-        display: block;
-      }
+      :host { display: block; }
 
       .header-fixed {
         position: fixed;
@@ -172,7 +224,6 @@ class HkiHeaderCard extends LitElement {
         box-sizing: border-box;
         color: var(--hki-header-text-color, #fff);
         border: none;
-        border-style: none;
         box-shadow: none !important;
       }
 
@@ -228,10 +279,7 @@ class HkiHeaderCard extends LitElement {
         cursor: pointer;
         transition: opacity 0.2s;
       }
-
-      .weather-clickable:hover {
-        opacity: 0.8;
-      }
+      .weather-clickable:hover { opacity: 0.8; }
 
       .weather-icon {
         --mdc-icon-size: var(--weather-icon-size, 32px);
@@ -240,22 +288,15 @@ class HkiHeaderCard extends LitElement {
         color: var(--hki-header-text-color, #fff);
         filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
       }
-      
-      /* Ensure SVG images act like icons */
+
       img.weather-icon {
         object-fit: contain;
         display: block;
       }
 
-      .weather-condition {
-        text-transform: capitalize;
-      }
+      .weather-condition { text-transform: capitalize; }
+      .weather-temperature { font-weight: 500; }
 
-      .weather-temperature {
-        font-weight: 500;
-      }
-
-      /* Weather pill */
       .weather-pill {
         background: var(--hki-weather-pill-background, rgba(0, 0, 0, 0.25));
         border-radius: var(--hki-weather-pill-radius, 999px);
@@ -264,48 +305,21 @@ class HkiHeaderCard extends LitElement {
         -webkit-backdrop-filter: blur(var(--hki-weather-pill-blur, 0px));
       }
 
-      /* Weather icon animations */
-      .animate-float {
-        animation: hki-weather-float 3s ease-in-out infinite;
-      }
-
-      .animate-pulse {
-        animation: hki-weather-pulse 1.8s ease-in-out infinite;
-      }
-
-      .animate-spin {
-        animation: hki-weather-spin 2.8s linear infinite;
-      }
+      .animate-float { animation: hki-weather-float 3s ease-in-out infinite; }
+      .animate-pulse { animation: hki-weather-pulse 1.8s ease-in-out infinite; }
+      .animate-spin { animation: hki-weather-spin 2.8s linear infinite; }
 
       @keyframes hki-weather-float {
-        0%,
-        100% {
-          transform: translateY(0);
-        }
-        50% {
-          transform: translateY(-4px);
-        }
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-4px); }
       }
-
       @keyframes hki-weather-pulse {
-        0%,
-        100% {
-          transform: scale(1);
-          opacity: 1;
-        }
-        50% {
-          transform: scale(1.08);
-          opacity: 0.85;
-        }
+        0%, 100% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.08); opacity: 0.85; }
       }
-
       @keyframes hki-weather-spin {
-        from {
-          transform: rotate(0deg);
-        }
-        to {
-          transform: rotate(360deg);
-        }
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
       }
     `;
   }
@@ -326,48 +340,18 @@ class HkiHeaderCard extends LitElement {
       this._ro.disconnect();
       this._ro = null;
     }
-    if (this._rafMeasure) {
-      cancelAnimationFrame(this._rafMeasure);
-      this._rafMeasure = 0;
-    }
-    if (this._rafBadges) {
-      cancelAnimationFrame(this._rafBadges);
-      this._rafBadges = 0;
-    }
-    if (this._tpl.timer) {
-      clearTimeout(this._tpl.timer);
-      this._tpl.timer = 0;
-    }
-    if (this._kioskCheckInterval) {
-      clearInterval(this._kioskCheckInterval);
-      this._kioskCheckInterval = null;
-    }
-    if (this._kioskMutationObserver) {
-      this._kioskMutationObserver.disconnect();
-      this._kioskMutationObserver = null;
-    }
+    if (this._rafMeasure) cancelAnimationFrame(this._rafMeasure);
+    if (this._rafBadges) cancelAnimationFrame(this._rafBadges);
+    if (this._tpl.timer) clearTimeout(this._tpl.timer);
+    if (this._kioskCheckInterval) clearInterval(this._kioskCheckInterval);
+    if (this._kioskMutationObserver) this._kioskMutationObserver.disconnect();
     if (this._urlChangeHandler) {
       window.removeEventListener("popstate", this._urlChangeHandler);
       window.removeEventListener("hashchange", this._urlChangeHandler);
-      this._urlChangeHandler = null;
     }
-    if (this._visibilityHandler) {
-      document.removeEventListener("visibilitychange", this._visibilityHandler);
-      this._visibilityHandler = null;
-    }
-    if (this._focusHandler) {
-      window.removeEventListener("focus", this._focusHandler);
-      this._focusHandler = null;
-    }
-    if (this._initialCheckTimer) {
-      clearTimeout(this._initialCheckTimer);
-      this._initialCheckTimer = null;
-    }
-
-    if (this._editModeInterval) {
-      clearInterval(this._editModeInterval);
-      this._editModeInterval = null;
-    }
+    if (this._visibilityHandler) document.removeEventListener("visibilitychange", this._visibilityHandler);
+    if (this._focusHandler) window.removeEventListener("focus", this._focusHandler);
+    if (this._editModeInterval) clearInterval(this._editModeInterval);
 
     this._unsubscribeTemplate("title");
     this._unsubscribeTemplate("subtitle");
@@ -379,30 +363,22 @@ class HkiHeaderCard extends LitElement {
     this._detectKioskMode();
     this._detectEditMode();
 
+    // Consolidated resize handling
     this._resizeHandler = () => {
       this._debouncedMeasure(true);
       this._debouncedBadgesZIndex();
     };
     window.addEventListener("resize", this._resizeHandler, { passive: true });
 
-    this._ro = new ResizeObserver(() => {
-      this._debouncedMeasure(true);
-      this._debouncedBadgesZIndex();
-    });
+    this._ro = new ResizeObserver(this._resizeHandler);
     this._ro.observe(this);
 
-    this._kioskMutationObserver = new MutationObserver(() => {
-      this._detectKioskMode();
-    });
-    this._kioskMutationObserver.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-    this._kioskMutationObserver.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
+    // Mutation observer for kiosk mode
+    this._kioskMutationObserver = new MutationObserver(() => this._detectKioskMode());
+    this._kioskMutationObserver.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    this._kioskMutationObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
 
+    // URL change handler
     this._urlChangeHandler = () => {
       this._detectKioskMode();
       this._detectEditMode();
@@ -410,12 +386,12 @@ class HkiHeaderCard extends LitElement {
     window.addEventListener("popstate", this._urlChangeHandler);
     window.addEventListener("hashchange", this._urlChangeHandler);
 
+    // Visibility & focus handlers
     this._visibilityHandler = () => {
       if (!document.hidden) {
         this._cachedHeader = null;
         this._detectKioskMode();
-        setTimeout(() => this._detectKioskMode(), 100);
-        setTimeout(() => this._detectKioskMode(), 300);
+        setTimeout(() => this._detectKioskMode(), 200);
       }
     };
     document.addEventListener("visibilitychange", this._visibilityHandler);
@@ -423,28 +399,24 @@ class HkiHeaderCard extends LitElement {
     this._focusHandler = () => {
       this._cachedHeader = null;
       this._detectKioskMode();
-      setTimeout(() => this._detectKioskMode(), 100);
     };
     window.addEventListener("focus", this._focusHandler);
 
-    this._editModeInterval = setInterval(() => {
-      this._detectEditMode();
-    }, 1000);
+    // Reduced polling: edit mode every 2s instead of 1s
+    this._editModeInterval = setInterval(() => this._detectEditMode(), 2000);
 
-    const initialChecks = [50, 150, 300, 600, 1000, 2000];
-    initialChecks.forEach(delay => {
+    // Reduced initial checks
+    [100, 500, 1500].forEach(delay => {
       setTimeout(() => {
         this._cachedHeader = null;
         this._detectKioskMode();
       }, delay);
     });
 
-    this._kioskCheckInterval = setInterval(() => {
-      this._detectKioskMode();
-    }, 5000);
+    // Reduced kiosk polling: 10s instead of 5s
+    this._kioskCheckInterval = setInterval(() => this._detectKioskMode(), 10000);
 
     requestAnimationFrame(() => this._measure(true));
-
     this._scheduleTemplateSetup(0);
     this._debouncedBadgesZIndex();
   }
@@ -470,7 +442,6 @@ class HkiHeaderCard extends LitElement {
         this._cachedHeader = null;
         this._detectKioskMode();
       }
-
       this._debouncedBadgesZIndex();
     }
 
@@ -482,11 +453,10 @@ class HkiHeaderCard extends LitElement {
 
   _detectKioskMode() {
     const urlParams = new URLSearchParams(window.location.search);
-    const urlKiosk = urlParams.get("kiosk") === "true" || window.location.search.includes("kiosk");
-    
-    const bodyKiosk = document.body.classList.contains("kiosk-mode") || 
+    const urlKiosk = urlParams.has("kiosk");
+    const bodyKiosk = document.body.classList.contains("kiosk-mode") ||
                       document.documentElement.classList.contains("kiosk-mode");
-    
+
     if (urlKiosk || bodyKiosk) {
       if (!this._kioskMode) {
         this._kioskMode = true;
@@ -494,70 +464,57 @@ class HkiHeaderCard extends LitElement {
       }
       return;
     }
-    
+
     let headerHidden = false;
     try {
       if (!this._cachedHeader || !document.contains(this._cachedHeader)) {
-        const findHeader = (root, depth = 0) => {
-          if (depth > 10) return null;
-          
-          const selectors = [
-            "app-header",
-            "mwc-top-app-bar-fixed", 
-            ".toolbar",
-            "[slot='header']",
-            "ha-app-layout app-header",
-            "ha-tabs"
-          ];
-          
-          for (const selector of selectors) {
-            const header = root.querySelector?.(selector);
-            if (header) return header;
-          }
-          
-          const elements = root.querySelectorAll?.("*") || [];
-          for (const el of elements) {
-            if (el.shadowRoot) {
-              const found = findHeader(el.shadowRoot, depth + 1);
-              if (found) return found;
-            }
-          }
-          return null;
-        };
-        
-        const ha = document.querySelector("home-assistant");
-        if (ha?.shadowRoot) {
-          this._cachedHeader = findHeader(ha.shadowRoot);
-        }
-        
-        if (!this._cachedHeader) {
-          this._cachedHeader = findHeader(document);
-        }
+        this._cachedHeader = this._findHeader();
       }
-      
+
       if (this._cachedHeader) {
         const rect = this._cachedHeader.getBoundingClientRect();
         const style = window.getComputedStyle(this._cachedHeader);
-        
-        headerHidden = 
-          rect.height === 0 || 
-          this._cachedHeader.offsetHeight === 0 || 
-          this._cachedHeader.clientHeight === 0 ||
-          rect.top < -100 ||
-          style.display === "none" || 
-          style.visibility === "hidden" || 
-          style.opacity === "0";
+        headerHidden = rect.height === 0 ||
+                       rect.top < -100 ||
+                       style.display === "none" ||
+                       style.visibility === "hidden" ||
+                       style.opacity === "0";
       }
-    } catch (e) {
-      // Silent fail
-    }
-    
-    const newKioskMode = headerHidden;
-    
-    if (newKioskMode !== this._kioskMode) {
-      this._kioskMode = newKioskMode;
+    } catch (_) { /* Silent fail */ }
+
+    if (headerHidden !== this._kioskMode) {
+      this._kioskMode = headerHidden;
       this.requestUpdate();
     }
+  }
+
+  // Optimized header search - limited depth, prioritized selectors
+  _findHeader() {
+    const selectors = ["app-header", "mwc-top-app-bar-fixed", ".toolbar", "[slot='header']", "ha-tabs"];
+    
+    const search = (root, depth = 0) => {
+      if (depth > 6 || !root) return null;
+      
+      for (const sel of selectors) {
+        const el = root.querySelector?.(sel);
+        if (el) return el;
+      }
+      
+      // Limited shadowRoot traversal
+      const shadowHosts = root.querySelectorAll?.("home-assistant, hui-root, ha-panel-lovelace, hui-view");
+      if (shadowHosts) {
+        for (const host of shadowHosts) {
+          if (host.shadowRoot) {
+            const found = search(host.shadowRoot, depth + 1);
+            if (found) return found;
+          }
+        }
+      }
+      return null;
+    };
+
+    const ha = document.querySelector("home-assistant");
+    return ha?.shadowRoot ? search(ha.shadowRoot) : search(document);
   }
 
   _debouncedMeasure(readCard = false) {
@@ -574,11 +531,7 @@ class HkiHeaderCard extends LitElement {
 
     const vw = window.innerWidth || document.documentElement.clientWidth || rect.width;
 
-    if (
-      vw !== this._viewportWidth ||
-      rect.left !== this._offsetLeft ||
-      rect.width !== this._contentWidth
-    ) {
+    if (vw !== this._viewportWidth || rect.left !== this._offsetLeft || rect.width !== this._contentWidth) {
       this._viewportWidth = vw;
       this._offsetLeft = rect.left;
       this._contentWidth = rect.width;
@@ -601,12 +554,7 @@ class HkiHeaderCard extends LitElement {
       if (!host) break;
 
       const tag = (host.tagName || "").toLowerCase();
-      if (
-        tag === "hui-card-preview" ||
-        tag === "hui-dialog-edit-card" ||
-        tag === "ha-dialog" ||
-        tag === "ha-dialog-scroller"
-      ) {
+      if (tag === "hui-card-preview" || tag === "hui-dialog-edit-card" || tag === "ha-dialog" || tag === "ha-dialog-scroller") {
         this._inPreview = true;
         return;
       }
@@ -626,24 +574,16 @@ class HkiHeaderCard extends LitElement {
 
     let edit = false;
     try {
-      const huiRoot =
-        document.querySelector("hui-root") ||
-        document.querySelector("home-assistant")?.shadowRoot?.querySelector("hui-root");
+      const huiRoot = document.querySelector("hui-root") ||
+                      document.querySelector("home-assistant")?.shadowRoot?.querySelector("hui-root");
       edit = !!(huiRoot?.lovelace?.editMode || huiRoot?.editMode);
-    } catch (_) {
-      // ignore
-    }
+    } catch (_) {}
 
     if (!edit) {
       try {
-        edit =
-          document.body?.classList?.contains("edit-mode") ||
-          document.documentElement?.classList?.contains("edit-mode") ||
-          !!document.querySelector("hui-dialog-edit-card") ||
-          !!document.querySelector("hui-card-element-editor");
-      } catch (_) {
-        // ignore
-      }
+        edit = document.body?.classList?.contains("edit-mode") ||
+               !!document.querySelector("hui-dialog-edit-card");
+      } catch (_) {}
     }
 
     if (edit !== this._editMode) {
@@ -655,94 +595,28 @@ class HkiHeaderCard extends LitElement {
   setConfig(config) {
     if (!config) throw new Error("Invalid configuration");
 
-    const defaults = {
-      title: "Header",
-      subtitle: "",
-      text_align: "left",
-      title_color: "",
-      subtitle_color: "",
-      weather_color: "",
-      background: "https://github.com/jimz011/hki-header-card/blob/main/wallpapers/livingroom.jpg?raw=true",
-      background_position: "center",
-      background_repeat: "no-repeat",
-      background_size: "cover",
-      height_vh: 35,
-      min_height: 180,
-      max_height: 220,
-      blend_color: "var(--primary-background-color)",
-      blend_stop: 95,
-      fixed: true,
-      fixed_top: 0,
-      title_offset_x: 5,
-      title_offset_y: 32,
-      subtitle_offset_x: 5,
-      subtitle_offset_y: 32,
-      badges_offset: 0,
-      badges_gap: 0,
-      weather_entity: "",
-      weather_align: "right",
-      weather_offset_x: 5,
-      weather_offset_y: 40,
-      weather_offset_x_mobile: null,
-      weather_offset_y_mobile: null,
-      mobile_breakpoint: 768,
-      weather_size_px: 12,
-      weather_weight: "medium",
-      weather_show_icon: true,
-      weather_show_condition: true,
-      weather_show_temperature: true,
-      weather_show_humidity: false,
-      weather_show_wind: false,
-      weather_show_pressure: false,
-      weather_colored_icons: true,
-      weather_icon_color_mode: "state",
-      weather_icon_color: "",
-      weather_animate_icon: "none",
-      weather_icon_pack_path: "", 
-      weather_pill: false,
-      weather_pill_background: "rgba(0,0,0,0.25)",
-      weather_pill_padding_x: 10,
-      weather_pill_padding_y: 6,
-      weather_pill_radius: 999,
-      weather_pill_blur: 0,
-      weather_tap_action: { action: "more-info" },
-    };
+    const m = { ...DEFAULTS, ...config };
 
-    const m = { ...defaults, ...config };
-
-    m.height_vh = clamp(Number(m.height_vh), 10, 100);
-    m.min_height = clamp(Number(m.min_height), 60, 2000);
-    m.max_height = clamp(Number(m.max_height), m.min_height, 4000);
-    m.blend_stop = clamp(Number(m.blend_stop), 0, 100);
-
+    // Numeric clamping
+    m.height_vh = clamp(+m.height_vh, 10, 100);
+    m.min_height = clamp(+m.min_height, 60, 2000);
+    m.max_height = clamp(+m.max_height, m.min_height, 4000);
+    m.blend_stop = clamp(+m.blend_stop, 0, 100);
     m.fixed = !!m.fixed;
-    m.fixed_top = Number.isFinite(+m.fixed_top) ? +m.fixed_top : 0;
-
-    m.title_offset_x = Number.isFinite(+m.title_offset_x) ? +m.title_offset_x : 5;
-    m.title_offset_y = Number.isFinite(+m.title_offset_y) ? +m.title_offset_y : 32;
-    m.subtitle_offset_x = Number.isFinite(+m.subtitle_offset_x) ? +m.subtitle_offset_x : 5;
-    m.subtitle_offset_y = Number.isFinite(+m.subtitle_offset_y) ? +m.subtitle_offset_y : 32;
-
-    m.badges_offset_pinned = Number.isFinite(+m.badges_offset_pinned) ? +m.badges_offset_pinned : 48;
-    m.badges_offset_unpinned = Number.isFinite(+m.badges_offset_unpinned) ? +m.badges_offset_unpinned : 100;
-    m.badges_gap = Number.isFinite(+m.badges_gap) ? +m.badges_gap : 0;
-
-    m.weather_offset_x = Number.isFinite(+m.weather_offset_x) ? +m.weather_offset_x : 5;
-    m.weather_offset_y = Number.isFinite(+m.weather_offset_y) ? +m.weather_offset_y : 40;
-    m.weather_offset_x_mobile =
-      m.weather_offset_x_mobile === null || m.weather_offset_x_mobile === undefined || m.weather_offset_x_mobile === ""
-        ? null
-        : Number.isFinite(+m.weather_offset_x_mobile)
-          ? +m.weather_offset_x_mobile
-          : null;
-    m.weather_offset_y_mobile =
-      m.weather_offset_y_mobile === null || m.weather_offset_y_mobile === undefined || m.weather_offset_y_mobile === ""
-        ? null
-        : Number.isFinite(+m.weather_offset_y_mobile)
-          ? +m.weather_offset_y_mobile
-          : null;
-    m.mobile_breakpoint = clamp(Number(m.mobile_breakpoint ?? 768), 240, 2500);
-    m.weather_size_px = clamp(Number(m.weather_size_px ?? 12), 8, 64);
+    m.fixed_top = toNum(m.fixed_top, 0);
+    m.title_offset_x = toNum(m.title_offset_x, 5);
+    m.title_offset_y = toNum(m.title_offset_y, 32);
+    m.subtitle_offset_x = toNum(m.subtitle_offset_x, 5);
+    m.subtitle_offset_y = toNum(m.subtitle_offset_y, 32);
+    m.badges_offset_pinned = toNum(m.badges_offset_pinned, 48);
+    m.badges_offset_unpinned = toNum(m.badges_offset_unpinned, 100);
+    m.badges_gap = toNum(m.badges_gap, 0);
+    m.weather_offset_x = toNum(m.weather_offset_x, 5);
+    m.weather_offset_y = toNum(m.weather_offset_y, 40);
+    m.weather_offset_x_mobile = m.weather_offset_x_mobile == null || m.weather_offset_x_mobile === "" ? null : toNum(m.weather_offset_x_mobile, null);
+    m.weather_offset_y_mobile = m.weather_offset_y_mobile == null || m.weather_offset_y_mobile === "" ? null : toNum(m.weather_offset_y_mobile, null);
+    m.mobile_breakpoint = clamp(+m.mobile_breakpoint || 768, 240, 2500);
+    m.weather_size_px = clamp(+m.weather_size_px || 12, 8, 64);
     m.weather_weight = normalizeWeightKey(m.weather_weight ?? "medium", "medium");
     m.weather_show_icon = m.weather_show_icon !== false;
     m.weather_show_condition = m.weather_show_condition !== false;
@@ -751,28 +625,18 @@ class HkiHeaderCard extends LitElement {
     m.weather_show_wind = !!m.weather_show_wind;
     m.weather_show_pressure = !!m.weather_show_pressure;
     m.weather_colored_icons = m.weather_colored_icons !== false;
-    m.weather_icon_color_mode = ["state", "custom", "inherit"].includes(m.weather_icon_color_mode)
-      ? m.weather_icon_color_mode
-      : "state";
-    m.weather_animate_icon = ["none", "float", "pulse", "spin"].includes(m.weather_animate_icon)
-      ? m.weather_animate_icon
-      : "none";
+    m.weather_icon_color_mode = ["state", "custom", "inherit"].includes(m.weather_icon_color_mode) ? m.weather_icon_color_mode : "state";
+    m.weather_animate_icon = ["none", "float", "pulse", "spin"].includes(m.weather_animate_icon) ? m.weather_animate_icon : "none";
     m.weather_pill = !!m.weather_pill;
-    m.weather_pill_padding_x = clamp(Number(m.weather_pill_padding_x ?? 10), 0, 80);
-    m.weather_pill_padding_y = clamp(Number(m.weather_pill_padding_y ?? 6), 0, 80);
-    m.weather_pill_radius = clamp(Number(m.weather_pill_radius ?? 999), 0, 999);
-    m.weather_pill_blur = clamp(Number(m.weather_pill_blur ?? 0), 0, 40);
-
-    m.font_family =
-      ["inherit", "system", "roboto", "inter", "arial", "georgia", "mono", "custom"].includes(
-        m.font_family
-      )
-        ? m.font_family
-        : "inherit";
+    m.weather_pill_padding_x = clamp(+m.weather_pill_padding_x || 10, 0, 80);
+    m.weather_pill_padding_y = clamp(+m.weather_pill_padding_y || 6, 0, 80);
+    m.weather_pill_radius = clamp(+m.weather_pill_radius || 999, 0, 999);
+    m.weather_pill_blur = clamp(+m.weather_pill_blur || 0, 0, 40);
+    m.font_family = ["inherit", "system", "roboto", "inter", "arial", "georgia", "mono", "custom"].includes(m.font_family) ? m.font_family : "inherit";
     m.font_family_custom = typeof m.font_family_custom === "string" ? m.font_family_custom : "";
     m.font_style = ["normal", "italic"].includes(m.font_style) ? m.font_style : "normal";
-    m.title_size_px = clamp(Number(m.title_size_px ?? 36), 8, 256);
-    m.subtitle_size_px = clamp(Number(m.subtitle_size_px ?? 15), 8, 128);
+    m.title_size_px = clamp(+m.title_size_px || 36, 8, 256);
+    m.subtitle_size_px = clamp(+m.subtitle_size_px || 15, 8, 128);
     m.title_weight = normalizeWeightKey(m.title_weight ?? "bold", "bold");
     m.subtitle_weight = normalizeWeightKey(m.subtitle_weight ?? "medium", "medium");
 
@@ -783,8 +647,7 @@ class HkiHeaderCard extends LitElement {
 
   _isTemplateString(s) {
     if (typeof s !== "string") return false;
-    const t = s.trim();
-    return t.includes("{{") || t.includes("{%") || t.includes("{#");
+    return s.includes("{{") || s.includes("{%") || s.includes("{#");
   }
 
   _getUserVariable() {
@@ -793,10 +656,7 @@ class HkiHeaderCard extends LitElement {
   }
 
   _buildTemplateVariables() {
-    return {
-      config: this._config ?? {},
-      user: this._getUserVariable(),
-    };
+    return { config: this._config ?? {}, user: this._getUserVariable() };
   }
 
   _scheduleTemplateSetup(delayMs = 0) {
@@ -808,10 +668,8 @@ class HkiHeaderCard extends LitElement {
   }
 
   _setupTemplates() {
-    const titleRaw = this._config?.title ?? "";
-    const subtitleRaw = this._config?.subtitle ?? "";
-    this._setupTemplateKey("title", titleRaw);
-    this._setupTemplateKey("subtitle", subtitleRaw);
+    this._setupTemplateKey("title", this._config?.title ?? "");
+    this._setupTemplateKey("subtitle", this._config?.subtitle ?? "");
   }
 
   _setupTemplateKey(key, raw) {
@@ -859,7 +717,6 @@ class HkiHeaderCard extends LitElement {
 
   async _renderTemplateOnce(key, seq, raw, vars, sig) {
     if (!this.hass?.callWS) return;
-
     try {
       const res = await this.hass.callWS({
         type: "render_template",
@@ -867,10 +724,7 @@ class HkiHeaderCard extends LitElement {
         variables: vars,
         strict: false,
       });
-
-      const st = this._tpl[key];
-      if (st.seq !== seq) return;
-
+      if (this._tpl[key].seq !== seq) return;
       const text = res?.result == null ? "" : String(res.result);
       this._setRendered(key, text);
       this._storeTemplateCache(sig, text);
@@ -881,24 +735,13 @@ class HkiHeaderCard extends LitElement {
 
   async _subscribeTemplateImmediate(key, seq, raw, vars, sig) {
     if (!this.hass?.connection?.subscribeMessage) return;
-
     try {
       const unsub = await this.hass.connection.subscribeMessage(
-        (msg) => this._onTemplateMsg(key, seq, raw, sig, msg),
-        {
-          type: "render_template",
-          template: raw,
-          variables: vars,
-          strict: false,
-          report_errors: false,
-        }
+        (msg) => this._onTemplateMsg(key, seq, sig, msg),
+        { type: "render_template", template: raw, variables: vars, strict: false, report_errors: false }
       );
-
       const st = this._tpl[key];
-      if (st.seq !== seq) {
-        unsub?.();
-        return;
-      }
+      if (st.seq !== seq) { unsub?.(); return; }
       st.unsub = unsub;
     } catch (err) {
       console.warn(`Template subscription failed for ${key}:`, err);
@@ -906,49 +749,31 @@ class HkiHeaderCard extends LitElement {
     }
   }
 
-  _onTemplateMsg(key, seq, raw, sig, msg) {
-    const st = this._tpl[key];
-    if (st.seq !== seq) return;
-    if (msg?.error) {
-      console.warn(`Template update error for ${key}:`, msg.error);
-      return;
-    }
-
+  _onTemplateMsg(key, seq, sig, msg) {
+    if (this._tpl[key].seq !== seq) return;
+    if (msg?.error) { console.warn(`Template update error for ${key}:`, msg.error); return; }
     const text = msg?.result == null ? "" : String(msg.result);
     this._setRendered(key, text);
     this._storeTemplateCache(sig, text);
   }
 
   _storeTemplateCache(sig, value) {
-    try {
-      sessionStorage.setItem(sig, value);
-    } catch (_) {}
+    try { sessionStorage.setItem(sig, value); } catch (_) {}
   }
 
   _setRendered(key, value) {
     const v = value == null ? "" : String(value);
     if (key === "title") {
-      if (this._renderedTitle !== v) {
-        this._renderedTitle = v;
-        this.requestUpdate();
-      }
+      if (this._renderedTitle !== v) { this._renderedTitle = v; this.requestUpdate(); }
     } else {
-      if (this._renderedSubtitle !== v) {
-        this._renderedSubtitle = v;
-        this.requestUpdate();
-      }
+      if (this._renderedSubtitle !== v) { this._renderedSubtitle = v; this.requestUpdate(); }
     }
   }
 
   _unsubscribeTemplate(key) {
     const st = this._tpl[key];
-    if (!st) return;
-    if (st.unsub) {
-      try {
-        st.unsub();
-      } catch (_) {}
-    }
-    st.unsub = null;
+    if (st?.unsub) { try { st.unsub(); } catch (_) {} }
+    if (st) st.unsub = null;
   }
 
   _resolveFontFamily() {
@@ -958,26 +783,17 @@ class HkiHeaderCard extends LitElement {
   }
 
   _resolveWeight(key) {
-    const k = this._config?.[key];
-    return WEIGHT_MAP[k] ?? 400;
+    return WEIGHT_MAP[this._config?.[key]] ?? 400;
   }
 
   _resolveBackground(bg) {
     if (!bg || typeof bg !== "string") return bg;
-    const trimmed = bg.trim();
-    
-    if (trimmed.startsWith("url(") || trimmed.startsWith("linear-gradient(") || trimmed.startsWith("radial-gradient(")) {
-      return trimmed;
-    }
-    
-    const isPath = trimmed.startsWith("/") || 
-                   trimmed.startsWith("./") || 
-                   trimmed.startsWith("../") ||
-                   trimmed.startsWith("http://") || 
-                   trimmed.startsWith("https://") ||
-                   /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(trimmed);
-    
-    return isPath ? `url('${trimmed}')` : trimmed;
+    const t = bg.trim();
+    if (t.startsWith("url(") || t.startsWith("linear-gradient(") || t.startsWith("radial-gradient(")) return t;
+    const isPath = t.startsWith("/") || t.startsWith("./") || t.startsWith("../") ||
+                   t.startsWith("http://") || t.startsWith("https://") ||
+                   /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(t);
+    return isPath ? `url('${t}')` : t;
   }
 
   _debouncedBadgesZIndex() {
@@ -992,16 +808,10 @@ class HkiHeaderCard extends LitElement {
     const cfg = this._config || {};
     const effectiveFixed = !!cfg.fixed && !this._inPreview;
 
-    if (!effectiveFixed) {
-      this._resetBadgesZIndex();
-      return;
-    }
+    if (!effectiveFixed) { this._resetBadgesZIndex(); return; }
 
     const el = this._findHaBadgesElement();
-    if (!el) {
-      this._resetBadgesZIndex();
-      return;
-    }
+    if (!el) { this._resetBadgesZIndex(); return; }
 
     if (el !== this._badgesEl) {
       this._resetBadgesZIndex();
@@ -1013,34 +823,17 @@ class HkiHeaderCard extends LitElement {
     const topPosition = Math.max(0, (this._headerHeight || 0) - badgesOffset + (cfg.fixed_top || 0) + kioskAdjustment);
 
     if (cfg.badges_fixed) {
-      el.style.position = "fixed";
-      el.style.top = `${topPosition}px`;
-      el.style.left = `${this._offsetLeft}px`;
-      el.style.width = `${this._contentWidth}px`;
-      el.style.zIndex = "2";
-      el.style.marginBottom = "";
+      el.style.cssText = `position:fixed;top:${topPosition}px;left:${this._offsetLeft}px;width:${this._contentWidth}px;z-index:2;`;
     } else {
-      el.style.position = "relative";
-      el.style.left = "";
-      el.style.width = "";
-      el.style.zIndex = "0";
       const kioskGapAdjustment = this._kioskMode ? 48 : 0;
       const effectiveGap = (cfg.badges_gap || 0) + kioskGapAdjustment;
-      el.style.marginBottom = `${effectiveGap}px`;
+      el.style.cssText = `position:relative;z-index:0;margin-bottom:${effectiveGap}px;`;
     }
   }
 
   _resetBadgesZIndex() {
     if (this._badgesEl) {
-      try {
-        this._badgesEl.style.position = "";
-        this._badgesEl.style.top = "";
-        this._badgesEl.style.left = "";
-        this._badgesEl.style.width = "";
-        this._badgesEl.style.right = "";
-        this._badgesEl.style.zIndex = "";
-        this._badgesEl.style.marginBottom = "";
-      } catch (_) {}
+      try { this._badgesEl.style.cssText = ""; } catch (_) {}
       this._badgesEl = null;
     }
   }
@@ -1053,11 +846,9 @@ class HkiHeaderCard extends LitElement {
       if (!root || root === document) break;
       const host = root.host;
       if (!host) break;
-
       const sr = host.shadowRoot;
-      const hit = (sr && sr.querySelector?.(selectors)) || host.querySelector?.(selectors);
+      const hit = sr?.querySelector?.(selectors) || host.querySelector?.(selectors);
       if (hit) return hit;
-
       node = host;
     }
     return null;
@@ -1072,12 +863,7 @@ class HkiHeaderCard extends LitElement {
     if (!raw) return {};
 
     if (raw.startsWith("{") || raw.startsWith("[")) {
-      try {
-        const v = JSON.parse(raw);
-        return v && typeof v === "object" ? v : {};
-      } catch (_) {
-        // fall through
-      }
+      try { const v = JSON.parse(raw); return v && typeof v === "object" ? v : {}; } catch (_) {}
     }
 
     try {
@@ -1086,13 +872,12 @@ class HkiHeaderCard extends LitElement {
         const v = loader(raw);
         return v && typeof v === "object" ? v : {};
       }
-    } catch (_) {
-      // fall through
-    }
+    } catch (_) {}
 
+    // Simple key: value parser
     const out = {};
     raw.split("\n").forEach((line) => {
-      const t = String(line || "").trim();
+      const t = line.trim();
       if (!t || t.startsWith("#")) return;
       const idx = t.indexOf(":");
       if (idx <= 0) return;
@@ -1108,56 +893,33 @@ class HkiHeaderCard extends LitElement {
 
   _handleAction(action) {
     if (!action || action.action === "none" || !this.hass) return;
-    
+
     switch (action.action) {
       case "navigate":
         if (action.navigation_path) {
           history.pushState(null, "", action.navigation_path);
-          const navEvent = new Event("location-changed", {
-            bubbles: true,
-            composed: true,
-          });
-          navEvent.detail = { replace: false };
-          window.dispatchEvent(navEvent);
+          window.dispatchEvent(new CustomEvent("location-changed", { bubbles: true, composed: true, detail: { replace: false } }));
         }
         break;
-        
       case "url":
-        if (action.url_path) {
-          window.open(action.url_path, "_blank");
-        }
+        if (action.url_path) window.open(action.url_path, "_blank");
         break;
-        
       case "call-service":
         if (action.service) {
           const [domain, service] = action.service.split(".");
-          if (domain && service) {
-            const data = this._parseServiceData(action.service_data);
-            this.hass.callService(domain, service, data);
-          }
+          if (domain && service) this.hass.callService(domain, service, this._parseServiceData(action.service_data));
         }
         break;
-        
-      case "more-info":
+      case "more-info": {
         const entity = action.entity || this._config.weather_entity;
-        if (entity) {
-          const moreInfoEvent = new Event("hass-more-info", {
-            bubbles: true,
-            composed: true,
-          });
-          moreInfoEvent.detail = { entityId: entity };
-          this.dispatchEvent(moreInfoEvent);
-        }
+        if (entity) this.dispatchEvent(new CustomEvent("hass-more-info", { bubbles: true, composed: true, detail: { entityId: entity } }));
         break;
-        
-      case "toggle":
+      }
+      case "toggle": {
         const toggleEntity = action.entity || this._config.weather_entity;
-        if (toggleEntity) {
-          this.hass.callService("homeassistant", "toggle", {
-            entity_id: toggleEntity,
-          });
-        }
+        if (toggleEntity) this.hass.callService("homeassistant", "toggle", { entity_id: toggleEntity });
         break;
+      }
     }
   }
 
@@ -1171,116 +933,65 @@ class HkiHeaderCard extends LitElement {
     const state = weatherEntity.state;
     const attrs = weatherEntity.attributes || {};
 
-    const isMobile =
-      Number.isFinite(this._viewportWidth) && this._viewportWidth > 0
-        ? this._viewportWidth <= (cfg.mobile_breakpoint || 768)
-        : false;
-
-    const offsetX =
-      isMobile && cfg.weather_offset_x_mobile !== null && cfg.weather_offset_x_mobile !== undefined
-        ? cfg.weather_offset_x_mobile
-        : cfg.weather_offset_x;
-    const offsetY =
-      isMobile && cfg.weather_offset_y_mobile !== null && cfg.weather_offset_y_mobile !== undefined
-        ? cfg.weather_offset_y_mobile
-        : cfg.weather_offset_y;
+    const isMobile = this._viewportWidth > 0 && this._viewportWidth <= (cfg.mobile_breakpoint || 768);
+    const offsetX = isMobile && cfg.weather_offset_x_mobile != null ? cfg.weather_offset_x_mobile : cfg.weather_offset_x;
+    const offsetY = isMobile && cfg.weather_offset_y_mobile != null ? cfg.weather_offset_y_mobile : cfg.weather_offset_y;
 
     const icon = WEATHER_ICON_MAP[state] || "mdi:weather-partly-cloudy";
-    const iconColor =
-      cfg.weather_icon_color_mode === "custom" && String(cfg.weather_icon_color || "").trim()
-        ? String(cfg.weather_icon_color).trim()
-        : cfg.weather_icon_color_mode === "inherit" || !cfg.weather_colored_icons
-          ? "inherit"
-          : WEATHER_COLOR_MAP[state] || "inherit";
+    const iconColor = cfg.weather_icon_color_mode === "custom" && cfg.weather_icon_color?.trim()
+      ? cfg.weather_icon_color.trim()
+      : cfg.weather_icon_color_mode === "inherit" || !cfg.weather_colored_icons
+        ? "inherit"
+        : WEATHER_COLOR_MAP[state] || "inherit";
 
-    // Use native HA translation helper if available
     let conditionText = String(state || "").replace(/-/g, " ");
-    if (this.hass.formatEntityState) {
-      conditionText = this.hass.formatEntityState(weatherEntity);
-    }
+    if (this.hass.formatEntityState) conditionText = this.hass.formatEntityState(weatherEntity);
 
     const temperature = attrs.temperature;
     const tempUnit = this.hass.config.unit_system.temperature;
-
     const humidity = attrs.humidity;
-
     const windSpeed = attrs.wind_speed;
     const speedUnit = this.hass.config.unit_system.speed || attrs.wind_speed_unit || "";
-
     const pressure = attrs.pressure;
     const pressureUnit = this.hass.config.unit_system.pressure || attrs.pressure_unit || "";
 
-    // Typography
     const fontFamily = this._resolveFontFamily();
-    const fontStyle = cfg.font_style || "normal";
-    const weatherFontSize = cfg.weather_size_px || 12;
-    const weatherWeight = this._resolveWeight("weather_weight");
-    const weatherColor = String(cfg.weather_color || "").trim() || "var(--hki-header-text-color, #fff)";
-    const weatherInline = `font-family:${fontFamily};font-style:${fontStyle};font-size:${weatherFontSize}px;font-weight:${weatherWeight};color:${weatherColor};`;
+    const iconSize = Math.round((cfg.weather_size_px || 12) * 2);
+    const weatherColor = cfg.weather_color?.trim() || "var(--hki-header-text-color, #fff)";
+    const weatherInline = `font-family:${fontFamily};font-style:${cfg.font_style || "normal"};font-size:${cfg.weather_size_px || 12}px;font-weight:${this._resolveWeight("weather_weight")};color:${weatherColor};`;
 
-    // Icon size scales with font size (2x for good proportion)
-    const iconSize = Math.round(weatherFontSize * 2);
+    const weatherStyle = cfg.weather_align === "left"
+      ? `left:${offsetX}px;top:${offsetY}px;--weather-icon-size:${iconSize}px;`
+      : `right:${offsetX}px;top:${offsetY}px;--weather-icon-size:${iconSize}px;`;
 
-    // Position
-    let weatherStyle = "";
-    if (cfg.weather_align === "left") {
-      weatherStyle = `left:${offsetX}px;top:${offsetY}px;--weather-icon-size:${iconSize}px;`;
-    } else {
-      weatherStyle = `right:${offsetX}px;top:${offsetY}px;--weather-icon-size:${iconSize}px;`;
-    }
-
-    // Weather pill vars
     const pillStyle = cfg.weather_pill
       ? `--hki-weather-pill-background:${cfg.weather_pill_background};--hki-weather-pill-padding-x:${cfg.weather_pill_padding_x}px;--hki-weather-pill-padding-y:${cfg.weather_pill_padding_y}px;--hki-weather-pill-radius:${cfg.weather_pill_radius}px;--hki-weather-pill-blur:${cfg.weather_pill_blur}px;`
       : "";
 
-    const handleTap = (e) => {
-      e.stopPropagation();
-      if (cfg.weather_tap_action) this._handleAction(cfg.weather_tap_action);
-    };
-
-    const hasAction = cfg.weather_tap_action && cfg.weather_tap_action.action !== "none";
+    const hasAction = cfg.weather_tap_action?.action !== "none";
     const baseClass = hasAction ? "weather-container weather-clickable" : "weather-container";
     const pillClass = cfg.weather_pill ? "weather-pill" : "";
+    const iconAnimClass = cfg.weather_animate_icon === "float" ? "animate-float"
+                        : cfg.weather_animate_icon === "pulse" ? "animate-pulse"
+                        : cfg.weather_animate_icon === "spin" ? "animate-spin" : "";
 
-    const iconAnimClass =
-      cfg.weather_animate_icon === "float"
-        ? "animate-float"
-        : cfg.weather_animate_icon === "pulse"
-          ? "animate-pulse"
-          : cfg.weather_animate_icon === "spin"
-            ? "animate-spin"
-            : "";
-            
-    // Animated SVG logic
     const useSvg = !!cfg.weather_icon_pack_path;
     const svgUrl = useSvg ? `${cfg.weather_icon_pack_path}/${state}.svg` : "";
+
+    const handleTap = (e) => { e.stopPropagation(); if (cfg.weather_tap_action) this._handleAction(cfg.weather_tap_action); };
 
     return html`
       <div class="${baseClass} ${pillClass}" style="${weatherStyle}${weatherInline}${pillStyle}" @click=${handleTap}>
         ${cfg.weather_show_icon
-          ? useSvg 
-            ? html`<img src="${svgUrl}" class="weather-icon ${iconAnimClass}" style="width: ${iconSize}px; height: ${iconSize}px;" alt="${state}" />`
+          ? useSvg
+            ? html`<img src="${svgUrl}" class="weather-icon ${iconAnimClass}" style="width:${iconSize}px;height:${iconSize}px;" alt="${state}" />`
             : html`<ha-icon icon="${icon}" class="weather-icon ${iconAnimClass}" style="color:${iconColor};"></ha-icon>`
           : html``}
-
         ${cfg.weather_show_condition ? html`<span class="weather-condition">${conditionText}</span>` : html``}
-
-        ${cfg.weather_show_temperature && Number.isFinite(+temperature)
-          ? html`<span class="weather-temperature">${Math.round(+temperature)}${tempUnit}</span>`
-          : html``}
-
-        ${cfg.weather_show_humidity && Number.isFinite(+humidity)
-          ? html`<span class="weather-humidity">${Math.round(+humidity)}%</span>`
-          : html``}
-
-        ${cfg.weather_show_wind && Number.isFinite(+windSpeed)
-          ? html`<span class="weather-wind">${Math.round(+windSpeed)}${speedUnit ? " " + speedUnit : ""}</span>`
-          : html``}
-
-        ${cfg.weather_show_pressure && Number.isFinite(+pressure)
-          ? html`<span class="weather-pressure">${Math.round(+pressure)}${pressureUnit ? " " + pressureUnit : ""}</span>`
-          : html``}
+        ${cfg.weather_show_temperature && Number.isFinite(+temperature) ? html`<span class="weather-temperature">${Math.round(+temperature)}${tempUnit}</span>` : html``}
+        ${cfg.weather_show_humidity && Number.isFinite(+humidity) ? html`<span class="weather-humidity">${Math.round(+humidity)}%</span>` : html``}
+        ${cfg.weather_show_wind && Number.isFinite(+windSpeed) ? html`<span class="weather-wind">${Math.round(+windSpeed)}${speedUnit ? " " + speedUnit : ""}</span>` : html``}
+        ${cfg.weather_show_pressure && Number.isFinite(+pressure) ? html`<span class="weather-pressure">${Math.round(+pressure)}${pressureUnit ? " " + pressureUnit : ""}</span>` : html``}
       </div>
     `;
   }
@@ -1293,10 +1004,9 @@ class HkiHeaderCard extends LitElement {
 
     const titleText = this._isTemplateString(cfg.title) ? (this._renderedTitle ?? "") : (cfg.title ?? "");
     const subtitleText = this._isTemplateString(cfg.subtitle) ? (this._renderedSubtitle ?? "") : (cfg.subtitle ?? "");
-    const subtitleVisible = !!String(subtitleText || "").trim();
+    const subtitleVisible = !!subtitleText.trim();
 
     const cardWidth = this._inPreview ? "100%" : "100vw";
-
     const resolvedBackground = this._resolveBackground(cfg.background);
 
     const cardStyle = [
@@ -1315,8 +1025,8 @@ class HkiHeaderCard extends LitElement {
 
     const fontFamily = this._resolveFontFamily();
     const fontStyle = cfg.font_style || "normal";
-    const titleColor = String(cfg.title_color || "").trim() || "var(--hki-header-text-color, #fff)";
-    const subtitleColor = String(cfg.subtitle_color || "").trim() || "var(--hki-header-text-color, #fff)";
+    const titleColor = cfg.title_color?.trim() || "var(--hki-header-text-color, #fff)";
+    const subtitleColor = cfg.subtitle_color?.trim() || "var(--hki-header-text-color, #fff)";
     const titleInline = `font-family:${fontFamily};font-style:${fontStyle};font-size:${cfg.title_size_px}px;font-weight:${this._resolveWeight("title_weight")};color:${titleColor};`;
     const subtitleInline = `font-family:${fontFamily};font-style:${fontStyle};font-size:${cfg.subtitle_size_px}px;font-weight:${this._resolveWeight("subtitle_weight")};color:${subtitleColor};`;
 
@@ -1324,25 +1034,20 @@ class HkiHeaderCard extends LitElement {
     const subtitleOffsetY = (cfg.subtitle_offset_y || 0) - (cfg.title_offset_y || 0);
     const subtitleTransform = `transform:translate(${subtitleOffsetX}px, ${subtitleOffsetY}px);`;
 
-    let titleBlockStyle = "";
+    let titleBlockStyle;
     if (cfg.text_align === "right") titleBlockStyle = `left:auto;right:${cfg.title_offset_x}px;top:${cfg.title_offset_y}px;text-align:right;align-items:flex-end;`;
     else if (cfg.text_align === "center") titleBlockStyle = `left:50%;top:${cfg.title_offset_y}px;transform:translateX(-50%);text-align:center;align-items:center;`;
     else titleBlockStyle = `left:${cfg.title_offset_x}px;top:${cfg.title_offset_y}px;text-align:left;align-items:flex-start;`;
 
     const topOffset = this._kioskMode ? (cfg.fixed_top || 0) : (cfg.fixed_top || 0) + 48;
     const wrapperStyle = effectiveFixed ? `top:${topOffset}px;` : "";
-    
+
     const badgesOffset = cfg.badges_fixed ? (cfg.badges_offset_pinned || 48) : (cfg.badges_offset_unpinned || 100);
-    
-    let spacerH = effectiveFixed 
-      ? Math.max(0, (this._headerHeight || 0) - badgesOffset + topOffset)
-      : 0;
-    
+    let spacerH = effectiveFixed ? Math.max(0, (this._headerHeight || 0) - badgesOffset + topOffset) : 0;
+
     if (cfg.badges_fixed && effectiveFixed) {
       const kioskGapAdjustment = this._kioskMode ? 48 : 0;
-      const pinnedGapAdjustment = -48;
-      const effectiveBadgesGap = (cfg.badges_gap || 0) + kioskGapAdjustment + pinnedGapAdjustment;
-      spacerH += effectiveBadgesGap;
+      spacerH += (cfg.badges_gap || 0) + kioskGapAdjustment - 48;
     }
 
     const cardMarkup = html`
@@ -1372,64 +1077,10 @@ class HkiHeaderCard extends LitElement {
 
   static getStubConfig() {
     return {
+      ...DEFAULTS,
       title: "{% if is_state('sun.sun','above_horizon') %}Good day, {{ user }}{% else %}Good evening, {{ user }}{% endif %}",
       subtitle: "{{ now().strftime('%A %H:%M') }}",
-      text_align: "left",
-      background: "https://github.com/jimz011/hki-header-card/blob/main/wallpapers/livingroom.jpg?raw=true",
-      background_position: "center",
-      background_repeat: "no-repeat",
-      background_size: "cover",
-      height_vh: 35,
-      min_height: 180,
-      max_height: 220,
-      blend_color: "var(--primary-background-color)",
-      blend_stop: 95,
-      fixed: true,
-      fixed_top: 0,
-      title_color: "",
-      subtitle_color: "",
-      weather_color: "",
-      title_offset_x: 5,
-      title_offset_y: 32,
-      subtitle_offset_x: 5,
-      subtitle_offset_y: 32,
-      badges_offset_pinned: 48,
-      badges_offset_unpinned: 100,
-      badges_gap: 0,
-      badges_fixed: false,
       font_family: "roboto",
-      font_style: "normal",
-      title_size_px: 36,
-      subtitle_size_px: 15,
-      title_weight: "bold",
-      subtitle_weight: "medium",
-      weather_entity: "",
-      weather_align: "right",
-      weather_offset_x: 5,
-      weather_offset_y: 40,
-      weather_offset_x_mobile: null,
-      weather_offset_y_mobile: null,
-      mobile_breakpoint: 768,
-      weather_size_px: 12,
-      weather_weight: "medium",
-      weather_show_icon: true,
-      weather_show_condition: true,
-      weather_show_temperature: true,
-      weather_show_humidity: false,
-      weather_show_wind: false,
-      weather_show_pressure: false,
-      weather_colored_icons: true,
-      weather_icon_color_mode: "state",
-      weather_icon_color: "",
-      weather_animate_icon: "none",
-      weather_icon_pack_path: "",
-      weather_pill: false,
-      weather_pill_background: "rgba(0,0,0,0.25)",
-      weather_pill_padding_x: 10,
-      weather_pill_padding_y: 6,
-      weather_pill_radius: 999,
-      weather_pill_blur: 0,
-      weather_tap_action: { action: "more-info" },
     };
   }
 
@@ -1438,7 +1089,12 @@ class HkiHeaderCard extends LitElement {
   }
 }
 
-customElements.define("hki-header-card", HkiHeaderCard);
+customElements.define(CARD_NAME, HkiHeaderCard);
+
+
+// ─────────────────────────────────────────────────────────────
+// EDITOR
+// ─────────────────────────────────────────────────────────────
 
 class HkiHeaderCardEditor extends LitElement {
   static get properties() {
@@ -1454,79 +1110,14 @@ class HkiHeaderCardEditor extends LitElement {
   }
 
   setConfig(config) {
-    this._config = {
-      title: "",
-      subtitle: "",
-      text_align: "left",
-      title_color: "",
-      subtitle_color: "",
-      weather_color: "",
-
-      background: "https://github.com/jimz011/hki-header-card/blob/main/wallpapers/livingroom.jpg?raw=true",
-      background_position: "center",
-      background_repeat: "no-repeat",
-      background_size: "cover",
-      height_vh: 35,
-      min_height: 180,
-      max_height: 220,
-      blend_color: "var(--primary-background-color)",
-      blend_stop: 95,
-      fixed: true,
-      fixed_top: 0,
-      title_offset_x: 5,
-      title_offset_y: 32,
-      subtitle_offset_x: 5,
-      subtitle_offset_y: 32,
-      badges_offset_pinned: 48,
-      badges_offset_unpinned: 100,
-      badges_gap: 0,
-      badges_fixed: false,
-      font_family: "inherit",
-      font_family_custom: "",
-      font_style: "normal",
-      title_size_px: 36,
-      subtitle_size_px: 15,
-      title_weight: "bold",
-      subtitle_weight: "medium",
-
-      // Weather
-      weather_entity: "",
-      weather_align: "right",
-      weather_offset_x: 5,
-      weather_offset_y: 40,
-      weather_offset_x_mobile: null,
-      weather_offset_y_mobile: null,
-      mobile_breakpoint: 768,
-      weather_size_px: 12,
-      weather_weight: "medium",
-      weather_show_icon: true,
-      weather_show_condition: true,
-      weather_show_temperature: true,
-      weather_show_humidity: false,
-      weather_show_wind: false,
-      weather_show_pressure: false,
-      weather_colored_icons: true,
-      weather_icon_color_mode: "state",
-      weather_icon_color: "",
-      weather_animate_icon: "none",
-      weather_icon_pack_path: "",
-      weather_pill: false,
-      weather_pill_background: "rgba(0,0,0,0.25)",
-      weather_pill_padding_x: 10,
-      weather_pill_padding_y: 6,
-      weather_pill_radius: 999,
-      weather_pill_blur: 0,
-      weather_tap_action: { action: "more-info" },
-      ...config,
-    };
+    this._config = { ...DEFAULTS, ...config };
   }
 
   _renderEntityPicker(label, field, value, helper = "", domain = null) {
-    // Strictly use ha-selector with entity type for consistent dropdowns
     return html`
       <ha-selector
         .hass=${this.hass}
-        .selector=${{ entity: { domain: domain } }}
+        .selector=${{ entity: { domain } }}
         .value=${value || ""}
         .label=${label}
         .helper=${helper}
@@ -1536,7 +1127,6 @@ class HkiHeaderCardEditor extends LitElement {
   }
 
   _renderNavigationPicker(label, field, value, helper = "") {
-    // Strictly use ha-selector with navigation type
     return html`
       <ha-selector
         .hass=${this.hass}
@@ -1561,40 +1151,19 @@ class HkiHeaderCardEditor extends LitElement {
     let value = this._val(ev);
 
     const numeric = new Set([
-      "height_vh",
-      "min_height",
-      "max_height",
-      "blend_stop",
-      "fixed_top",
-      "title_offset_x",
-      "title_offset_y",
-      "subtitle_offset_x",
-      "subtitle_offset_y",
-      "title_size_px",
-      "subtitle_size_px",
-      "badges_offset_pinned",
-      "badges_offset_unpinned",
-      "badges_gap",
-      "weather_offset_x",
-      "weather_offset_y",
-      "weather_size_px",
-      "mobile_breakpoint",
-      "weather_pill_padding_x",
-      "weather_pill_padding_y",
-      "weather_pill_radius",
-      "weather_pill_blur",
+      "height_vh", "min_height", "max_height", "blend_stop", "fixed_top",
+      "title_offset_x", "title_offset_y", "subtitle_offset_x", "subtitle_offset_y",
+      "title_size_px", "subtitle_size_px", "badges_offset_pinned", "badges_offset_unpinned",
+      "badges_gap", "weather_offset_x", "weather_offset_y", "weather_size_px",
+      "mobile_breakpoint", "weather_pill_padding_x", "weather_pill_padding_y",
+      "weather_pill_radius", "weather_pill_blur",
     ]);
 
     const nullableNumeric = new Set(["weather_offset_x_mobile", "weather_offset_y_mobile"]);
 
     if (nullableNumeric.has(field)) {
-      if (value === "" || value === null || value === undefined) {
-        value = null;
-      } else {
-        const n = Number(value);
-        if (!Number.isFinite(n)) return;
-        value = n;
-      }
+      value = value === "" || value == null ? null : toNum(value, null);
+      if (value === null || !Number.isFinite(value)) value = null;
     } else if (numeric.has(field)) {
       const n = Number(value);
       if (!Number.isFinite(n)) return;
@@ -1602,62 +1171,39 @@ class HkiHeaderCardEditor extends LitElement {
     }
 
     const bools = new Set([
-      "fixed",
-      "badges_fixed",
-      "weather_show_icon",
-      "weather_show_condition",
-      "weather_show_temperature",
-      "weather_show_humidity",
-      "weather_show_wind",
-      "weather_show_pressure",
-      "weather_colored_icons",
-      "weather_pill",
+      "fixed", "badges_fixed", "weather_show_icon", "weather_show_condition",
+      "weather_show_temperature", "weather_show_humidity", "weather_show_wind",
+      "weather_show_pressure", "weather_colored_icons", "weather_pill",
     ]);
     if (bools.has(field)) value = !!(ev.target?.checked ?? value);
 
     let next;
-    
+
     if (field.includes(".")) {
-      const parts = field.split(".");
-      const rootField = parts[0];
-      const subField = parts[1];
-      
+      const [rootField, subField] = field.split(".");
       const currentValue = this._config[rootField] || {};
-      
-      next = {
-        ...this._config,
-        [rootField]: {
-          ...currentValue,
-          [subField]: value
-        }
-      };
+      next = { ...this._config, [rootField]: { ...currentValue, [subField]: value } };
 
       if (subField === "action" && value === "call-service") {
-        next[rootField] = {
-          ...next[rootField],
-          service: next[rootField].service ?? "",
-          service_data: next[rootField].service_data ?? "entity_id: \n",
-        };
+        next[rootField] = { ...next[rootField], service: next[rootField].service ?? "", service_data: next[rootField].service_data ?? "entity_id: \n" };
       }
     } else {
       next = { ...this._config, [field]: value };
     }
-    
+
     if (field === "badges_fixed") {
       const currentOffset = this._config.badges_offset;
       if (currentOffset === 48 || currentOffset === 100 || currentOffset === 0) {
         next.badges_offset = value ? 48 : 100;
       }
     }
-    
-    this._config = next;
 
+    this._config = next;
     this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: next } }));
   }
 
-  _renderTemplateEditor(label, field, rows = 6) {
+  _renderTemplateEditor(label, field) {
     const value = this._config?.[field] ?? "";
-    // Forced usage of ha-code-editor (no fallback)
     return html`
       <div class="code-wrap">
         <div class="code-label">${label}</div>
@@ -1669,50 +1215,26 @@ class HkiHeaderCardEditor extends LitElement {
   _renderServiceDataEditor(field, serviceData) {
     let value = "";
     if (serviceData) {
-      if (typeof serviceData === 'string') {
-        value = serviceData;
-      } else {
-        value = Object.entries(serviceData)
-          .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
-          .join('\n');
-      }
+      if (typeof serviceData === 'string') value = serviceData;
+      else value = Object.entries(serviceData).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('\n');
     }
-    
-    // Forced usage of ha-code-editor with autocomplete attributes
-    // Added both property binding and attribute as requested
     return html`
       <div class="code-wrap">
         <div class="code-label">Service data (YAML)</div>
-        <ha-code-editor 
-          .hass=${this.hass} 
-          .value=${value} 
-          mode="yaml" 
-          ?autocomplete-entities=${true}
-          ?autocomplete-icons=${true}
-          data-field="${field}.service_data" 
-          @value-changed=${this._changed}>
-        </ha-code-editor>
+        <ha-code-editor .hass=${this.hass} .value=${value} mode="yaml" ?autocomplete-entities=${true} ?autocomplete-icons=${true} data-field="${field}.service_data" @value-changed=${this._changed}></ha-code-editor>
       </div>
     `;
   }
 
-_renderActionEditor(label, field) {
+  _renderActionEditor(label, field) {
     const action = this._config?.[field] || { action: "more-info" };
     const actionType = action.action || "more-info";
-    
-    // Check if the native service picker is available in this context
     const hasServicePicker = !!customElements.get("ha-service-picker");
 
     return html`
       <div class="code-wrap">
         <div class="code-label">${label}</div>
-        <ha-select 
-          label="Action type" 
-          .value=${actionType} 
-          data-field="${field}.action" 
-          @selected=${this._changed} 
-          @closed=${this._changed} 
-          @value-changed=${this._changed}>
+        <ha-select label="Action type" .value=${actionType} data-field="${field}.action" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
           <mwc-list-item value="none">None</mwc-list-item>
           <mwc-list-item value="navigate">Navigate</mwc-list-item>
           <mwc-list-item value="url">URL</mwc-list-item>
@@ -1721,53 +1243,15 @@ _renderActionEditor(label, field) {
           <mwc-list-item value="toggle">Toggle</mwc-list-item>
         </ha-select>
         
-        ${actionType === "navigate" ? html`
-          ${this._renderNavigationPicker(
-            "Navigation path",
-            `${field}.navigation_path`,
-            action.navigation_path || "",
-            "Pick a view or enter a custom path"
-          )}
-        ` : ""}
-        
-        ${actionType === "url" ? html`
-          <ha-textfield 
-            label="URL" 
-            .value=${action.url_path || ""} 
-            data-field="${field}.url_path" 
-            @input=${this._changed}>
-          </ha-textfield>
-        ` : ""}
-        
+        ${actionType === "navigate" ? this._renderNavigationPicker("Navigation path", `${field}.navigation_path`, action.navigation_path || "", "Pick a view or enter a custom path") : ""}
+        ${actionType === "url" ? html`<ha-textfield label="URL" .value=${action.url_path || ""} data-field="${field}.url_path" @input=${this._changed}></ha-textfield>` : ""}
         ${actionType === "call-service" ? html`
           ${hasServicePicker
-            ? html`
-                <ha-service-picker
-                  style="width: 100%; display: block;"
-                  .hass=${this.hass}
-                  .value=${action.service || ""}
-                  @value-changed=${(ev) => this._changed(ev, `${field}.service`)}
-                ></ha-service-picker>`
-            : html`
-                <ha-textfield 
-                  label="Service" 
-                  helper="e.g., light.turn_on"
-                  .value=${action.service || ""} 
-                  data-field="${field}.service" 
-                  @input=${this._changed}>
-                </ha-textfield>`
-          }
+            ? html`<ha-service-picker style="width:100%;display:block;" .hass=${this.hass} .value=${action.service || ""} @value-changed=${(ev) => this._changed(ev, `${field}.service`)}></ha-service-picker>`
+            : html`<ha-textfield label="Service" helper="e.g., light.turn_on" .value=${action.service || ""} data-field="${field}.service" @input=${this._changed}></ha-textfield>`}
           ${this._renderServiceDataEditor(field, action.service_data)}
         ` : ""}
-        
-        ${actionType === "more-info" || actionType === "toggle" ? html`
-          ${this._renderEntityPicker(
-            "Entity",
-            `${field}.entity`,
-            action.entity || "",
-            "Leave empty to use the weather entity"
-          )}
-        ` : ""}
+        ${actionType === "more-info" || actionType === "toggle" ? this._renderEntityPicker("Entity", `${field}.entity`, action.entity || "", "Leave empty to use the weather entity") : ""}
       </div>
     `;
   }
@@ -1788,8 +1272,8 @@ _renderActionEditor(label, field) {
           </ha-alert>
         </div>
 
-        ${this._renderTemplateEditor("Title (Accepts jinja2 templates)", "title", 8)}
-        ${this._renderTemplateEditor("Subtitle (Accepts jinja2 templates)", "subtitle", 6)}
+        ${this._renderTemplateEditor("Title (Accepts jinja2 templates)", "title")}
+        ${this._renderTemplateEditor("Subtitle (Accepts jinja2 templates)", "subtitle")}
 
         <ha-select label="Text alignment" .value=${this._config.text_align} data-field="text_align" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
           <mwc-list-item value="left">Left</mwc-list-item>
@@ -1817,13 +1301,7 @@ _renderActionEditor(label, field) {
         </div>
 
         <div class="section">Weather</div>
-        ${this._renderEntityPicker(
-          "Weather entity",
-          "weather_entity",
-          this._config.weather_entity,
-          "Optional: Add a weather entity to display conditions (e.g., weather.home)",
-          "weather"
-        )}
+        ${this._renderEntityPicker("Weather entity", "weather_entity", this._config.weather_entity, "Optional: Add a weather entity to display conditions (e.g., weather.home)", "weather")}
 
         ${this._config.weather_entity ? html`
           <ha-select label="Weather alignment" .value=${this._config.weather_align || "right"} data-field="weather_align" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
@@ -1832,8 +1310,8 @@ _renderActionEditor(label, field) {
           </ha-select>
 
           <div class="inline-fields-2">
-            <ha-textfield label="Weather horizontal offset (px)" type="number" .value=${String(this._config.weather_offset_x !== undefined ? this._config.weather_offset_x : 5)} data-field="weather_offset_x" @input=${this._changed}></ha-textfield>
-            <ha-textfield label="Weather vertical offset (px)" type="number" .value=${String(this._config.weather_offset_y !== undefined ? this._config.weather_offset_y : 40)} data-field="weather_offset_y" @input=${this._changed}></ha-textfield>
+            <ha-textfield label="Weather horizontal offset (px)" type="number" .value=${String(this._config.weather_offset_x ?? 5)} data-field="weather_offset_x" @input=${this._changed}></ha-textfield>
+            <ha-textfield label="Weather vertical offset (px)" type="number" .value=${String(this._config.weather_offset_y ?? 40)} data-field="weather_offset_y" @input=${this._changed}></ha-textfield>
           </div>
 
           <div class="section">Mobile weather offset</div>
@@ -1873,9 +1351,9 @@ _renderActionEditor(label, field) {
               <mwc-list-item value="spin">Spin</mwc-list-item>
             </ha-select>
           </div>
-          ${String(this._config.weather_icon_color_mode || "state") === "custom" ? html`
+          ${this._config.weather_icon_color_mode === "custom" ? html`
             <ha-textfield label="Custom icon color (CSS)" helper="e.g., #ffcc00 or var(--accent-color)" .value=${this._config.weather_icon_color || ""} data-field="weather_icon_color" @input=${this._changed}></ha-textfield>
-          ` : html``}
+          ` : ""}
 
           <div class="section">Weather pill background</div>
           <div class="switch-row">
@@ -1892,7 +1370,7 @@ _renderActionEditor(label, field) {
               <ha-textfield label="Radius (px)" type="number" .value=${String(this._config.weather_pill_radius ?? 999)} data-field="weather_pill_radius" @input=${this._changed}></ha-textfield>
               <ha-textfield label="Blur (px)" type="number" .value=${String(this._config.weather_pill_blur ?? 0)} data-field="weather_pill_blur" @input=${this._changed}></ha-textfield>
             </div>
-          ` : html``}
+          ` : ""}
 
           <div class="inline-fields-2">
             <ha-textfield label="Weather size (px)" type="number" .value=${String(this._config.weather_size_px || 12)} data-field="weather_size_px" @input=${this._changed}></ha-textfield>
@@ -1907,7 +1385,7 @@ _renderActionEditor(label, field) {
           </div>
 
           ${this._renderActionEditor("Weather tap action", "weather_tap_action")}
-        ` : html``}
+        ` : ""}
 
         <div class="section">Background</div>
         <ha-textfield label="Background (color/gradient/url)" helper="Auto-wraps image paths in url() - just enter /local/image.jpg or color value" .value=${this._config.background} data-field="background" @input=${this._changed}></ha-textfield>
@@ -1954,7 +1432,7 @@ _renderActionEditor(label, field) {
           <mwc-list-item value="custom">Custom…</mwc-list-item>
         </ha-select>
 
-        ${showCustomFont ? html`<ha-textfield label="Custom font-family (CSS)" .value=${this._config.font_family_custom} data-field="font_family_custom" @input=${this._changed}></ha-textfield>` : html``}
+        ${showCustomFont ? html`<ha-textfield label="Custom font-family (CSS)" .value=${this._config.font_family_custom} data-field="font_family_custom" @input=${this._changed}></ha-textfield>` : ""}
 
         <ha-select label="Font style" .value=${this._config.font_style} data-field="font_style" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
           <mwc-list-item value="normal">Normal</mwc-list-item>
@@ -1993,7 +1471,7 @@ _renderActionEditor(label, field) {
           </ha-formfield>
         </div>
 
-        ${this._config.fixed ? html`<ha-textfield label="Fixed top offset (px)" type="number" .value=${String(this._config.fixed_top)} data-field="fixed_top" @input=${this._changed}></ha-textfield>` : html``}
+        ${this._config.fixed ? html`<ha-textfield label="Fixed top offset (px)" type="number" .value=${String(this._config.fixed_top)} data-field="fixed_top" @input=${this._changed}></ha-textfield>` : ""}
 
         <div class="section">Badge positioning</div>
         
@@ -2008,10 +1486,9 @@ _renderActionEditor(label, field) {
           </ha-formfield>
         </div>
         
-        ${this._config.badges_fixed 
+        ${this._config.badges_fixed
           ? html`<ha-textfield label="Badges vertical offset when pinned (px)" helper="Negative values pull badges up (into header), positive values push down" type="number" .value=${String(this._config.badges_offset_pinned)} data-field="badges_offset_pinned" @input=${this._changed}></ha-textfield>`
-          : html`<ha-textfield label="Badges vertical offset when unpinned (px)" helper="Negative values pull badges up (into header), positive values push down" type="number" .value=${String(this._config.badges_offset_unpinned)} data-field="badges_offset_unpinned" @input=${this._changed}></ha-textfield>`
-        }
+          : html`<ha-textfield label="Badges vertical offset when unpinned (px)" helper="Negative values pull badges up (into header), positive values push down" type="number" .value=${String(this._config.badges_offset_unpinned)} data-field="badges_offset_unpinned" @input=${this._changed}></ha-textfield>`}
         
         <ha-textfield label="Gap under badges (px)" helper="Space between badges and next content (auto-adjusts -48px when pinned, +48px in kiosk mode)" type="number" .value=${String(this._config.badges_gap)} data-field="badges_gap" @input=${this._changed}></ha-textfield>
       </div>
@@ -2026,83 +1503,19 @@ _renderActionEditor(label, field) {
         gap: 12px;
         padding: 8px;
       }
-
-      .disclaimer {
-        margin-bottom: 8px;
-      }
-
-      .disclaimer ha-alert {
-        margin-bottom: 0;
-      }
-
-      .disclaimer a {
-        color: var(--primary-color);
-        text-decoration: none;
-      }
-
-      .disclaimer a:hover {
-        text-decoration: underline;
-      }
-
-      .badge-warning {
-        margin-bottom: 12px;
-      }
-
-      .section {
-        margin-top: 8px;
-        font-weight: 600;
-      }
-
-      .switch-row {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-      }
-
-      .inline-fields-2 {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 8px;
-      }
-
-      .inline-fields-3 {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 8px;
-      }
-
-      ha-textfield,
-      ha-select,
-      ha-combo-box,
-      ha-navigation-picker,
-      ha-entity-picker,
-      ha-selector,
-      ha-service-picker {
-        width: 100%;
-      }
-
-      .helper-text {
-        font-size: 0.75rem;
-        opacity: 0.7;
-        margin-top: -2px;
-      }
-
-      .code-wrap {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-      }
-
-      .code-label {
-        font-size: 0.9rem;
-        opacity: 0.9;
-      }
-
-      ha-code-editor {
-        height: 180px;
-        border-radius: 8px;
-        overflow: hidden;
-      }
+      .disclaimer { margin-bottom: 8px; }
+      .disclaimer ha-alert { margin-bottom: 0; }
+      .disclaimer a { color: var(--primary-color); text-decoration: none; }
+      .disclaimer a:hover { text-decoration: underline; }
+      .badge-warning { margin-bottom: 12px; }
+      .section { margin-top: 8px; font-weight: 600; }
+      .switch-row { display: flex; align-items: center; gap: 12px; }
+      .inline-fields-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+      .inline-fields-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+      ha-textfield, ha-select, ha-combo-box, ha-navigation-picker, ha-entity-picker, ha-selector, ha-service-picker { width: 100%; }
+      .code-wrap { display: flex; flex-direction: column; gap: 6px; }
+      .code-label { font-size: 0.9rem; opacity: 0.9; }
+      ha-code-editor { height: 180px; border-radius: 8px; overflow: hidden; }
     `;
   }
 }
@@ -2111,7 +1524,7 @@ customElements.define("hki-header-card-editor", HkiHeaderCardEditor);
 
 window.customCards = window.customCards || [];
 window.customCards.push({
-  type: "hki-header-card",
+  type: CARD_NAME,
   name: "HKI Header Card",
   description: "Full Width Customizable Header.",
   preview: false,
