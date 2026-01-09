@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.1.0 ',
+  '%c HKI-HEADER-CARD %c v1.1.1 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -557,10 +557,11 @@ class HkiHeaderCard extends LitElement {
 
   _detectKioskMode() {
     const urlParams = new URLSearchParams(window.location.search);
-    const urlKiosk = urlParams.has("kiosk");
-    const bodyKiosk = document.body.classList.contains("kiosk-mode") ||
+    const urlKiosk = urlParams.get("kiosk") === "true" || window.location.search.includes("kiosk");
+    
+    const bodyKiosk = document.body.classList.contains("kiosk-mode") || 
                       document.documentElement.classList.contains("kiosk-mode");
-
+    
     if (urlKiosk || bodyKiosk) {
       if (!this._kioskMode) {
         this._kioskMode = true;
@@ -568,26 +569,68 @@ class HkiHeaderCard extends LitElement {
       }
       return;
     }
-
+    
     let headerHidden = false;
     try {
       if (!this._cachedHeader || !document.contains(this._cachedHeader)) {
-        this._cachedHeader = this._findHeader();
+        const findHeader = (root, depth = 0) => {
+          if (depth > 10) return null;
+          
+          const selectors = [
+            "app-header",
+            "mwc-top-app-bar-fixed", 
+            ".toolbar",
+            "[slot='header']",
+            "ha-app-layout app-header",
+            "ha-tabs"
+          ];
+          
+          for (const selector of selectors) {
+            const header = root.querySelector?.(selector);
+            if (header) return header;
+          }
+          
+          const elements = root.querySelectorAll?.("*") || [];
+          for (const el of elements) {
+            if (el.shadowRoot) {
+              const found = findHeader(el.shadowRoot, depth + 1);
+              if (found) return found;
+            }
+          }
+          return null;
+        };
+        
+        const ha = document.querySelector("home-assistant");
+        if (ha?.shadowRoot) {
+          this._cachedHeader = findHeader(ha.shadowRoot);
+        }
+        
+        if (!this._cachedHeader) {
+          this._cachedHeader = findHeader(document);
+        }
       }
-
+      
       if (this._cachedHeader) {
         const rect = this._cachedHeader.getBoundingClientRect();
         const style = window.getComputedStyle(this._cachedHeader);
-        headerHidden = rect.height === 0 ||
-                       rect.top < -100 ||
-                       style.display === "none" ||
-                       style.visibility === "hidden" ||
-                       style.opacity === "0";
+        
+        headerHidden = 
+          rect.height === 0 || 
+          this._cachedHeader.offsetHeight === 0 || 
+          this._cachedHeader.clientHeight === 0 ||
+          rect.top < -100 ||
+          style.display === "none" || 
+          style.visibility === "hidden" || 
+          style.opacity === "0";
       }
-    } catch (_) { /* Silent fail */ }
-
-    if (headerHidden !== this._kioskMode) {
-      this._kioskMode = headerHidden;
+    } catch (e) {
+      // Silent fail
+    }
+    
+    const newKioskMode = headerHidden;
+    
+    if (newKioskMode !== this._kioskMode) {
+      this._kioskMode = newKioskMode;
       this.requestUpdate();
     }
   }
