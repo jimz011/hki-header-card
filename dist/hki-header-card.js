@@ -3,7 +3,7 @@
 import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?module";
 
 const CARD_NAME = "hki-header-card";
-const VERSION = "1.0.7";
+const VERSION = "1.1.0";
 
 console.log(`%c${CARD_NAME} %cv${VERSION}`, 'color: #17a2b8', 'color: #999');
 
@@ -67,7 +67,6 @@ const DEFAULTS = Object.freeze({
   text_align: "left",
   title_color: "",
   subtitle_color: "",
-  weather_color: "",
   background: "https://github.com/jimz011/hki-header-card/blob/main/wallpapers/livingroom.jpg?raw=true",
   background_position: "center",
   background_repeat: "no-repeat",
@@ -94,15 +93,30 @@ const DEFAULTS = Object.freeze({
   subtitle_size_px: 15,
   title_weight: "bold",
   subtitle_weight: "medium",
-  weather_entity: "",
-  weather_align: "right",
-  weather_offset_x: 5,
-  weather_offset_y: 40,
-  weather_offset_x_mobile: null,
-  weather_offset_y_mobile: null,
+
+  // Info display type: "none", "weather", "datetime", "badge"
+  info_type: "none",
+
+  // Shared info positioning
+  info_align: "right",
+  info_offset_x: 5,
+  info_offset_y: 40,
+  info_offset_x_mobile: null,
+  info_offset_y_mobile: null,
   mobile_breakpoint: 768,
-  weather_size_px: 12,
-  weather_weight: "medium",
+  info_size_px: 12,
+  info_weight: "medium",
+  info_color: "",
+  info_pill: false,
+  info_pill_background: "rgba(0,0,0,0.25)",
+  info_pill_padding_x: 10,
+  info_pill_padding_y: 6,
+  info_pill_radius: 999,
+  info_pill_blur: 0,
+  info_tap_action: { action: "none" },
+
+  // Weather-specific
+  weather_entity: "",
   weather_show_icon: true,
   weather_show_condition: true,
   weather_show_temperature: true,
@@ -114,13 +128,23 @@ const DEFAULTS = Object.freeze({
   weather_icon_color: "",
   weather_animate_icon: "none",
   weather_icon_pack_path: "",
-  weather_pill: false,
-  weather_pill_background: "rgba(0,0,0,0.25)",
-  weather_pill_padding_x: 10,
-  weather_pill_padding_y: 6,
-  weather_pill_radius: 999,
-  weather_pill_blur: 0,
-  weather_tap_action: { action: "more-info" },
+
+  // Datetime-specific
+  datetime_show_time: true,
+  datetime_show_date: true,
+  datetime_show_day: true,
+  datetime_time_format: "HH:mm",
+  datetime_date_format: "D MMM",
+  datetime_separator: " • ",
+  datetime_icon: "",
+  datetime_icon_color: "",
+  datetime_animate_icon: "none",
+
+  // Badge-specific
+  badge_icon: "mdi:information",
+  badge_text: "",
+  badge_icon_color: "",
+  badge_animate_icon: "none",
 });
 
 function normalizeWeightKey(input, fallbackKey) {
@@ -147,6 +171,41 @@ function cacheKey(raw, vars) {
   return `hkiTpl:${hashStr(raw + (vars ? JSON.stringify(vars) : ""))}`;
 }
 
+// Date formatting helper
+function formatDateTime(date, format) {
+  const pad = (n) => String(n).padStart(2, '0');
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const daysShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const monthsShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  const h24 = date.getHours();
+  const h12 = h24 % 12 || 12;
+  const ampm = h24 < 12 ? 'AM' : 'PM';
+
+  return format
+    .replace(/YYYY/g, date.getFullYear())
+    .replace(/YY/g, String(date.getFullYear()).slice(-2))
+    .replace(/MMMM/g, months[date.getMonth()])
+    .replace(/MMM/g, monthsShort[date.getMonth()])
+    .replace(/MM/g, pad(date.getMonth() + 1))
+    .replace(/M/g, date.getMonth() + 1)
+    .replace(/DDDD/g, days[date.getDay()])
+    .replace(/DDD/g, daysShort[date.getDay()])
+    .replace(/DD/g, pad(date.getDate()))
+    .replace(/D/g, date.getDate())
+    .replace(/HH/g, pad(h24))
+    .replace(/H/g, h24)
+    .replace(/hh/g, pad(h12))
+    .replace(/h/g, h12)
+    .replace(/mm/g, pad(date.getMinutes()))
+    .replace(/m/g, date.getMinutes())
+    .replace(/ss/g, pad(date.getSeconds()))
+    .replace(/s/g, date.getSeconds())
+    .replace(/A/g, ampm)
+    .replace(/a/g, ampm.toLowerCase());
+}
+
 class HkiHeaderCard extends LitElement {
   static get properties() {
     return {
@@ -161,6 +220,8 @@ class HkiHeaderCard extends LitElement {
       _editMode: { type: Boolean },
       _renderedTitle: { type: String },
       _renderedSubtitle: { type: String },
+      _renderedBadgeText: { type: String },
+      _currentTime: { type: Number },
     };
   }
 
@@ -176,6 +237,8 @@ class HkiHeaderCard extends LitElement {
     this._editMode = false;
     this._renderedTitle = "";
     this._renderedSubtitle = "";
+    this._renderedBadgeText = "";
+    this._currentTime = Date.now();
 
     // Handlers & observers
     this._resizeHandler = null;
@@ -189,11 +252,13 @@ class HkiHeaderCard extends LitElement {
     this._visibilityHandler = null;
     this._focusHandler = null;
     this._editModeInterval = null;
+    this._timeInterval = null;
 
     this._tpl = {
       timer: 0,
       title: { raw: "", sig: "", seq: 0, unsub: null },
       subtitle: { raw: "", sig: "", seq: 0, unsub: null },
+      badge_text: { raw: "", sig: "", seq: 0, unsub: null },
     };
 
     this._hassReady = false;
@@ -265,7 +330,7 @@ class HkiHeaderCard extends LitElement {
         display: block;
       }
 
-      .weather-container {
+      .info-container {
         position: absolute;
         display: flex;
         align-items: center;
@@ -275,49 +340,49 @@ class HkiHeaderCard extends LitElement {
         z-index: 2;
       }
 
-      .weather-clickable {
+      .info-clickable {
         cursor: pointer;
         transition: opacity 0.2s;
       }
-      .weather-clickable:hover { opacity: 0.8; }
+      .info-clickable:hover { opacity: 0.8; }
 
-      .weather-icon {
-        --mdc-icon-size: var(--weather-icon-size, 32px);
-        width: var(--weather-icon-size, 32px);
-        height: var(--weather-icon-size, 32px);
+      .info-icon {
+        --mdc-icon-size: var(--info-icon-size, 32px);
+        width: var(--info-icon-size, 32px);
+        height: var(--info-icon-size, 32px);
         color: var(--hki-header-text-color, #fff);
         filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
       }
 
-      img.weather-icon {
+      img.info-icon {
         object-fit: contain;
         display: block;
       }
 
-      .weather-condition { text-transform: capitalize; }
-      .weather-temperature { font-weight: 500; }
+      .info-text { text-transform: capitalize; }
+      .info-temperature { font-weight: 500; }
 
-      .weather-pill {
-        background: var(--hki-weather-pill-background, rgba(0, 0, 0, 0.25));
-        border-radius: var(--hki-weather-pill-radius, 999px);
-        padding: var(--hki-weather-pill-padding-y, 6px) var(--hki-weather-pill-padding-x, 10px);
-        backdrop-filter: blur(var(--hki-weather-pill-blur, 0px));
-        -webkit-backdrop-filter: blur(var(--hki-weather-pill-blur, 0px));
+      .info-pill {
+        background: var(--hki-info-pill-background, rgba(0, 0, 0, 0.25));
+        border-radius: var(--hki-info-pill-radius, 999px);
+        padding: var(--hki-info-pill-padding-y, 6px) var(--hki-info-pill-padding-x, 10px);
+        backdrop-filter: blur(var(--hki-info-pill-blur, 0px));
+        -webkit-backdrop-filter: blur(var(--hki-info-pill-blur, 0px));
       }
 
-      .animate-float { animation: hki-weather-float 3s ease-in-out infinite; }
-      .animate-pulse { animation: hki-weather-pulse 1.8s ease-in-out infinite; }
-      .animate-spin { animation: hki-weather-spin 2.8s linear infinite; }
+      .animate-float { animation: hki-float 3s ease-in-out infinite; }
+      .animate-pulse { animation: hki-pulse 1.8s ease-in-out infinite; }
+      .animate-spin { animation: hki-spin 2.8s linear infinite; }
 
-      @keyframes hki-weather-float {
+      @keyframes hki-float {
         0%, 100% { transform: translateY(0); }
         50% { transform: translateY(-4px); }
       }
-      @keyframes hki-weather-pulse {
+      @keyframes hki-pulse {
         0%, 100% { transform: scale(1); opacity: 1; }
         50% { transform: scale(1.08); opacity: 0.85; }
       }
-      @keyframes hki-weather-spin {
+      @keyframes hki-spin {
         from { transform: rotate(0deg); }
         to { transform: rotate(360deg); }
       }
@@ -352,9 +417,11 @@ class HkiHeaderCard extends LitElement {
     if (this._visibilityHandler) document.removeEventListener("visibilitychange", this._visibilityHandler);
     if (this._focusHandler) window.removeEventListener("focus", this._focusHandler);
     if (this._editModeInterval) clearInterval(this._editModeInterval);
+    if (this._timeInterval) clearInterval(this._timeInterval);
 
     this._unsubscribeTemplate("title");
     this._unsubscribeTemplate("subtitle");
+    this._unsubscribeTemplate("badge_text");
     this._resetBadgesZIndex();
   }
 
@@ -404,6 +471,13 @@ class HkiHeaderCard extends LitElement {
 
     // Reduced polling: edit mode every 2s instead of 1s
     this._editModeInterval = setInterval(() => this._detectEditMode(), 2000);
+
+    // Time update interval for datetime display
+    this._timeInterval = setInterval(() => {
+      if (this._config?.info_type === "datetime") {
+        this._currentTime = Date.now();
+      }
+    }, 1000);
 
     // Reduced initial checks
     [100, 500, 1500].forEach(delay => {
@@ -597,6 +671,28 @@ class HkiHeaderCard extends LitElement {
 
     const m = { ...DEFAULTS, ...config };
 
+    // Backward compatibility: migrate old weather_* positioning to info_*
+    if (config.weather_align !== undefined && config.info_align === undefined) m.info_align = config.weather_align;
+    if (config.weather_offset_x !== undefined && config.info_offset_x === undefined) m.info_offset_x = config.weather_offset_x;
+    if (config.weather_offset_y !== undefined && config.info_offset_y === undefined) m.info_offset_y = config.weather_offset_y;
+    if (config.weather_offset_x_mobile !== undefined && config.info_offset_x_mobile === undefined) m.info_offset_x_mobile = config.weather_offset_x_mobile;
+    if (config.weather_offset_y_mobile !== undefined && config.info_offset_y_mobile === undefined) m.info_offset_y_mobile = config.weather_offset_y_mobile;
+    if (config.weather_size_px !== undefined && config.info_size_px === undefined) m.info_size_px = config.weather_size_px;
+    if (config.weather_weight !== undefined && config.info_weight === undefined) m.info_weight = config.weather_weight;
+    if (config.weather_color !== undefined && config.info_color === undefined) m.info_color = config.weather_color;
+    if (config.weather_pill !== undefined && config.info_pill === undefined) m.info_pill = config.weather_pill;
+    if (config.weather_pill_background !== undefined && config.info_pill_background === undefined) m.info_pill_background = config.weather_pill_background;
+    if (config.weather_pill_padding_x !== undefined && config.info_pill_padding_x === undefined) m.info_pill_padding_x = config.weather_pill_padding_x;
+    if (config.weather_pill_padding_y !== undefined && config.info_pill_padding_y === undefined) m.info_pill_padding_y = config.weather_pill_padding_y;
+    if (config.weather_pill_radius !== undefined && config.info_pill_radius === undefined) m.info_pill_radius = config.weather_pill_radius;
+    if (config.weather_pill_blur !== undefined && config.info_pill_blur === undefined) m.info_pill_blur = config.weather_pill_blur;
+    if (config.weather_tap_action !== undefined && config.info_tap_action === undefined) m.info_tap_action = config.weather_tap_action;
+
+    // Auto-detect info_type for backward compatibility
+    if (config.info_type === undefined && config.weather_entity) {
+      m.info_type = "weather";
+    }
+
     // Numeric clamping
     m.height_vh = clamp(+m.height_vh, 10, 100);
     m.min_height = clamp(+m.min_height, 60, 2000);
@@ -611,13 +707,22 @@ class HkiHeaderCard extends LitElement {
     m.badges_offset_pinned = toNum(m.badges_offset_pinned, 48);
     m.badges_offset_unpinned = toNum(m.badges_offset_unpinned, 100);
     m.badges_gap = toNum(m.badges_gap, 0);
-    m.weather_offset_x = toNum(m.weather_offset_x, 5);
-    m.weather_offset_y = toNum(m.weather_offset_y, 40);
-    m.weather_offset_x_mobile = m.weather_offset_x_mobile == null || m.weather_offset_x_mobile === "" ? null : toNum(m.weather_offset_x_mobile, null);
-    m.weather_offset_y_mobile = m.weather_offset_y_mobile == null || m.weather_offset_y_mobile === "" ? null : toNum(m.weather_offset_y_mobile, null);
+
+    // Info positioning
+    m.info_offset_x = toNum(m.info_offset_x, 5);
+    m.info_offset_y = toNum(m.info_offset_y, 40);
+    m.info_offset_x_mobile = m.info_offset_x_mobile == null || m.info_offset_x_mobile === "" ? null : toNum(m.info_offset_x_mobile, null);
+    m.info_offset_y_mobile = m.info_offset_y_mobile == null || m.info_offset_y_mobile === "" ? null : toNum(m.info_offset_y_mobile, null);
     m.mobile_breakpoint = clamp(+m.mobile_breakpoint || 768, 240, 2500);
-    m.weather_size_px = clamp(+m.weather_size_px || 12, 8, 64);
-    m.weather_weight = normalizeWeightKey(m.weather_weight ?? "medium", "medium");
+    m.info_size_px = clamp(+m.info_size_px || 12, 8, 64);
+    m.info_weight = normalizeWeightKey(m.info_weight ?? "medium", "medium");
+    m.info_pill = !!m.info_pill;
+    m.info_pill_padding_x = clamp(+m.info_pill_padding_x || 10, 0, 80);
+    m.info_pill_padding_y = clamp(+m.info_pill_padding_y || 6, 0, 80);
+    m.info_pill_radius = clamp(+m.info_pill_radius || 999, 0, 999);
+    m.info_pill_blur = clamp(+m.info_pill_blur || 0, 0, 40);
+
+    // Weather options
     m.weather_show_icon = m.weather_show_icon !== false;
     m.weather_show_condition = m.weather_show_condition !== false;
     m.weather_show_temperature = m.weather_show_temperature !== false;
@@ -627,11 +732,17 @@ class HkiHeaderCard extends LitElement {
     m.weather_colored_icons = m.weather_colored_icons !== false;
     m.weather_icon_color_mode = ["state", "custom", "inherit"].includes(m.weather_icon_color_mode) ? m.weather_icon_color_mode : "state";
     m.weather_animate_icon = ["none", "float", "pulse", "spin"].includes(m.weather_animate_icon) ? m.weather_animate_icon : "none";
-    m.weather_pill = !!m.weather_pill;
-    m.weather_pill_padding_x = clamp(+m.weather_pill_padding_x || 10, 0, 80);
-    m.weather_pill_padding_y = clamp(+m.weather_pill_padding_y || 6, 0, 80);
-    m.weather_pill_radius = clamp(+m.weather_pill_radius || 999, 0, 999);
-    m.weather_pill_blur = clamp(+m.weather_pill_blur || 0, 0, 40);
+
+    // Datetime options
+    m.datetime_show_time = m.datetime_show_time !== false;
+    m.datetime_show_date = m.datetime_show_date !== false;
+    m.datetime_show_day = m.datetime_show_day !== false;
+    m.datetime_animate_icon = ["none", "float", "pulse", "spin"].includes(m.datetime_animate_icon) ? m.datetime_animate_icon : "none";
+
+    // Badge options
+    m.badge_animate_icon = ["none", "float", "pulse", "spin"].includes(m.badge_animate_icon) ? m.badge_animate_icon : "none";
+
+    // Font options
     m.font_family = ["inherit", "system", "roboto", "inter", "arial", "georgia", "mono", "custom"].includes(m.font_family) ? m.font_family : "inherit";
     m.font_family_custom = typeof m.font_family_custom === "string" ? m.font_family_custom : "";
     m.font_style = ["normal", "italic"].includes(m.font_style) ? m.font_style : "normal";
@@ -639,6 +750,9 @@ class HkiHeaderCard extends LitElement {
     m.subtitle_size_px = clamp(+m.subtitle_size_px || 15, 8, 128);
     m.title_weight = normalizeWeightKey(m.title_weight ?? "bold", "bold");
     m.subtitle_weight = normalizeWeightKey(m.subtitle_weight ?? "medium", "medium");
+
+    // Info type validation
+    m.info_type = ["none", "weather", "datetime", "badge"].includes(m.info_type) ? m.info_type : "none";
 
     this._config = m;
     this._scheduleTemplateSetup(0);
@@ -670,6 +784,7 @@ class HkiHeaderCard extends LitElement {
   _setupTemplates() {
     this._setupTemplateKey("title", this._config?.title ?? "");
     this._setupTemplateKey("subtitle", this._config?.subtitle ?? "");
+    this._setupTemplateKey("badge_text", this._config?.badge_text ?? "");
   }
 
   _setupTemplateKey(key, raw) {
@@ -765,8 +880,10 @@ class HkiHeaderCard extends LitElement {
     const v = value == null ? "" : String(value);
     if (key === "title") {
       if (this._renderedTitle !== v) { this._renderedTitle = v; this.requestUpdate(); }
-    } else {
+    } else if (key === "subtitle") {
       if (this._renderedSubtitle !== v) { this._renderedSubtitle = v; this.requestUpdate(); }
+    } else if (key === "badge_text") {
+      if (this._renderedBadgeText !== v) { this._renderedBadgeText = v; this.requestUpdate(); }
     }
   }
 
@@ -923,6 +1040,27 @@ class HkiHeaderCard extends LitElement {
     }
   }
 
+  _getInfoContainerStyle(cfg) {
+    const isMobile = this._viewportWidth > 0 && this._viewportWidth <= (cfg.mobile_breakpoint || 768);
+    const offsetX = isMobile && cfg.info_offset_x_mobile != null ? cfg.info_offset_x_mobile : cfg.info_offset_x;
+    const offsetY = isMobile && cfg.info_offset_y_mobile != null ? cfg.info_offset_y_mobile : cfg.info_offset_y;
+
+    const fontFamily = this._resolveFontFamily();
+    const iconSize = Math.round((cfg.info_size_px || 12) * 2);
+    const infoColor = cfg.info_color?.trim() || "var(--hki-header-text-color, #fff)";
+    const infoInline = `font-family:${fontFamily};font-style:${cfg.font_style || "normal"};font-size:${cfg.info_size_px || 12}px;font-weight:${this._resolveWeight("info_weight")};color:${infoColor};`;
+
+    const posStyle = cfg.info_align === "left"
+      ? `left:${offsetX}px;top:${offsetY}px;--info-icon-size:${iconSize}px;`
+      : `right:${offsetX}px;top:${offsetY}px;--info-icon-size:${iconSize}px;`;
+
+    const pillStyle = cfg.info_pill
+      ? `--hki-info-pill-background:${cfg.info_pill_background};--hki-info-pill-padding-x:${cfg.info_pill_padding_x}px;--hki-info-pill-padding-y:${cfg.info_pill_padding_y}px;--hki-info-pill-radius:${cfg.info_pill_radius}px;--hki-info-pill-blur:${cfg.info_pill_blur}px;`
+      : "";
+
+    return { posStyle, infoInline, pillStyle, iconSize };
+  }
+
   _renderWeather() {
     if (!this._config.weather_entity || !this.hass) return html``;
 
@@ -932,10 +1070,6 @@ class HkiHeaderCard extends LitElement {
     const cfg = this._config;
     const state = weatherEntity.state;
     const attrs = weatherEntity.attributes || {};
-
-    const isMobile = this._viewportWidth > 0 && this._viewportWidth <= (cfg.mobile_breakpoint || 768);
-    const offsetX = isMobile && cfg.weather_offset_x_mobile != null ? cfg.weather_offset_x_mobile : cfg.weather_offset_x;
-    const offsetY = isMobile && cfg.weather_offset_y_mobile != null ? cfg.weather_offset_y_mobile : cfg.weather_offset_y;
 
     const icon = WEATHER_ICON_MAP[state] || "mdi:weather-partly-cloudy";
     const iconColor = cfg.weather_icon_color_mode === "custom" && cfg.weather_icon_color?.trim()
@@ -955,22 +1089,11 @@ class HkiHeaderCard extends LitElement {
     const pressure = attrs.pressure;
     const pressureUnit = this.hass.config.unit_system.pressure || attrs.pressure_unit || "";
 
-    const fontFamily = this._resolveFontFamily();
-    const iconSize = Math.round((cfg.weather_size_px || 12) * 2);
-    const weatherColor = cfg.weather_color?.trim() || "var(--hki-header-text-color, #fff)";
-    const weatherInline = `font-family:${fontFamily};font-style:${cfg.font_style || "normal"};font-size:${cfg.weather_size_px || 12}px;font-weight:${this._resolveWeight("weather_weight")};color:${weatherColor};`;
+    const { posStyle, infoInline, pillStyle, iconSize } = this._getInfoContainerStyle(cfg);
 
-    const weatherStyle = cfg.weather_align === "left"
-      ? `left:${offsetX}px;top:${offsetY}px;--weather-icon-size:${iconSize}px;`
-      : `right:${offsetX}px;top:${offsetY}px;--weather-icon-size:${iconSize}px;`;
-
-    const pillStyle = cfg.weather_pill
-      ? `--hki-weather-pill-background:${cfg.weather_pill_background};--hki-weather-pill-padding-x:${cfg.weather_pill_padding_x}px;--hki-weather-pill-padding-y:${cfg.weather_pill_padding_y}px;--hki-weather-pill-radius:${cfg.weather_pill_radius}px;--hki-weather-pill-blur:${cfg.weather_pill_blur}px;`
-      : "";
-
-    const hasAction = cfg.weather_tap_action?.action !== "none";
-    const baseClass = hasAction ? "weather-container weather-clickable" : "weather-container";
-    const pillClass = cfg.weather_pill ? "weather-pill" : "";
+    const hasAction = cfg.info_tap_action?.action !== "none";
+    const baseClass = hasAction ? "info-container info-clickable" : "info-container";
+    const pillClass = cfg.info_pill ? "info-pill" : "";
     const iconAnimClass = cfg.weather_animate_icon === "float" ? "animate-float"
                         : cfg.weather_animate_icon === "pulse" ? "animate-pulse"
                         : cfg.weather_animate_icon === "spin" ? "animate-spin" : "";
@@ -978,22 +1101,101 @@ class HkiHeaderCard extends LitElement {
     const useSvg = !!cfg.weather_icon_pack_path;
     const svgUrl = useSvg ? `${cfg.weather_icon_pack_path}/${state}.svg` : "";
 
-    const handleTap = (e) => { e.stopPropagation(); if (cfg.weather_tap_action) this._handleAction(cfg.weather_tap_action); };
+    const handleTap = (e) => { e.stopPropagation(); if (cfg.info_tap_action) this._handleAction(cfg.info_tap_action); };
 
     return html`
-      <div class="${baseClass} ${pillClass}" style="${weatherStyle}${weatherInline}${pillStyle}" @click=${handleTap}>
+      <div class="${baseClass} ${pillClass}" style="${posStyle}${infoInline}${pillStyle}" @click=${handleTap}>
         ${cfg.weather_show_icon
           ? useSvg
-            ? html`<img src="${svgUrl}" class="weather-icon ${iconAnimClass}" style="width:${iconSize}px;height:${iconSize}px;" alt="${state}" />`
-            : html`<ha-icon icon="${icon}" class="weather-icon ${iconAnimClass}" style="color:${iconColor};"></ha-icon>`
+            ? html`<img src="${svgUrl}" class="info-icon ${iconAnimClass}" style="width:${iconSize}px;height:${iconSize}px;" alt="${state}" />`
+            : html`<ha-icon icon="${icon}" class="info-icon ${iconAnimClass}" style="color:${iconColor};"></ha-icon>`
           : html``}
-        ${cfg.weather_show_condition ? html`<span class="weather-condition">${conditionText}</span>` : html``}
-        ${cfg.weather_show_temperature && Number.isFinite(+temperature) ? html`<span class="weather-temperature">${Math.round(+temperature)}${tempUnit}</span>` : html``}
-        ${cfg.weather_show_humidity && Number.isFinite(+humidity) ? html`<span class="weather-humidity">${Math.round(+humidity)}%</span>` : html``}
-        ${cfg.weather_show_wind && Number.isFinite(+windSpeed) ? html`<span class="weather-wind">${Math.round(+windSpeed)}${speedUnit ? " " + speedUnit : ""}</span>` : html``}
-        ${cfg.weather_show_pressure && Number.isFinite(+pressure) ? html`<span class="weather-pressure">${Math.round(+pressure)}${pressureUnit ? " " + pressureUnit : ""}</span>` : html``}
+        ${cfg.weather_show_condition ? html`<span class="info-text">${conditionText}</span>` : html``}
+        ${cfg.weather_show_temperature && Number.isFinite(+temperature) ? html`<span class="info-temperature">${Math.round(+temperature)}${tempUnit}</span>` : html``}
+        ${cfg.weather_show_humidity && Number.isFinite(+humidity) ? html`<span>${Math.round(+humidity)}%</span>` : html``}
+        ${cfg.weather_show_wind && Number.isFinite(+windSpeed) ? html`<span>${Math.round(+windSpeed)}${speedUnit ? " " + speedUnit : ""}</span>` : html``}
+        ${cfg.weather_show_pressure && Number.isFinite(+pressure) ? html`<span>${Math.round(+pressure)}${pressureUnit ? " " + pressureUnit : ""}</span>` : html``}
       </div>
     `;
+  }
+
+  _renderDatetime() {
+    const cfg = this._config;
+    const now = new Date(this._currentTime);
+
+    const parts = [];
+    if (cfg.datetime_show_day) {
+      parts.push(formatDateTime(now, "DDDD"));
+    }
+    if (cfg.datetime_show_date) {
+      parts.push(formatDateTime(now, cfg.datetime_date_format || "D MMM"));
+    }
+    if (cfg.datetime_show_time) {
+      parts.push(formatDateTime(now, cfg.datetime_time_format || "HH:mm"));
+    }
+
+    if (parts.length === 0) return html``;
+
+    const separator = cfg.datetime_separator || " • ";
+    const displayText = parts.join(separator);
+
+    const { posStyle, infoInline, pillStyle, iconSize } = this._getInfoContainerStyle(cfg);
+
+    const hasAction = cfg.info_tap_action?.action !== "none";
+    const baseClass = hasAction ? "info-container info-clickable" : "info-container";
+    const pillClass = cfg.info_pill ? "info-pill" : "";
+    const iconAnimClass = cfg.datetime_animate_icon === "float" ? "animate-float"
+                        : cfg.datetime_animate_icon === "pulse" ? "animate-pulse"
+                        : cfg.datetime_animate_icon === "spin" ? "animate-spin" : "";
+
+    const handleTap = (e) => { e.stopPropagation(); if (cfg.info_tap_action) this._handleAction(cfg.info_tap_action); };
+
+    const iconColor = cfg.datetime_icon_color?.trim() || "inherit";
+
+    return html`
+      <div class="${baseClass} ${pillClass}" style="${posStyle}${infoInline}${pillStyle}" @click=${handleTap}>
+        ${cfg.datetime_icon ? html`<ha-icon icon="${cfg.datetime_icon}" class="info-icon ${iconAnimClass}" style="color:${iconColor};"></ha-icon>` : html``}
+        <span class="info-text">${displayText}</span>
+      </div>
+    `;
+  }
+
+  _renderBadge() {
+    const cfg = this._config;
+
+    const badgeText = this._isTemplateString(cfg.badge_text) ? this._renderedBadgeText : (cfg.badge_text || "");
+
+    if (!cfg.badge_icon && !badgeText.trim()) return html``;
+
+    const { posStyle, infoInline, pillStyle, iconSize } = this._getInfoContainerStyle(cfg);
+
+    const hasAction = cfg.info_tap_action?.action !== "none";
+    const baseClass = hasAction ? "info-container info-clickable" : "info-container";
+    const pillClass = cfg.info_pill ? "info-pill" : "";
+    const iconAnimClass = cfg.badge_animate_icon === "float" ? "animate-float"
+                        : cfg.badge_animate_icon === "pulse" ? "animate-pulse"
+                        : cfg.badge_animate_icon === "spin" ? "animate-spin" : "";
+
+    const handleTap = (e) => { e.stopPropagation(); if (cfg.info_tap_action) this._handleAction(cfg.info_tap_action); };
+
+    const iconColor = cfg.badge_icon_color?.trim() || "inherit";
+
+    return html`
+      <div class="${baseClass} ${pillClass}" style="${posStyle}${infoInline}${pillStyle}" @click=${handleTap}>
+        ${cfg.badge_icon ? html`<ha-icon icon="${cfg.badge_icon}" class="info-icon ${iconAnimClass}" style="color:${iconColor};"></ha-icon>` : html``}
+        ${badgeText.trim() ? html`<span class="info-text">${badgeText}</span>` : html``}
+      </div>
+    `;
+  }
+
+  _renderInfoDisplay() {
+    const cfg = this._config;
+    switch (cfg.info_type) {
+      case "weather": return this._renderWeather();
+      case "datetime": return this._renderDatetime();
+      case "badge": return this._renderBadge();
+      default: return html``;
+    }
   }
 
   render() {
@@ -1058,7 +1260,7 @@ class HkiHeaderCard extends LitElement {
             <div class="title" style=${titleInline} role="heading" aria-level="1">${titleText}</div>
             ${subtitleVisible ? html`<div class="subtitle" style="${subtitleInline}${subtitleTransform}">${subtitleText}</div>` : html``}
           </div>
-          ${this._renderWeather()}
+          ${this._renderInfoDisplay()}
         </div>
       </ha-card>
     `;
@@ -1139,6 +1341,19 @@ class HkiHeaderCardEditor extends LitElement {
     `;
   }
 
+  _renderIconPicker(label, field, value, helper = "") {
+    return html`
+      <ha-selector
+        .hass=${this.hass}
+        .selector=${{ icon: {} }}
+        .value=${value || ""}
+        .label=${label}
+        .helper=${helper}
+        @value-changed=${(ev) => this._changed(ev, field)}
+      ></ha-selector>
+    `;
+  }
+
   _val(ev) {
     return ev.detail?.value ?? ev.target?.value;
   }
@@ -1154,12 +1369,12 @@ class HkiHeaderCardEditor extends LitElement {
       "height_vh", "min_height", "max_height", "blend_stop", "fixed_top",
       "title_offset_x", "title_offset_y", "subtitle_offset_x", "subtitle_offset_y",
       "title_size_px", "subtitle_size_px", "badges_offset_pinned", "badges_offset_unpinned",
-      "badges_gap", "weather_offset_x", "weather_offset_y", "weather_size_px",
-      "mobile_breakpoint", "weather_pill_padding_x", "weather_pill_padding_y",
-      "weather_pill_radius", "weather_pill_blur",
+      "badges_gap", "info_offset_x", "info_offset_y", "info_size_px",
+      "mobile_breakpoint", "info_pill_padding_x", "info_pill_padding_y",
+      "info_pill_radius", "info_pill_blur",
     ]);
 
-    const nullableNumeric = new Set(["weather_offset_x_mobile", "weather_offset_y_mobile"]);
+    const nullableNumeric = new Set(["info_offset_x_mobile", "info_offset_y_mobile"]);
 
     if (nullableNumeric.has(field)) {
       value = value === "" || value == null ? null : toNum(value, null);
@@ -1173,7 +1388,8 @@ class HkiHeaderCardEditor extends LitElement {
     const bools = new Set([
       "fixed", "badges_fixed", "weather_show_icon", "weather_show_condition",
       "weather_show_temperature", "weather_show_humidity", "weather_show_wind",
-      "weather_show_pressure", "weather_colored_icons", "weather_pill",
+      "weather_show_pressure", "weather_colored_icons", "info_pill",
+      "datetime_show_time", "datetime_show_date", "datetime_show_day",
     ]);
     if (bools.has(field)) value = !!(ev.target?.checked ?? value);
 
@@ -1227,8 +1443,8 @@ class HkiHeaderCardEditor extends LitElement {
   }
 
   _renderActionEditor(label, field) {
-    const action = this._config?.[field] || { action: "more-info" };
-    const actionType = action.action || "more-info";
+    const action = this._config?.[field] || { action: "none" };
+    const actionType = action.action || "none";
     const hasServicePicker = !!customElements.get("ha-service-picker");
 
     return html`
@@ -1251,9 +1467,169 @@ class HkiHeaderCardEditor extends LitElement {
             : html`<ha-textfield label="Service" helper="e.g., light.turn_on" .value=${action.service || ""} data-field="${field}.service" @input=${this._changed}></ha-textfield>`}
           ${this._renderServiceDataEditor(field, action.service_data)}
         ` : ""}
-        ${actionType === "more-info" || actionType === "toggle" ? this._renderEntityPicker("Entity", `${field}.entity`, action.entity || "", "Leave empty to use the weather entity") : ""}
+        ${actionType === "more-info" || actionType === "toggle" ? this._renderEntityPicker("Entity", `${field}.entity`, action.entity || "", "Entity to show info for or toggle") : ""}
       </div>
     `;
+  }
+
+  _renderInfoTypeOptions() {
+    const cfg = this._config;
+    const infoType = cfg.info_type || "none";
+
+    if (infoType === "none") return html``;
+
+    // Shared positioning options
+    const sharedOptions = html`
+      <div class="section">Position & Style</div>
+      <ha-select label="Alignment" .value=${cfg.info_align || "right"} data-field="info_align" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+        <mwc-list-item value="left">Left</mwc-list-item>
+        <mwc-list-item value="right">Right</mwc-list-item>
+      </ha-select>
+
+      <div class="inline-fields-2">
+        <ha-textfield label="Horizontal offset (px)" type="number" .value=${String(cfg.info_offset_x ?? 5)} data-field="info_offset_x" @input=${this._changed}></ha-textfield>
+        <ha-textfield label="Vertical offset (px)" type="number" .value=${String(cfg.info_offset_y ?? 40)} data-field="info_offset_y" @input=${this._changed}></ha-textfield>
+      </div>
+
+      <div class="section">Mobile offset</div>
+      <div class="inline-fields-2">
+        <ha-textfield label="Mobile horizontal (px)" type="number" .value=${cfg.info_offset_x_mobile == null ? "" : String(cfg.info_offset_x_mobile)} data-field="info_offset_x_mobile" @input=${this._changed}></ha-textfield>
+        <ha-textfield label="Mobile vertical (px)" type="number" .value=${cfg.info_offset_y_mobile == null ? "" : String(cfg.info_offset_y_mobile)} data-field="info_offset_y_mobile" @input=${this._changed}></ha-textfield>
+      </div>
+      <ha-textfield label="Mobile breakpoint (px)" type="number" .value=${String(cfg.mobile_breakpoint || 768)} data-field="mobile_breakpoint" @input=${this._changed}></ha-textfield>
+
+      <div class="inline-fields-2">
+        <ha-textfield label="Font size (px)" type="number" .value=${String(cfg.info_size_px || 12)} data-field="info_size_px" @input=${this._changed}></ha-textfield>
+        <ha-select label="Font weight" .value=${cfg.info_weight || "medium"} data-field="info_weight" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+          <mwc-list-item value="light">Light</mwc-list-item>
+          <mwc-list-item value="regular">Regular</mwc-list-item>
+          <mwc-list-item value="medium">Medium</mwc-list-item>
+          <mwc-list-item value="semibold">Semi-bold</mwc-list-item>
+          <mwc-list-item value="bold">Bold</mwc-list-item>
+          <mwc-list-item value="black">Black</mwc-list-item>
+        </ha-select>
+      </div>
+
+      <ha-textfield label="Text color (CSS)" placeholder="inherit" .value=${cfg.info_color || ""} data-field="info_color" @input=${this._changed}></ha-textfield>
+
+      <div class="section">Pill background</div>
+      <div class="switch-row">
+        <ha-switch .checked=${!!cfg.info_pill} data-field="info_pill" @change=${this._changed}></ha-switch>
+        <span>Enable pill</span>
+      </div>
+      ${cfg.info_pill ? html`
+        <ha-textfield label="Pill background (CSS)" .value=${cfg.info_pill_background || "rgba(0,0,0,0.25)"} data-field="info_pill_background" @input=${this._changed}></ha-textfield>
+        <div class="inline-fields-2">
+          <ha-textfield label="Padding X (px)" type="number" .value=${String(cfg.info_pill_padding_x ?? 10)} data-field="info_pill_padding_x" @input=${this._changed}></ha-textfield>
+          <ha-textfield label="Padding Y (px)" type="number" .value=${String(cfg.info_pill_padding_y ?? 6)} data-field="info_pill_padding_y" @input=${this._changed}></ha-textfield>
+        </div>
+        <div class="inline-fields-2">
+          <ha-textfield label="Radius (px)" type="number" .value=${String(cfg.info_pill_radius ?? 999)} data-field="info_pill_radius" @input=${this._changed}></ha-textfield>
+          <ha-textfield label="Blur (px)" type="number" .value=${String(cfg.info_pill_blur ?? 0)} data-field="info_pill_blur" @input=${this._changed}></ha-textfield>
+        </div>
+      ` : ""}
+
+      ${this._renderActionEditor("Tap action", "info_tap_action")}
+    `;
+
+    // Type-specific options
+    if (infoType === "weather") {
+      return html`
+        <div class="section">Weather Settings</div>
+        ${this._renderEntityPicker("Weather entity", "weather_entity", cfg.weather_entity, "Select a weather entity", "weather")}
+
+        ${cfg.weather_entity ? html`
+          <div class="section">Weather elements</div>
+          <div class="inline-fields-3">
+            <div class="switch-row"><ha-switch .checked=${cfg.weather_show_icon !== false} data-field="weather_show_icon" @change=${this._changed}></ha-switch><span>Icon</span></div>
+            <div class="switch-row"><ha-switch .checked=${cfg.weather_show_condition !== false} data-field="weather_show_condition" @change=${this._changed}></ha-switch><span>Condition</span></div>
+            <div class="switch-row"><ha-switch .checked=${cfg.weather_show_temperature !== false} data-field="weather_show_temperature" @change=${this._changed}></ha-switch><span>Temp</span></div>
+            <div class="switch-row"><ha-switch .checked=${!!cfg.weather_show_humidity} data-field="weather_show_humidity" @change=${this._changed}></ha-switch><span>Humidity</span></div>
+            <div class="switch-row"><ha-switch .checked=${!!cfg.weather_show_wind} data-field="weather_show_wind" @change=${this._changed}></ha-switch><span>Wind</span></div>
+            <div class="switch-row"><ha-switch .checked=${!!cfg.weather_show_pressure} data-field="weather_show_pressure" @change=${this._changed}></ha-switch><span>Pressure</span></div>
+          </div>
+
+          <div class="section">Weather icon styling</div>
+          <ha-textfield label="Icon pack path (SVG)" helper="Path to folder (e.g., /local/icons/weather)" .value=${cfg.weather_icon_pack_path || ""} data-field="weather_icon_pack_path" @input=${this._changed}></ha-textfield>
+          
+          <div class="switch-row">
+            <ha-switch .checked=${cfg.weather_colored_icons !== false} data-field="weather_colored_icons" @change=${this._changed}></ha-switch>
+            <span>Colored icons</span>
+          </div>
+          <div class="inline-fields-2">
+            <ha-select label="Icon color mode" .value=${cfg.weather_icon_color_mode || "state"} data-field="weather_icon_color_mode" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+              <mwc-list-item value="state">By condition</mwc-list-item>
+              <mwc-list-item value="custom">Custom</mwc-list-item>
+              <mwc-list-item value="inherit">Inherit</mwc-list-item>
+            </ha-select>
+            <ha-select label="Icon animation" .value=${cfg.weather_animate_icon || "none"} data-field="weather_animate_icon" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+              <mwc-list-item value="none">None</mwc-list-item>
+              <mwc-list-item value="float">Float</mwc-list-item>
+              <mwc-list-item value="pulse">Pulse</mwc-list-item>
+              <mwc-list-item value="spin">Spin</mwc-list-item>
+            </ha-select>
+          </div>
+          ${cfg.weather_icon_color_mode === "custom" ? html`
+            <ha-textfield label="Custom icon color (CSS)" .value=${cfg.weather_icon_color || ""} data-field="weather_icon_color" @input=${this._changed}></ha-textfield>
+          ` : ""}
+
+          ${sharedOptions}
+        ` : html`
+          <ha-alert alert-type="warning">Please select a weather entity to configure weather display.</ha-alert>
+        `}
+      `;
+    }
+
+    if (infoType === "datetime") {
+      return html`
+        <div class="section">Date & Time Settings</div>
+        <div class="inline-fields-3">
+          <div class="switch-row"><ha-switch .checked=${cfg.datetime_show_day !== false} data-field="datetime_show_day" @change=${this._changed}></ha-switch><span>Day</span></div>
+          <div class="switch-row"><ha-switch .checked=${cfg.datetime_show_date !== false} data-field="datetime_show_date" @change=${this._changed}></ha-switch><span>Date</span></div>
+          <div class="switch-row"><ha-switch .checked=${cfg.datetime_show_time !== false} data-field="datetime_show_time" @change=${this._changed}></ha-switch><span>Time</span></div>
+        </div>
+
+        <ha-textfield label="Time format" helper="HH:mm (24h) or h:mm A (12h)" .value=${cfg.datetime_time_format || "HH:mm"} data-field="datetime_time_format" @input=${this._changed}></ha-textfield>
+        <ha-textfield label="Date format" helper="D MMM, DD/MM/YYYY, MMMM D, etc." .value=${cfg.datetime_date_format || "D MMM"} data-field="datetime_date_format" @input=${this._changed}></ha-textfield>
+        <ha-textfield label="Separator" .value=${cfg.datetime_separator || " • "} data-field="datetime_separator" @input=${this._changed}></ha-textfield>
+
+        <div class="section">Icon (optional)</div>
+        ${this._renderIconPicker("Icon", "datetime_icon", cfg.datetime_icon, "Optional icon to display")}
+        <div class="inline-fields-2">
+          <ha-textfield label="Icon color (CSS)" placeholder="inherit" .value=${cfg.datetime_icon_color || ""} data-field="datetime_icon_color" @input=${this._changed}></ha-textfield>
+          <ha-select label="Icon animation" .value=${cfg.datetime_animate_icon || "none"} data-field="datetime_animate_icon" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+            <mwc-list-item value="none">None</mwc-list-item>
+            <mwc-list-item value="float">Float</mwc-list-item>
+            <mwc-list-item value="pulse">Pulse</mwc-list-item>
+            <mwc-list-item value="spin">Spin</mwc-list-item>
+          </ha-select>
+        </div>
+
+        ${sharedOptions}
+      `;
+    }
+
+    if (infoType === "badge") {
+      return html`
+        <div class="section">Custom Badge Settings</div>
+        ${this._renderIconPicker("Icon", "badge_icon", cfg.badge_icon, "Icon to display")}
+        ${this._renderTemplateEditor("Text (supports Jinja2)", "badge_text")}
+
+        <div class="inline-fields-2">
+          <ha-textfield label="Icon color (CSS)" placeholder="inherit" .value=${cfg.badge_icon_color || ""} data-field="badge_icon_color" @input=${this._changed}></ha-textfield>
+          <ha-select label="Icon animation" .value=${cfg.badge_animate_icon || "none"} data-field="badge_animate_icon" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+            <mwc-list-item value="none">None</mwc-list-item>
+            <mwc-list-item value="float">Float</mwc-list-item>
+            <mwc-list-item value="pulse">Pulse</mwc-list-item>
+            <mwc-list-item value="spin">Spin</mwc-list-item>
+          </ha-select>
+        </div>
+
+        ${sharedOptions}
+      `;
+    }
+
+    return html``;
   }
 
   render() {
@@ -1282,10 +1658,9 @@ class HkiHeaderCardEditor extends LitElement {
         </ha-select>
 
         <div class="section">Colors</div>
-        <div class="inline-fields-3">
+        <div class="inline-fields-2">
           <ha-textfield label="Title color (CSS)" placeholder="inherit" .value=${this._config.title_color || ""} data-field="title_color" @input=${this._changed}></ha-textfield>
           <ha-textfield label="Subtitle color (CSS)" placeholder="inherit" .value=${this._config.subtitle_color || ""} data-field="subtitle_color" @input=${this._changed}></ha-textfield>
-          <ha-textfield label="Weather color (CSS)" placeholder="inherit" .value=${this._config.weather_color || ""} data-field="weather_color" @input=${this._changed}></ha-textfield>
         </div>
 
         <div class="section">Title position</div>
@@ -1300,92 +1675,15 @@ class HkiHeaderCardEditor extends LitElement {
           <ha-textfield label="Subtitle vertical offset (px)" type="number" .value=${String(this._config.subtitle_offset_y)} data-field="subtitle_offset_y" @input=${this._changed}></ha-textfield>
         </div>
 
-        <div class="section">Weather</div>
-        ${this._renderEntityPicker("Weather entity", "weather_entity", this._config.weather_entity, "Optional: Add a weather entity to display conditions (e.g., weather.home)", "weather")}
+        <div class="section">Info Display</div>
+        <ha-select label="Display type" .value=${this._config.info_type || "none"} data-field="info_type" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+          <mwc-list-item value="none">None</mwc-list-item>
+          <mwc-list-item value="weather">Weather</mwc-list-item>
+          <mwc-list-item value="datetime">Date & Time</mwc-list-item>
+          <mwc-list-item value="badge">Custom Badge</mwc-list-item>
+        </ha-select>
 
-        ${this._config.weather_entity ? html`
-          <ha-select label="Weather alignment" .value=${this._config.weather_align || "right"} data-field="weather_align" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-            <mwc-list-item value="left">Left</mwc-list-item>
-            <mwc-list-item value="right">Right</mwc-list-item>
-          </ha-select>
-
-          <div class="inline-fields-2">
-            <ha-textfield label="Weather horizontal offset (px)" type="number" .value=${String(this._config.weather_offset_x ?? 5)} data-field="weather_offset_x" @input=${this._changed}></ha-textfield>
-            <ha-textfield label="Weather vertical offset (px)" type="number" .value=${String(this._config.weather_offset_y ?? 40)} data-field="weather_offset_y" @input=${this._changed}></ha-textfield>
-          </div>
-
-          <div class="section">Mobile weather offset</div>
-          <div class="inline-fields-2">
-            <ha-textfield label="Mobile horizontal offset (px)" type="number" .value=${this._config.weather_offset_x_mobile == null ? "" : String(this._config.weather_offset_x_mobile)} data-field="weather_offset_x_mobile" @input=${this._changed}></ha-textfield>
-            <ha-textfield label="Mobile vertical offset (px)" type="number" .value=${this._config.weather_offset_y_mobile == null ? "" : String(this._config.weather_offset_y_mobile)} data-field="weather_offset_y_mobile" @input=${this._changed}></ha-textfield>
-          </div>
-          <ha-textfield label="Mobile breakpoint (px)" type="number" .value=${String(this._config.mobile_breakpoint || 768)} data-field="mobile_breakpoint" @input=${this._changed}></ha-textfield>
-
-          <div class="section">Weather elements</div>
-          <div class="inline-fields-3">
-            <div class="switch-row"><ha-switch .checked=${this._config.weather_show_icon !== false} data-field="weather_show_icon" @change=${this._changed}></ha-switch><span>Icon</span></div>
-            <div class="switch-row"><ha-switch .checked=${this._config.weather_show_condition !== false} data-field="weather_show_condition" @change=${this._changed}></ha-switch><span>Condition</span></div>
-            <div class="switch-row"><ha-switch .checked=${this._config.weather_show_temperature !== false} data-field="weather_show_temperature" @change=${this._changed}></ha-switch><span>Temp</span></div>
-            <div class="switch-row"><ha-switch .checked=${!!this._config.weather_show_humidity} data-field="weather_show_humidity" @change=${this._changed}></ha-switch><span>Humidity</span></div>
-            <div class="switch-row"><ha-switch .checked=${!!this._config.weather_show_wind} data-field="weather_show_wind" @change=${this._changed}></ha-switch><span>Wind</span></div>
-            <div class="switch-row"><ha-switch .checked=${!!this._config.weather_show_pressure} data-field="weather_show_pressure" @change=${this._changed}></ha-switch><span>Pressure</span></div>
-          </div>
-
-          <div class="section">Weather icon styling</div>
-          <ha-textfield label="Icon pack path (SVG)" helper="Path to folder (e.g., /local/icons/weather). Images must match state name (e.g., sunny.svg)" .value=${this._config.weather_icon_pack_path || ""} data-field="weather_icon_pack_path" @input=${this._changed}></ha-textfield>
-          
-          <div class="switch-row">
-            <ha-switch .checked=${this._config.weather_colored_icons !== false} data-field="weather_colored_icons" @change=${this._changed}></ha-switch>
-            <span>Colored icons</span>
-          </div>
-          <div class="inline-fields-2">
-            <ha-select label="Icon color mode" .value=${this._config.weather_icon_color_mode || "state"} data-field="weather_icon_color_mode" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-              <mwc-list-item value="state">By condition</mwc-list-item>
-              <mwc-list-item value="custom">Custom</mwc-list-item>
-              <mwc-list-item value="inherit">Inherit</mwc-list-item>
-            </ha-select>
-            <ha-select label="Icon animation" .value=${this._config.weather_animate_icon || "none"} data-field="weather_animate_icon" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-              <mwc-list-item value="none">None</mwc-list-item>
-              <mwc-list-item value="float">Float</mwc-list-item>
-              <mwc-list-item value="pulse">Pulse</mwc-list-item>
-              <mwc-list-item value="spin">Spin</mwc-list-item>
-            </ha-select>
-          </div>
-          ${this._config.weather_icon_color_mode === "custom" ? html`
-            <ha-textfield label="Custom icon color (CSS)" helper="e.g., #ffcc00 or var(--accent-color)" .value=${this._config.weather_icon_color || ""} data-field="weather_icon_color" @input=${this._changed}></ha-textfield>
-          ` : ""}
-
-          <div class="section">Weather pill background</div>
-          <div class="switch-row">
-            <ha-switch .checked=${!!this._config.weather_pill} data-field="weather_pill" @change=${this._changed}></ha-switch>
-            <span>Enable pill</span>
-          </div>
-          ${this._config.weather_pill ? html`
-            <ha-textfield label="Pill background (CSS)" .value=${this._config.weather_pill_background || "rgba(0,0,0,0.25)"} data-field="weather_pill_background" @input=${this._changed}></ha-textfield>
-            <div class="inline-fields-2">
-              <ha-textfield label="Padding X (px)" type="number" .value=${String(this._config.weather_pill_padding_x ?? 10)} data-field="weather_pill_padding_x" @input=${this._changed}></ha-textfield>
-              <ha-textfield label="Padding Y (px)" type="number" .value=${String(this._config.weather_pill_padding_y ?? 6)} data-field="weather_pill_padding_y" @input=${this._changed}></ha-textfield>
-            </div>
-            <div class="inline-fields-2">
-              <ha-textfield label="Radius (px)" type="number" .value=${String(this._config.weather_pill_radius ?? 999)} data-field="weather_pill_radius" @input=${this._changed}></ha-textfield>
-              <ha-textfield label="Blur (px)" type="number" .value=${String(this._config.weather_pill_blur ?? 0)} data-field="weather_pill_blur" @input=${this._changed}></ha-textfield>
-            </div>
-          ` : ""}
-
-          <div class="inline-fields-2">
-            <ha-textfield label="Weather size (px)" type="number" .value=${String(this._config.weather_size_px || 12)} data-field="weather_size_px" @input=${this._changed}></ha-textfield>
-            <ha-select label="Weather weight" .value=${this._config.weather_weight || "medium"} data-field="weather_weight" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-              <mwc-list-item value="light">Light</mwc-list-item>
-              <mwc-list-item value="regular">Regular</mwc-list-item>
-              <mwc-list-item value="medium">Medium</mwc-list-item>
-              <mwc-list-item value="semibold">Semi-bold</mwc-list-item>
-              <mwc-list-item value="bold">Bold</mwc-list-item>
-              <mwc-list-item value="black">Black</mwc-list-item>
-            </ha-select>
-          </div>
-
-          ${this._renderActionEditor("Weather tap action", "weather_tap_action")}
-        ` : ""}
+        ${this._renderInfoTypeOptions()}
 
         <div class="section">Background</div>
         <ha-textfield label="Background (color/gradient/url)" helper="Auto-wraps image paths in url() - just enter /local/image.jpg or color value" .value=${this._config.background} data-field="background" @input=${this._changed}></ha-textfield>
