@@ -171,7 +171,7 @@ function cacheKey(raw, vars) {
   return `hkiTpl:${hashStr(raw + (vars ? JSON.stringify(vars) : ""))}`;
 }
 
-// Date formatting helper
+// Date formatting helper - single-pass to avoid replacing letters in substituted values
 function formatDateTime(date, format) {
   const pad = (n) => String(n).padStart(2, '0');
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -183,27 +183,32 @@ function formatDateTime(date, format) {
   const h12 = h24 % 12 || 12;
   const ampm = h24 < 12 ? 'AM' : 'PM';
 
-  return format
-    .replace(/YYYY/g, date.getFullYear())
-    .replace(/YY/g, String(date.getFullYear()).slice(-2))
-    .replace(/MMMM/g, months[date.getMonth()])
-    .replace(/MMM/g, monthsShort[date.getMonth()])
-    .replace(/MM/g, pad(date.getMonth() + 1))
-    .replace(/M/g, date.getMonth() + 1)
-    .replace(/DDDD/g, days[date.getDay()])
-    .replace(/DDD/g, daysShort[date.getDay()])
-    .replace(/DD/g, pad(date.getDate()))
-    .replace(/D/g, date.getDate())
-    .replace(/HH/g, pad(h24))
-    .replace(/H/g, h24)
-    .replace(/hh/g, pad(h12))
-    .replace(/h/g, h12)
-    .replace(/mm/g, pad(date.getMinutes()))
-    .replace(/m/g, date.getMinutes())
-    .replace(/ss/g, pad(date.getSeconds()))
-    .replace(/s/g, date.getSeconds())
-    .replace(/A/g, ampm)
-    .replace(/a/g, ampm.toLowerCase());
+  const tokens = {
+    'YYYY': date.getFullYear(),
+    'YY': String(date.getFullYear()).slice(-2),
+    'MMMM': months[date.getMonth()],
+    'MMM': monthsShort[date.getMonth()],
+    'MM': pad(date.getMonth() + 1),
+    'DDDD': days[date.getDay()],
+    'DDD': daysShort[date.getDay()],
+    'DD': pad(date.getDate()),
+    'HH': pad(h24),
+    'hh': pad(h12),
+    'mm': pad(date.getMinutes()),
+    'ss': pad(date.getSeconds()),
+    'M': date.getMonth() + 1,
+    'D': date.getDate(),
+    'H': h24,
+    'h': h12,
+    'm': date.getMinutes(),
+    's': date.getSeconds(),
+    'A': ampm,
+    'a': ampm.toLowerCase(),
+  };
+
+  // Single-pass replacement using regex with all tokens (longest first via alternation order)
+  const tokenPattern = /YYYY|MMMM|DDDD|YY|MMM|DDD|MM|DD|HH|hh|mm|ss|M|D|H|h|m|s|A|a/g;
+  return format.replace(tokenPattern, match => tokens[match]);
 }
 
 class HkiHeaderCard extends LitElement {
@@ -221,6 +226,7 @@ class HkiHeaderCard extends LitElement {
       _renderedTitle: { type: String },
       _renderedSubtitle: { type: String },
       _renderedBadgeText: { type: String },
+      _renderedBadgeIcon: { type: String },
       _currentTime: { type: Number },
     };
   }
@@ -238,6 +244,7 @@ class HkiHeaderCard extends LitElement {
     this._renderedTitle = "";
     this._renderedSubtitle = "";
     this._renderedBadgeText = "";
+    this._renderedBadgeIcon = "";
     this._currentTime = Date.now();
 
     // Handlers & observers
@@ -259,6 +266,7 @@ class HkiHeaderCard extends LitElement {
       title: { raw: "", sig: "", seq: 0, unsub: null },
       subtitle: { raw: "", sig: "", seq: 0, unsub: null },
       badge_text: { raw: "", sig: "", seq: 0, unsub: null },
+      badge_icon: { raw: "", sig: "", seq: 0, unsub: null },
     };
 
     this._hassReady = false;
@@ -422,6 +430,7 @@ class HkiHeaderCard extends LitElement {
     this._unsubscribeTemplate("title");
     this._unsubscribeTemplate("subtitle");
     this._unsubscribeTemplate("badge_text");
+    this._unsubscribeTemplate("badge_icon");
     this._resetBadgesZIndex();
   }
 
@@ -785,6 +794,7 @@ class HkiHeaderCard extends LitElement {
     this._setupTemplateKey("title", this._config?.title ?? "");
     this._setupTemplateKey("subtitle", this._config?.subtitle ?? "");
     this._setupTemplateKey("badge_text", this._config?.badge_text ?? "");
+    this._setupTemplateKey("badge_icon", this._config?.badge_icon ?? "");
   }
 
   _setupTemplateKey(key, raw) {
@@ -884,6 +894,8 @@ class HkiHeaderCard extends LitElement {
       if (this._renderedSubtitle !== v) { this._renderedSubtitle = v; this.requestUpdate(); }
     } else if (key === "badge_text") {
       if (this._renderedBadgeText !== v) { this._renderedBadgeText = v; this.requestUpdate(); }
+    } else if (key === "badge_icon") {
+      if (this._renderedBadgeIcon !== v) { this._renderedBadgeIcon = v; this.requestUpdate(); }
     }
   }
 
@@ -1164,8 +1176,9 @@ class HkiHeaderCard extends LitElement {
     const cfg = this._config;
 
     const badgeText = this._isTemplateString(cfg.badge_text) ? this._renderedBadgeText : (cfg.badge_text || "");
+    const badgeIcon = this._isTemplateString(cfg.badge_icon) ? this._renderedBadgeIcon : (cfg.badge_icon || "");
 
-    if (!cfg.badge_icon && !badgeText.trim()) return html``;
+    if (!badgeIcon && !badgeText.trim()) return html``;
 
     const { posStyle, infoInline, pillStyle, iconSize } = this._getInfoContainerStyle(cfg);
 
@@ -1182,7 +1195,7 @@ class HkiHeaderCard extends LitElement {
 
     return html`
       <div class="${baseClass} ${pillClass}" style="${posStyle}${infoInline}${pillStyle}" @click=${handleTap}>
-        ${cfg.badge_icon ? html`<ha-icon icon="${cfg.badge_icon}" class="info-icon ${iconAnimClass}" style="color:${iconColor};"></ha-icon>` : html``}
+        ${badgeIcon ? html`<ha-icon icon="${badgeIcon}" class="info-icon ${iconAnimClass}" style="color:${iconColor};"></ha-icon>` : html``}
         ${badgeText.trim() ? html`<span class="info-text">${badgeText}</span>` : html``}
       </div>
     `;
@@ -1612,7 +1625,7 @@ class HkiHeaderCardEditor extends LitElement {
     if (infoType === "badge") {
       return html`
         <div class="section">Custom Badge Settings</div>
-        ${this._renderIconPicker("Icon", "badge_icon", cfg.badge_icon, "Icon to display")}
+        ${this._renderTemplateEditor("Icon (supports Jinja2, e.g. mdi:home)", "badge_icon")}
         ${this._renderTemplateEditor("Text (supports Jinja2)", "badge_text")}
 
         <div class="inline-fields-2">
