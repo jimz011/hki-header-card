@@ -6,6 +6,9 @@
 [![Downloads](https://img.shields.io/github/downloads/jimz011/hki-header-card/total.svg)](https://github.com/jimz011/hki-header-card/releases)
 [![Maintained](https://img.shields.io/badge/Maintained-Yes-green.svg)](https://github.com/jimz011/hki-navigation-card/graphs/commit-activity)
 
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Support-yellow.svg)](https://www.buymeacoffee.com/w8Jnf6Hit)
+[![PayPal](https://img.shields.io/badge/PayPal-Donate-blue.svg)](https://paypal.me/JimmySchings)
+
 Full-width customizable header for Home Assistant with automatic kiosk mode detection, Jinja2 template support, and advanced badge positioning.
 
 <img src="https://github.com/jimz011/hki-header-card/blob/main/screenshots/header-with-badges.png?raw=true" width="600" alt="HKI Header Card Example">
@@ -361,13 +364,6 @@ This card was inspired by:
 - All contributors and testers
 
 ---
-
-## ☕ Support the Project
-
-If you find this card useful, consider supporting development:
-
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Support-yellow.svg)](https://www.buymeacoffee.com/w8Jnf6Hit)
-[![PayPal](https://img.shields.io/badge/PayPal-Donate-blue.svg)](https://paypal.me/JimmySchings)
 
 ## 📱 Related Projects
 
