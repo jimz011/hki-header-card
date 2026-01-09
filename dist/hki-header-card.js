@@ -3,9 +3,12 @@
 import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?module";
 
 const CARD_NAME = "hki-header-card";
-const VERSION = "1.1.0";
 
-console.log(`%c${CARD_NAME} %cv${VERSION}`, 'color: #17a2b8', 'color: #999');
+console.info(
+  '%c HKI-HEADER-CARD %c v1.1.0 ',
+  'color: white; background: #17a2b8; font-weight: bold;',
+  'color: #17a2b8; background: white; font-weight: bold;'
+);
 
 const clamp = (n, min, max) => (Number.isFinite(n) ? Math.min(Math.max(n, min), max) : min);
 const toNum = (v, fallback) => { const n = +v; return Number.isFinite(n) ? n : fallback; };
@@ -171,13 +174,31 @@ function cacheKey(raw, vars) {
   return `hkiTpl:${hashStr(raw + (vars ? JSON.stringify(vars) : ""))}`;
 }
 
-// Date formatting helper - single-pass to avoid replacing letters in substituted values
-function formatDateTime(date, format) {
+// Date formatting helper - uses locale for proper translations
+function formatDateTime(date, format, locale = 'en') {
   const pad = (n) => String(n).padStart(2, '0');
-  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const daysShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  const monthsShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  
+  // Get localized day names
+  const getDayName = (d, style) => {
+    try {
+      return new Intl.DateTimeFormat(locale, { weekday: style }).format(d);
+    } catch (_) {
+      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const daysShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      return style === 'long' ? days[d.getDay()] : daysShort[d.getDay()];
+    }
+  };
+  
+  // Get localized month names
+  const getMonthName = (d, style) => {
+    try {
+      return new Intl.DateTimeFormat(locale, { month: style }).format(d);
+    } catch (_) {
+      const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      const monthsShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return style === 'long' ? months[d.getMonth()] : monthsShort[d.getMonth()];
+    }
+  };
 
   const h24 = date.getHours();
   const h12 = h24 % 12 || 12;
@@ -186,11 +207,11 @@ function formatDateTime(date, format) {
   const tokens = {
     'YYYY': date.getFullYear(),
     'YY': String(date.getFullYear()).slice(-2),
-    'MMMM': months[date.getMonth()],
-    'MMM': monthsShort[date.getMonth()],
+    'MMMM': getMonthName(date, 'long'),
+    'MMM': getMonthName(date, 'short'),
     'MM': pad(date.getMonth() + 1),
-    'DDDD': days[date.getDay()],
-    'DDD': daysShort[date.getDay()],
+    'DDDD': getDayName(date, 'long'),
+    'DDD': getDayName(date, 'short'),
     'DD': pad(date.getDate()),
     'HH': pad(h24),
     'hh': pad(h12),
@@ -1134,16 +1155,17 @@ class HkiHeaderCard extends LitElement {
   _renderDatetime() {
     const cfg = this._config;
     const now = new Date(this._currentTime);
+    const locale = this.hass?.language || 'en';
 
     const parts = [];
     if (cfg.datetime_show_day) {
-      parts.push(formatDateTime(now, "DDDD"));
+      parts.push(formatDateTime(now, "DDDD", locale));
     }
     if (cfg.datetime_show_date) {
-      parts.push(formatDateTime(now, cfg.datetime_date_format || "D MMM"));
+      parts.push(formatDateTime(now, cfg.datetime_date_format || "D MMM", locale));
     }
     if (cfg.datetime_show_time) {
-      parts.push(formatDateTime(now, cfg.datetime_time_format || "HH:mm"));
+      parts.push(formatDateTime(now, cfg.datetime_time_format || "HH:mm", locale));
     }
 
     if (parts.length === 0) return html``;
@@ -1431,12 +1453,21 @@ class HkiHeaderCardEditor extends LitElement {
     this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: next } }));
   }
 
-  _renderTemplateEditor(label, field) {
+  _renderTemplateEditor(label, field, options = {}) {
     const value = this._config?.[field] ?? "";
+    const { autocompleteIcons = false } = options;
     return html`
       <div class="code-wrap">
         <div class="code-label">${label}</div>
-        <ha-code-editor .hass=${this.hass} .value=${value} mode="jinja2" data-field=${field} @value-changed=${this._changed}></ha-code-editor>
+        <ha-code-editor 
+          .hass=${this.hass} 
+          .value=${value} 
+          mode="jinja2" 
+          data-field=${field} 
+          ?autocomplete-entities=${true}
+          ?autocomplete-icons=${autocompleteIcons}
+          @value-changed=${this._changed}
+        ></ha-code-editor>
       </div>
     `;
   }
@@ -1625,7 +1656,7 @@ class HkiHeaderCardEditor extends LitElement {
     if (infoType === "badge") {
       return html`
         <div class="section">Custom Badge Settings</div>
-        ${this._renderTemplateEditor("Icon (supports Jinja2, e.g. mdi:home)", "badge_icon")}
+        ${this._renderTemplateEditor("Icon (supports Jinja2, e.g. mdi:home)", "badge_icon", { autocompleteIcons: true })}
         ${this._renderTemplateEditor("Text (supports Jinja2)", "badge_text")}
 
         <div class="inline-fields-2">
