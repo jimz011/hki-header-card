@@ -362,6 +362,13 @@ This card was inspired by:
 
 ---
 
+## ☕ Support the Project
+
+If you find this card useful, consider supporting development:
+
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Support-yellow.svg)](https://www.buymeacoffee.com/w8Jnf6Hit)
+[![PayPal](https://img.shields.io/badge/PayPal-Donate-blue.svg)](https://paypal.me/JimmySchings)
+
 ## 📱 Related Projects
 
 - [HKI Navigation Card](https://github.com/jimz011/hki-navigation-card) - Companion navigation card
