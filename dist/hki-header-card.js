@@ -1,4 +1,4 @@
-// HKI Header Card - Optimized
+// HKI Header Card - Optimized & Updated with Custom Card Support
 
 import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?module";
 
@@ -97,8 +97,9 @@ const DEFAULTS = Object.freeze({
   title_weight: "bold",
   subtitle_weight: "medium",
 
-  // Info display type: "none", "weather", "datetime", "badge"
+  // Info display type: "none", "weather", "datetime", "badge", "custom"
   info_type: "none",
+  info_card: { type: "markdown", content: "Custom Card" },
 
   // Shared info positioning
   info_align: "right",
@@ -148,14 +149,6 @@ const DEFAULTS = Object.freeze({
   badge_text: "",
   badge_icon_color: "",
   badge_animate_icon: "none",
-
-  // Header Bar (top section with slots)
-  header_bar: false,
-  header_bar_offset_y: 12,
-  header_bar_offset_x: 5,
-  header_bar_swap: false,
-  header_card: null,
-  header_card_align: "left",
 });
 
 function normalizeWeightKey(input, fallbackKey) {
@@ -257,7 +250,7 @@ class HkiHeaderCard extends LitElement {
       _renderedBadgeText: { type: String },
       _renderedBadgeIcon: { type: String },
       _currentTime: { type: Number },
-      _headerCardEl: { attribute: false },
+      _infoCardEl: { attribute: false },
     };
   }
 
@@ -276,6 +269,7 @@ class HkiHeaderCard extends LitElement {
     this._renderedBadgeText = "";
     this._renderedBadgeIcon = "";
     this._currentTime = Date.now();
+    this._infoCardEl = null;
 
     // Handlers & observers
     this._resizeHandler = null;
@@ -301,8 +295,6 @@ class HkiHeaderCard extends LitElement {
 
     this._hassReady = false;
     this._badgesEl = null;
-    this._headerCardEl = null;
-    this._headerCardConfig = null;
   }
 
   static get styles() {
@@ -426,35 +418,6 @@ class HkiHeaderCard extends LitElement {
         from { transform: rotate(0deg); }
         to { transform: rotate(360deg); }
       }
-
-      /* Header Bar Styles */
-      .header-bar {
-        position: absolute;
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        z-index: 3;
-        gap: 16px;
-      }
-
-      .header-bar-slot {
-        display: flex;
-        flex: 1;
-        min-width: 0;
-      }
-
-      .header-bar-slot > * {
-        max-width: 100%;
-      }
-
-      /* Info display inline (non-absolute) for header bar */
-      .info-inline {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        color: var(--hki-header-text-color, #fff);
-        text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
-      }
     `;
   }
 
@@ -563,6 +526,10 @@ class HkiHeaderCard extends LitElement {
     requestAnimationFrame(() => this._measure(true));
     this._scheduleTemplateSetup(0);
     this._debouncedBadgesZIndex();
+
+    if (this._config?.info_type === "custom" && this._config.info_card) {
+      this._createCustomCard();
+    }
   }
 
   updated(changed) {
@@ -571,6 +538,10 @@ class HkiHeaderCard extends LitElement {
       this._debouncedMeasure(true);
       this._scheduleTemplateSetup(80);
       this._debouncedBadgesZIndex();
+
+      if (this._config?.info_type === "custom" && this._config.info_card) {
+        this._createCustomCard();
+      }
       return;
     }
 
@@ -578,11 +549,6 @@ class HkiHeaderCard extends LitElement {
       this._detectPreview();
       this._detectEditMode();
       this._debouncedMeasure(true);
-
-      // Pass hass to header card
-      if (this._headerCardEl && this.hass) {
-        this._headerCardEl.hass = this.hass;
-      }
 
       const nowReady = !!this.hass?.connection && typeof this.hass?.callWS === "function";
       if (nowReady && !this._hassReady) {
@@ -592,6 +558,10 @@ class HkiHeaderCard extends LitElement {
         this._detectKioskMode();
       }
       this._debouncedBadgesZIndex();
+
+      if (this._infoCardEl) {
+        this._infoCardEl.hass = this.hass;
+      }
     }
 
     if (changed.has("_kioskMode")) {
@@ -870,94 +840,11 @@ class HkiHeaderCard extends LitElement {
     m.subtitle_weight = normalizeWeightKey(m.subtitle_weight ?? "medium", "medium");
 
     // Info type validation
-    m.info_type = ["none", "weather", "datetime", "badge"].includes(m.info_type) ? m.info_type : "none";
-
-    // Header bar options
-    m.header_bar = !!m.header_bar;
-    m.header_bar_offset_y = toNum(m.header_bar_offset_y, 12);
-    m.header_bar_offset_x = toNum(m.header_bar_offset_x, 5);
-    m.header_bar_swap = !!m.header_bar_swap;
-    m.header_card_align = ["left", "center", "right"].includes(m.header_card_align) ? m.header_card_align : "left";
+    m.info_type = ["none", "weather", "datetime", "badge", "custom"].includes(m.info_type) ? m.info_type : "none";
 
     this._config = m;
-    
-    // Create or update header card element
-    this._setupHeaderCard(m.header_card);
-    
     this._scheduleTemplateSetup(0);
     this._debouncedBadgesZIndex();
-  }
-
-  _setupHeaderCard(cardConfig) {
-    const configStr = cardConfig ? JSON.stringify(cardConfig) : null;
-    const prevConfigStr = this._headerCardConfig ? JSON.stringify(this._headerCardConfig) : null;
-    
-    // Skip if config hasn't changed
-    if (configStr === prevConfigStr) return;
-    
-    this._headerCardConfig = cardConfig;
-    
-    if (!cardConfig) {
-      this._headerCardEl = null;
-      return;
-    }
-    
-    try {
-      // Use Home Assistant's card helper
-      const helpers = window.loadCardHelpers ? window.loadCardHelpers() : Promise.resolve(null);
-      helpers.then((h) => {
-        if (h && h.createCardElement) {
-          this._headerCardEl = h.createCardElement(cardConfig);
-          if (this._headerCardEl) {
-            this._headerCardEl.hass = this.hass;
-            this.requestUpdate();
-          }
-        } else {
-          // Fallback: create element manually
-          this._createCardElementFallback(cardConfig);
-        }
-      }).catch(() => {
-        this._createCardElementFallback(cardConfig);
-      });
-    } catch (e) {
-      console.warn("HKI Header Card: Failed to create header_card", e);
-      this._headerCardEl = null;
-    }
-  }
-
-  _createCardElementFallback(cardConfig) {
-    if (!cardConfig || !cardConfig.type) {
-      this._headerCardEl = null;
-      return;
-    }
-    
-    let tag = cardConfig.type;
-    if (tag.startsWith("custom:")) {
-      tag = tag.substring(7);
-    } else {
-      tag = `hui-${tag}-card`;
-    }
-    
-    const el = document.createElement(tag);
-    if (el.setConfig) {
-      el.setConfig(cardConfig);
-      el.hass = this.hass;
-      this._headerCardEl = el;
-      this.requestUpdate();
-    } else {
-      // Element may not be defined yet, wait and retry
-      customElements.whenDefined(tag).then(() => {
-        const el2 = document.createElement(tag);
-        if (el2.setConfig) {
-          el2.setConfig(cardConfig);
-          el2.hass = this.hass;
-          this._headerCardEl = el2;
-          this.requestUpdate();
-        }
-      }).catch(() => {
-        console.warn(`HKI Header Card: Unknown card type ${cardConfig.type}`);
-      });
-    }
   }
 
   _isTemplateString(s) {
@@ -1265,6 +1152,43 @@ class HkiHeaderCard extends LitElement {
     return { posStyle, infoInline, pillStyle, iconSize };
   }
 
+  async _createCustomCard() {
+    if (!window.loadCardHelpers) return;
+    
+    // cleanup old card
+    if (this._infoCardEl) this._infoCardEl = null;
+
+    try {
+      const helpers = await window.loadCardHelpers();
+      const element = await helpers.createCardElement(this._config.info_card);
+      
+      if (this.hass) element.hass = this.hass;
+      
+      // Style adjustments to make it fit nicely
+      element.style.display = "block";
+      
+      this._infoCardEl = element;
+    } catch (e) {
+      console.error("Failed to create custom card", e);
+    }
+  }
+
+  _renderCustomCard() {
+    if (!this._infoCardEl) return html``;
+    
+    const cfg = this._config;
+    // Reuse the positioning logic
+    const { posStyle, infoInline } = this._getInfoContainerStyle(cfg);
+
+    // We override specific styles because a card is a block element, not inline text
+    // We allow the user to control width via the card config, but we anchor it.
+    return html`
+      <div class="info-container" style="${posStyle} ${infoInline} display: block; min-width: 100px;">
+        ${this._infoCardEl}
+      </div>
+    `;
+  }
+
   _renderWeather() {
     if (!this._config.weather_entity || !this.hass) return html``;
 
@@ -1394,186 +1318,13 @@ class HkiHeaderCard extends LitElement {
     `;
   }
 
-  _renderHeaderBar() {
-    const cfg = this._config;
-    if (!cfg.header_bar) return html``;
-    
-    const hasHeaderCard = !!this._headerCardEl;
-    const hasInfoDisplay = cfg.info_type !== "none";
-    
-    if (!hasHeaderCard && !hasInfoDisplay) return html``;
-    
-    const barStyle = `top:${cfg.header_bar_offset_y}px;left:${cfg.header_bar_offset_x}px;right:${cfg.header_bar_offset_x}px;`;
-    
-    // Determine alignment for header card slot
-    let headerCardJustify = "flex-start";
-    if (cfg.header_card_align === "center") headerCardJustify = "center";
-    if (cfg.header_card_align === "right") headerCardJustify = "flex-end";
-    
-    // Determine alignment for info display slot (uses existing info_align)
-    let infoJustify = "flex-end";
-    if (cfg.info_align === "left") infoJustify = "flex-start";
-    if (cfg.info_align === "center") infoJustify = "center";
-    
-    const headerCardSlot = hasHeaderCard ? html`
-      <div class="header-bar-slot" style="justify-content:${headerCardJustify};">
-        ${this._headerCardEl}
-      </div>
-    ` : html`<div class="header-bar-slot"></div>`;
-    
-    const infoDisplaySlot = hasInfoDisplay ? html`
-      <div class="header-bar-slot" style="justify-content:${infoJustify};">
-        ${this._renderInfoDisplayInline()}
-      </div>
-    ` : html`<div class="header-bar-slot"></div>`;
-    
-    // Swap positions if enabled
-    const leftSlot = cfg.header_bar_swap ? infoDisplaySlot : headerCardSlot;
-    const rightSlot = cfg.header_bar_swap ? headerCardSlot : infoDisplaySlot;
-    
-    return html`
-      <div class="header-bar" style=${barStyle}>
-        ${leftSlot}
-        ${rightSlot}
-      </div>
-    `;
-  }
-
-  _renderInfoDisplayInline() {
-    // Render info display without absolute positioning for use in header bar
-    const cfg = this._config;
-    
-    const fontFamily = this._resolveFontFamily();
-    const infoColor = cfg.info_color?.trim() || "var(--hki-header-text-color, #fff)";
-    const iconSize = Math.round((cfg.info_size_px || 12) * 2);
-    const infoInline = `font-family:${fontFamily};font-style:${cfg.font_style || "normal"};font-size:${cfg.info_size_px || 12}px;font-weight:${this._resolveWeight("info_weight")};color:${infoColor};--info-icon-size:${iconSize}px;`;
-    
-    const pillStyle = cfg.info_pill
-      ? `--hki-info-pill-background:${cfg.info_pill_background};--hki-info-pill-padding-x:${cfg.info_pill_padding_x}px;--hki-info-pill-padding-y:${cfg.info_pill_padding_y}px;--hki-info-pill-radius:${cfg.info_pill_radius}px;--hki-info-pill-blur:${cfg.info_pill_blur}px;`
-      : "";
-    
-    const hasAction = cfg.info_tap_action?.action !== "none";
-    const baseClass = hasAction ? "info-inline info-clickable" : "info-inline";
-    const pillClass = cfg.info_pill ? "info-pill" : "";
-    
-    const handleTap = (e) => { e.stopPropagation(); if (cfg.info_tap_action) this._handleAction(cfg.info_tap_action); };
-    
-    switch (cfg.info_type) {
-      case "weather": return this._renderWeatherInline(baseClass, pillClass, infoInline, pillStyle, handleTap);
-      case "datetime": return this._renderDatetimeInline(baseClass, pillClass, infoInline, pillStyle, handleTap);
-      case "badge": return this._renderBadgeInline(baseClass, pillClass, infoInline, pillStyle, handleTap);
-      default: return html``;
-    }
-  }
-
-  _renderWeatherInline(baseClass, pillClass, infoInline, pillStyle, handleTap) {
-    if (!this._config.weather_entity || !this.hass) return html``;
-    
-    const weatherEntity = this.hass.states[this._config.weather_entity];
-    if (!weatherEntity) return html``;
-    
-    const cfg = this._config;
-    const state = weatherEntity.state;
-    const attrs = weatherEntity.attributes || {};
-    
-    const icon = WEATHER_ICON_MAP[state] || "mdi:weather-partly-cloudy";
-    const iconColor = cfg.weather_icon_color_mode === "custom" && cfg.weather_icon_color?.trim()
-      ? cfg.weather_icon_color.trim()
-      : cfg.weather_icon_color_mode === "inherit" || !cfg.weather_colored_icons
-        ? "inherit"
-        : WEATHER_COLOR_MAP[state] || "inherit";
-    
-    let conditionText = String(state || "").replace(/-/g, " ");
-    if (this.hass.formatEntityState) conditionText = this.hass.formatEntityState(weatherEntity);
-    
-    const temperature = attrs.temperature;
-    const tempUnit = this.hass.config.unit_system.temperature;
-    const humidity = attrs.humidity;
-    const windSpeed = attrs.wind_speed;
-    const speedUnit = this.hass.config.unit_system.speed || attrs.wind_speed_unit || "";
-    const pressure = attrs.pressure;
-    const pressureUnit = this.hass.config.unit_system.pressure || attrs.pressure_unit || "";
-    
-    const iconSize = Math.round((cfg.info_size_px || 12) * 2);
-    const iconAnimClass = cfg.weather_animate_icon === "float" ? "animate-float"
-                        : cfg.weather_animate_icon === "pulse" ? "animate-pulse"
-                        : cfg.weather_animate_icon === "spin" ? "animate-spin" : "";
-    
-    const useSvg = !!cfg.weather_icon_pack_path;
-    const svgUrl = useSvg ? `${cfg.weather_icon_pack_path}/${state}.svg` : "";
-    
-    return html`
-      <div class="${baseClass} ${pillClass}" style="${infoInline}${pillStyle}" @click=${handleTap}>
-        ${cfg.weather_show_icon
-          ? useSvg
-            ? html`<img src="${svgUrl}" class="info-icon ${iconAnimClass}" style="width:${iconSize}px;height:${iconSize}px;" alt="${state}" />`
-            : html`<ha-icon icon="${icon}" class="info-icon ${iconAnimClass}" style="color:${iconColor};"></ha-icon>`
-          : html``}
-        ${cfg.weather_show_condition ? html`<span class="info-text">${conditionText}</span>` : html``}
-        ${cfg.weather_show_temperature && Number.isFinite(+temperature) ? html`<span class="info-temperature">${Math.round(+temperature)}${tempUnit}</span>` : html``}
-        ${cfg.weather_show_humidity && Number.isFinite(+humidity) ? html`<span>${Math.round(+humidity)}%</span>` : html``}
-        ${cfg.weather_show_wind && Number.isFinite(+windSpeed) ? html`<span>${Math.round(+windSpeed)}${speedUnit ? " " + speedUnit : ""}</span>` : html``}
-        ${cfg.weather_show_pressure && Number.isFinite(+pressure) ? html`<span>${Math.round(+pressure)}${pressureUnit ? " " + pressureUnit : ""}</span>` : html``}
-      </div>
-    `;
-  }
-
-  _renderDatetimeInline(baseClass, pillClass, infoInline, pillStyle, handleTap) {
-    const cfg = this._config;
-    const now = new Date(this._currentTime);
-    const locale = this.hass?.language || 'en';
-    
-    const parts = [];
-    if (cfg.datetime_show_day) parts.push(formatDateTime(now, "DDDD", locale));
-    if (cfg.datetime_show_date) parts.push(formatDateTime(now, cfg.datetime_date_format || "D MMM", locale));
-    if (cfg.datetime_show_time) parts.push(formatDateTime(now, cfg.datetime_time_format || "HH:mm", locale));
-    
-    if (parts.length === 0) return html``;
-    
-    const separator = cfg.datetime_separator || " • ";
-    const displayText = parts.join(separator);
-    const iconColor = cfg.datetime_icon_color?.trim() || "inherit";
-    const iconAnimClass = cfg.datetime_animate_icon === "float" ? "animate-float"
-                        : cfg.datetime_animate_icon === "pulse" ? "animate-pulse"
-                        : cfg.datetime_animate_icon === "spin" ? "animate-spin" : "";
-    
-    return html`
-      <div class="${baseClass} ${pillClass}" style="${infoInline}${pillStyle}" @click=${handleTap}>
-        ${cfg.datetime_icon ? html`<ha-icon icon="${cfg.datetime_icon}" class="info-icon ${iconAnimClass}" style="color:${iconColor};"></ha-icon>` : html``}
-        <span class="info-text">${displayText}</span>
-      </div>
-    `;
-  }
-
-  _renderBadgeInline(baseClass, pillClass, infoInline, pillStyle, handleTap) {
-    const cfg = this._config;
-    const badgeText = this._isTemplateString(cfg.badge_text) ? this._renderedBadgeText : (cfg.badge_text || "");
-    const badgeIcon = this._isTemplateString(cfg.badge_icon) ? this._renderedBadgeIcon : (cfg.badge_icon || "");
-    
-    if (!badgeIcon && !badgeText.trim()) return html``;
-    
-    const iconColor = cfg.badge_icon_color?.trim() || "inherit";
-    const iconAnimClass = cfg.badge_animate_icon === "float" ? "animate-float"
-                        : cfg.badge_animate_icon === "pulse" ? "animate-pulse"
-                        : cfg.badge_animate_icon === "spin" ? "animate-spin" : "";
-    
-    return html`
-      <div class="${baseClass} ${pillClass}" style="${infoInline}${pillStyle}" @click=${handleTap}>
-        ${badgeIcon ? html`<ha-icon icon="${badgeIcon}" class="info-icon ${iconAnimClass}" style="color:${iconColor};"></ha-icon>` : html``}
-        ${badgeText.trim() ? html`<span class="info-text">${badgeText}</span>` : html``}
-      </div>
-    `;
-  }
-
   _renderInfoDisplay() {
     const cfg = this._config;
-    // If header bar is enabled, info display is rendered there instead
-    if (cfg.header_bar) return html``;
-    
     switch (cfg.info_type) {
       case "weather": return this._renderWeather();
       case "datetime": return this._renderDatetime();
       case "badge": return this._renderBadge();
+      case "custom": return this._renderCustomCard();
       default: return html``;
     }
   }
@@ -1583,7 +1334,6 @@ class HkiHeaderCard extends LitElement {
 
     const cfg = this._config;
     const effectiveFixed = !!cfg.fixed && !this._inPreview;
-    const useHeaderBar = cfg.header_bar;
 
     const titleText = this._isTemplateString(cfg.title) ? (this._renderedTitle ?? "") : (cfg.title ?? "");
     const subtitleText = this._isTemplateString(cfg.subtitle) ? (this._renderedSubtitle ?? "") : (cfg.subtitle ?? "");
@@ -1643,7 +1393,6 @@ class HkiHeaderCard extends LitElement {
       <ha-card class="header" style=${cardStyle} aria-label=${titleText || "Header"}>
         <div class="overlay" style=${overlayStyle}></div>
         <div class="content" style=${contentStyle}>
-          ${useHeaderBar ? this._renderHeaderBar() : html``}
           <div class="title-block" style=${titleBlockStyle}>
             <div class="title" style=${titleInline} role="heading" aria-level="1">${titleText}</div>
             ${subtitleVisible ? html`<div class="subtitle" style="${subtitleInline}${subtitleTransform}">${subtitleText}</div>` : html``}
@@ -1759,12 +1508,19 @@ class HkiHeaderCardEditor extends LitElement {
       "title_size_px", "subtitle_size_px", "badges_offset_pinned", "badges_offset_unpinned",
       "badges_gap", "info_offset_x", "info_offset_y", "info_size_px",
       "mobile_breakpoint", "info_pill_padding_x", "info_pill_padding_y",
-      "info_pill_radius", "info_pill_blur", "header_bar_offset_x", "header_bar_offset_y",
+      "info_pill_radius", "info_pill_blur",
     ]);
 
     const nullableNumeric = new Set(["info_offset_x_mobile", "info_offset_y_mobile"]);
 
-    if (nullableNumeric.has(field)) {
+    if (field === "info_card") {
+        try {
+          value = window.jsyaml.load(value);
+        } catch (e) {
+          console.error("Invalid YAML", e);
+          return;
+        }
+    } else if (nullableNumeric.has(field)) {
       value = value === "" || value == null ? null : toNum(value, null);
       if (value === null || !Number.isFinite(value)) value = null;
     } else if (numeric.has(field)) {
@@ -1778,7 +1534,6 @@ class HkiHeaderCardEditor extends LitElement {
       "weather_show_temperature", "weather_show_humidity", "weather_show_wind",
       "weather_show_pressure", "weather_colored_icons", "info_pill",
       "datetime_show_time", "datetime_show_date", "datetime_show_day",
-      "header_bar", "header_bar_swap",
     ]);
     if (bools.has(field)) value = !!(ev.target?.checked ?? value);
 
@@ -1803,31 +1558,6 @@ class HkiHeaderCardEditor extends LitElement {
       }
     }
 
-    this._config = next;
-    this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: next } }));
-  }
-
-  _headerCardChanged(ev) {
-    ev.stopPropagation();
-    const yaml = ev.detail?.value ?? "";
-    
-    let cardConfig = null;
-    if (yaml.trim()) {
-      try {
-        // Try YAML parse first
-        if (window.jsyaml?.load) {
-          cardConfig = window.jsyaml.load(yaml);
-        } else {
-          // Fallback to JSON
-          cardConfig = JSON.parse(yaml);
-        }
-      } catch (e) {
-        // Invalid YAML/JSON - don't update
-        return;
-      }
-    }
-    
-    const next = { ...this._config, header_card: cardConfig };
     this._config = next;
     this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: next } }));
   }
@@ -2053,6 +1783,33 @@ class HkiHeaderCardEditor extends LitElement {
       `;
     }
 
+    if (infoType === "custom") {
+        const yamlVal = this._config.info_card 
+          ? (typeof this._config.info_card === 'string' ? this._config.info_card : window.jsyaml.dump(this._config.info_card))
+          : "type: markdown\ncontent: Custom Card";
+      
+        return html`
+          <div class="section">Custom Card Configuration</div>
+          <ha-alert alert-type="info">
+            You can place any Lovelace card here (Markdown, Tile, Button, etc).
+          </ha-alert>
+          
+          <div class="code-wrap">
+            <div class="code-label">Card YAML</div>
+            <ha-code-editor 
+              .hass=${this.hass} 
+              .value=${yamlVal} 
+              mode="yaml" 
+              data-field="info_card" 
+              ?autocomplete-entities=${true}
+              @value-changed=${(ev) => this._changed(ev, "info_card")}
+            ></ha-code-editor>
+          </div>
+      
+          ${sharedOptions}
+        `;
+    }
+
     return html``;
   }
 
@@ -2099,53 +1856,13 @@ class HkiHeaderCardEditor extends LitElement {
           <ha-textfield label="Subtitle vertical offset (px)" type="number" .value=${String(this._config.subtitle_offset_y)} data-field="subtitle_offset_y" @input=${this._changed}></ha-textfield>
         </div>
 
-        <div class="section">Header Bar</div>
-        <ha-alert alert-type="info">
-          The Header Bar creates a top section where you can place a custom card (like notifications) alongside the Info Display. When enabled, both slots align horizontally and the title moves below them.
-        </ha-alert>
-        <div class="switch-row">
-          <ha-formfield label="Enable Header Bar">
-            <ha-switch .checked=${!!this._config.header_bar} data-field="header_bar" @change=${this._changed}></ha-switch>
-          </ha-formfield>
-        </div>
-
-        ${this._config.header_bar ? html`
-          <div class="inline-fields-2">
-            <ha-textfield label="Vertical offset (px)" type="number" .value=${String(this._config.header_bar_offset_y ?? 12)} data-field="header_bar_offset_y" @input=${this._changed}></ha-textfield>
-            <ha-textfield label="Horizontal padding (px)" type="number" .value=${String(this._config.header_bar_offset_x ?? 5)} data-field="header_bar_offset_x" @input=${this._changed}></ha-textfield>
-          </div>
-          
-          <div class="switch-row">
-            <ha-formfield label="Swap slot positions">
-              <ha-switch .checked=${!!this._config.header_bar_swap} data-field="header_bar_swap" @change=${this._changed}></ha-switch>
-            </ha-formfield>
-          </div>
-          <p class="helper-text">When swapped, the custom card moves to the right and info display to the left.</p>
-
-          <div class="section">Custom Card Slot</div>
-          <ha-select label="Card alignment" .value=${this._config.header_card_align || "left"} data-field="header_card_align" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-            <mwc-list-item value="left">Left</mwc-list-item>
-            <mwc-list-item value="center">Center</mwc-list-item>
-            <mwc-list-item value="right">Right</mwc-list-item>
-          </ha-select>
-          
-          <div class="code-wrap">
-            <span class="code-label">Card configuration (YAML)</span>
-            <ha-code-editor
-              mode="yaml"
-              .value=${this._config.header_card ? window.jsyaml?.dump?.(this._config.header_card) || JSON.stringify(this._config.header_card, null, 2) : ""}
-              @value-changed=${(ev) => this._headerCardChanged(ev)}
-            ></ha-code-editor>
-          </div>
-          <p class="helper-text">Enter any card config, e.g.:<br><code>type: custom:hki-notification-card</code><br><code>entity: sensor.hki_notify_main</code></p>
-        ` : ""}
-
         <div class="section">Info Display</div>
         <ha-select label="Display type" .value=${this._config.info_type || "none"} data-field="info_type" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
           <mwc-list-item value="none">None</mwc-list-item>
           <mwc-list-item value="weather">Weather</mwc-list-item>
           <mwc-list-item value="datetime">Date & Time</mwc-list-item>
           <mwc-list-item value="badge">Custom Badge</mwc-list-item>
+          <mwc-list-item value="custom">Custom Card</mwc-list-item>
         </ha-select>
 
         ${this._renderInfoTypeOptions()}
@@ -2279,8 +1996,6 @@ class HkiHeaderCardEditor extends LitElement {
       .code-wrap { display: flex; flex-direction: column; gap: 6px; }
       .code-label { font-size: 0.9rem; opacity: 0.9; }
       ha-code-editor { height: 180px; border-radius: 8px; overflow: hidden; }
-      .helper-text { font-size: 0.85rem; opacity: 0.7; margin: -4px 0 8px 0; line-height: 1.4; }
-      .helper-text code { background: rgba(0,0,0,0.1); padding: 2px 6px; border-radius: 4px; font-size: 0.85em; }
     `;
   }
 }
