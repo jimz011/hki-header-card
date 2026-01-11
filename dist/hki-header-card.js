@@ -1,11 +1,11 @@
-// HKI Header Card - Optimized & Updated with Custom Card Support
+// HKI Header Card - Optimized & Updated with Native Visual Editor for Custom Cards
 
 import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?module";
 
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.2.0 ',
+  '%c HKI-HEADER-CARD %c v1.3.0 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -1439,6 +1439,7 @@ class HkiHeaderCardEditor extends LitElement {
   static get properties() {
     return {
       hass: {},
+      lovelace: {},
       _config: { attribute: false },
     };
   }
@@ -1493,6 +1494,14 @@ class HkiHeaderCardEditor extends LitElement {
 
   _val(ev) {
     return ev.detail?.value ?? ev.target?.value;
+  }
+
+  _handleCustomCardChange(ev) {
+    ev.stopPropagation();
+    if (!this._config) return;
+    const newCardConfig = ev.detail.config;
+    this._config = { ...this._config, info_card: newCardConfig };
+    this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config } }));
   }
 
   _changed(ev, explicitField = null) {
@@ -1631,9 +1640,9 @@ class HkiHeaderCardEditor extends LitElement {
 
     if (infoType === "none") return html``;
 
-    // Shared positioning options
+    // Shared positioning options - visible for ALL types, including custom
     const sharedOptions = html`
-      <div class="section">Position</div>
+      <div class="section">Position & Style</div>
       <ha-select label="Alignment" .value=${cfg.info_align || "right"} data-field="info_align" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
         <mwc-list-item value="left">Left</mwc-list-item>
         <mwc-list-item value="right">Right</mwc-list-item>
@@ -1784,26 +1793,15 @@ class HkiHeaderCardEditor extends LitElement {
     }
 
     if (infoType === "custom") {
-        const yamlVal = this._config.info_card 
-          ? (typeof this._config.info_card === 'string' ? this._config.info_card : window.jsyaml.dump(this._config.info_card))
-          : "type: markdown\ncontent: Custom Card";
-      
         return html`
           <div class="section">Custom Card Configuration</div>
-          <ha-alert alert-type="info">
-            You can place any Lovelace card here (Markdown, Tile, Button, etc).
-          </ha-alert>
-          
-          <div class="code-wrap">
-            <div class="code-label">Card YAML</div>
-            <ha-code-editor 
-              .hass=${this.hass} 
-              .value=${yamlVal} 
-              mode="yaml" 
-              data-field="info_card" 
-              ?autocomplete-entities=${true}
-              @value-changed=${(ev) => this._changed(ev, "info_card")}
-            ></ha-code-editor>
+          <div class="card-config">
+            <hui-card-element-editor
+              .hass=${this.hass}
+              .lovelace=${this.lovelace}
+              .value=${this._config.info_card}
+              @config-changed=${this._handleCustomCardChange}
+            ></hui-card-element-editor>
           </div>
       
           ${sharedOptions}
