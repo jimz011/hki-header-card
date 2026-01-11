@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.1.1 ',
+  '%c HKI-HEADER-CARD %c v1.1.2 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -308,12 +308,9 @@ class HkiHeaderCard extends LitElement {
 
       ha-card.header {
         position: relative;
-        width: 100vw;
-        height: 35vh;
         min-height: 180px;
         max-height: 340px;
         margin: 0;
-        border-radius: 0;
         overflow: hidden;
         box-sizing: border-box;
         color: var(--hki-header-text-color, #fff);
@@ -1286,7 +1283,8 @@ class HkiHeaderCard extends LitElement {
     const subtitleText = this._isTemplateString(cfg.subtitle) ? (this._renderedSubtitle ?? "") : (cfg.subtitle ?? "");
     const subtitleVisible = !!subtitleText.trim();
 
-    const cardWidth = this._inPreview ? "100%" : "100vw";
+    // Layout Logic Update: If not fixed, behave like a normal card (100% width, no negative margins)
+    const cardWidth = effectiveFixed || this._inPreview ? "100vw" : "100%";
     const resolvedBackground = this._resolveBackground(cfg.background);
 
     const cardStyle = [
@@ -1298,10 +1296,15 @@ class HkiHeaderCard extends LitElement {
       cfg.background_position ? `background-position:${cfg.background_position}` : "",
       cfg.background_repeat ? `background-repeat:${cfg.background_repeat}` : "",
       cfg.background_size ? `background-size:${cfg.background_size}` : "",
+      !effectiveFixed ? "border-radius: var(--ha-card-border-radius, 12px)" : "", // Normal card radius if not fixed
     ].filter(Boolean).join(";");
 
     const overlayStyle = `background:linear-gradient(to bottom, transparent 0%, ${cfg.blend_color} ${cfg.blend_stop}%, ${cfg.blend_color} 100%);`;
-    const contentStyle = `margin-left:${this._offsetLeft}px;width:${this._contentWidth}px;`;
+    
+    // Logic Update: Only apply viewport offsetting if fixed
+    const contentStyle = effectiveFixed 
+      ? `margin-left:${this._offsetLeft}px;width:${this._contentWidth}px;`
+      : `width:100%;`;
 
     const fontFamily = this._resolveFontFamily();
     const fontStyle = cfg.font_style || "normal";
@@ -1429,6 +1432,30 @@ class HkiHeaderCardEditor extends LitElement {
         .helper=${helper}
         @value-changed=${(ev) => this._changed(ev, field)}
       ></ha-selector>
+    `;
+  }
+
+  _parseColor(value) {
+    return value || "";
+  }
+
+  _handleColorChange(ev, field) {
+    ev.stopPropagation();
+    const value = ev.detail.value;
+    this._changed({ target: { value } }, field);
+  }
+
+  _renderColorPicker(label, field, value) {
+    return html`
+      <div class="color-field">
+        <label>${label}</label>
+        <ha-selector
+          .hass=${this.hass}
+          .selector=${{ color_rgb: {} }}
+          .value=${this._parseColor(value)}
+          @value-changed=${(ev) => this._handleColorChange(ev, field)}
+        ></ha-selector>
+      </div>
     `;
   }
 
@@ -1567,7 +1594,7 @@ class HkiHeaderCardEditor extends LitElement {
 
     // Shared positioning options
     const sharedOptions = html`
-      <div class="section">Position & Style</div>
+      <div class="section">Position</div>
       <ha-select label="Alignment" .value=${cfg.info_align || "right"} data-field="info_align" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
         <mwc-list-item value="left">Left</mwc-list-item>
         <mwc-list-item value="right">Right</mwc-list-item>
@@ -1578,13 +1605,14 @@ class HkiHeaderCardEditor extends LitElement {
         <ha-textfield label="Vertical offset (px)" type="number" .value=${String(cfg.info_offset_y ?? 40)} data-field="info_offset_y" @input=${this._changed}></ha-textfield>
       </div>
 
-      <div class="section">Mobile offset</div>
+      <div class="section">Position (mobile phone)</div>
       <div class="inline-fields-2">
         <ha-textfield label="Mobile horizontal (px)" type="number" .value=${cfg.info_offset_x_mobile == null ? "" : String(cfg.info_offset_x_mobile)} data-field="info_offset_x_mobile" @input=${this._changed}></ha-textfield>
         <ha-textfield label="Mobile vertical (px)" type="number" .value=${cfg.info_offset_y_mobile == null ? "" : String(cfg.info_offset_y_mobile)} data-field="info_offset_y_mobile" @input=${this._changed}></ha-textfield>
       </div>
       <ha-textfield label="Mobile breakpoint (px)" type="number" .value=${String(cfg.mobile_breakpoint || 768)} data-field="mobile_breakpoint" @input=${this._changed}></ha-textfield>
 
+      <div class="section">Font Style</div>
       <div class="inline-fields-2">
         <ha-textfield label="Font size (px)" type="number" .value=${String(cfg.info_size_px || 12)} data-field="info_size_px" @input=${this._changed}></ha-textfield>
         <ha-select label="Font weight" .value=${cfg.info_weight || "medium"} data-field="info_weight" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
@@ -1597,7 +1625,7 @@ class HkiHeaderCardEditor extends LitElement {
         </ha-select>
       </div>
 
-      <ha-textfield label="Text color (CSS)" placeholder="inherit" .value=${cfg.info_color || ""} data-field="info_color" @input=${this._changed}></ha-textfield>
+      ${this._renderColorPicker("Text color", "info_color", cfg.info_color)}
 
       <div class="section">Pill background</div>
       <div class="switch-row">
@@ -1605,7 +1633,7 @@ class HkiHeaderCardEditor extends LitElement {
         <span>Enable pill</span>
       </div>
       ${cfg.info_pill ? html`
-        <ha-textfield label="Pill background (CSS)" .value=${cfg.info_pill_background || "rgba(0,0,0,0.25)"} data-field="info_pill_background" @input=${this._changed}></ha-textfield>
+        ${this._renderColorPicker("Pill background", "info_pill_background", cfg.info_pill_background)}
         <div class="inline-fields-2">
           <ha-textfield label="Padding X (px)" type="number" .value=${String(cfg.info_pill_padding_x ?? 10)} data-field="info_pill_padding_x" @input=${this._changed}></ha-textfield>
           <ha-textfield label="Padding Y (px)" type="number" .value=${String(cfg.info_pill_padding_y ?? 6)} data-field="info_pill_padding_y" @input=${this._changed}></ha-textfield>
@@ -1657,7 +1685,7 @@ class HkiHeaderCardEditor extends LitElement {
             </ha-select>
           </div>
           ${cfg.weather_icon_color_mode === "custom" ? html`
-            <ha-textfield label="Custom icon color (CSS)" .value=${cfg.weather_icon_color || ""} data-field="weather_icon_color" @input=${this._changed}></ha-textfield>
+            ${this._renderColorPicker("Custom icon color", "weather_icon_color", cfg.weather_icon_color)}
           ` : ""}
 
           ${sharedOptions}
@@ -1683,7 +1711,7 @@ class HkiHeaderCardEditor extends LitElement {
         <div class="section">Icon (optional)</div>
         ${this._renderIconPicker("Icon", "datetime_icon", cfg.datetime_icon, "Optional icon to display")}
         <div class="inline-fields-2">
-          <ha-textfield label="Icon color (CSS)" placeholder="inherit" .value=${cfg.datetime_icon_color || ""} data-field="datetime_icon_color" @input=${this._changed}></ha-textfield>
+          ${this._renderColorPicker("Icon color", "datetime_icon_color", cfg.datetime_icon_color)}
           <ha-select label="Icon animation" .value=${cfg.datetime_animate_icon || "none"} data-field="datetime_animate_icon" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
             <mwc-list-item value="none">None</mwc-list-item>
             <mwc-list-item value="float">Float</mwc-list-item>
@@ -1703,7 +1731,7 @@ class HkiHeaderCardEditor extends LitElement {
         ${this._renderTemplateEditor("Text (supports Jinja2)", "badge_text")}
 
         <div class="inline-fields-2">
-          <ha-textfield label="Icon color (CSS)" placeholder="inherit" .value=${cfg.badge_icon_color || ""} data-field="badge_icon_color" @input=${this._changed}></ha-textfield>
+          ${this._renderColorPicker("Icon color", "badge_icon_color", cfg.badge_icon_color)}
           <ha-select label="Icon animation" .value=${cfg.badge_animate_icon || "none"} data-field="badge_animate_icon" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
             <mwc-list-item value="none">None</mwc-list-item>
             <mwc-list-item value="float">Float</mwc-list-item>
@@ -1746,8 +1774,8 @@ class HkiHeaderCardEditor extends LitElement {
 
         <div class="section">Colors</div>
         <div class="inline-fields-2">
-          <ha-textfield label="Title color (CSS)" placeholder="inherit" .value=${this._config.title_color || ""} data-field="title_color" @input=${this._changed}></ha-textfield>
-          <ha-textfield label="Subtitle color (CSS)" placeholder="inherit" .value=${this._config.subtitle_color || ""} data-field="subtitle_color" @input=${this._changed}></ha-textfield>
+          ${this._renderColorPicker("Title color", "title_color", this._config.title_color)}
+          ${this._renderColorPicker("Subtitle color", "subtitle_color", this._config.subtitle_color)}
         </div>
 
         <div class="section">Title position</div>
@@ -1802,7 +1830,7 @@ class HkiHeaderCardEditor extends LitElement {
         </div>
 
         <div class="section">Blend</div>
-        <ha-textfield label="Blend color (CSS)" .value=${this._config.blend_color} data-field="blend_color" @input=${this._changed}></ha-textfield>
+        ${this._renderColorPicker("Blend color", "blend_color", this._config.blend_color)}
         <ha-textfield label="Blend stop (%)" type="number" .value=${String(this._config.blend_stop)} data-field="blend_stop" @input=${this._changed}></ha-textfield>
 
         <div class="section">Typography</div>
@@ -1901,6 +1929,9 @@ class HkiHeaderCardEditor extends LitElement {
       .code-wrap { display: flex; flex-direction: column; gap: 6px; }
       .code-label { font-size: 0.9rem; opacity: 0.9; }
       ha-code-editor { height: 180px; border-radius: 8px; overflow: hidden; }
+      .color-field { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+      .color-field label { flex: 1; color: var(--secondary-text-color); }
+      .color-field ha-selector { width: auto; }
     `;
   }
 }
