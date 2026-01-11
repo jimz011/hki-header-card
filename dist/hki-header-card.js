@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.1.2 ',
+  '%c HKI-HEADER-CARD %c v1.1.3 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -1095,9 +1095,12 @@ class HkiHeaderCard extends LitElement {
         if (action.url_path) window.open(action.url_path, "_blank");
         break;
       case "call-service":
-        if (action.service) {
-          const [domain, service] = action.service.split(".");
-          if (domain && service) this.hass.callService(domain, service, this._parseServiceData(action.service_data));
+      case "perform-action":
+        if (action.service || action.perform_action) {
+          const service = action.service || action.perform_action;
+          const [domain, serviceName] = service.split(".");
+          const data = { ...action.data, ...action.target };
+          if (domain && serviceName) this.hass.callService(domain, serviceName, data);
         }
         break;
       case "more-info": {
@@ -1436,13 +1439,25 @@ class HkiHeaderCardEditor extends LitElement {
   }
 
   _parseColor(value) {
-    return value || "";
+    if (!value || typeof value !== 'string') return [0, 0, 0];
+    const match = value.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+    if (match) {
+      const parts = [parseInt(match[1]), parseInt(match[2]), parseInt(match[3])];
+      if (match[4]) parts.push(parseFloat(match[4]));
+      return parts;
+    }
+    return [0, 0, 0];
   }
 
   _handleColorChange(ev, field) {
     ev.stopPropagation();
-    const value = ev.detail.value;
-    this._changed({ target: { value } }, field);
+    const rgb = ev.detail.value;
+    let colorString = "";
+    if (Array.isArray(rgb)) {
+      if (rgb.length === 3) colorString = `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+      if (rgb.length === 4) colorString = `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${rgb[3]})`;
+    }
+    this._changed({ target: { value: colorString } }, field);
   }
 
   _renderColorPicker(label, field, value) {
@@ -1504,10 +1519,6 @@ class HkiHeaderCardEditor extends LitElement {
       const [rootField, subField] = field.split(".");
       const currentValue = this._config[rootField] || {};
       next = { ...this._config, [rootField]: { ...currentValue, [subField]: value } };
-
-      if (subField === "action" && value === "call-service") {
-        next[rootField] = { ...next[rootField], service: next[rootField].service ?? "", service_data: next[rootField].service_data ?? "entity_id: \n" };
-      }
     } else {
       next = { ...this._config, [field]: value };
     }
@@ -1542,47 +1553,21 @@ class HkiHeaderCardEditor extends LitElement {
     `;
   }
 
-  _renderServiceDataEditor(field, serviceData) {
-    let value = "";
-    if (serviceData) {
-      if (typeof serviceData === 'string') value = serviceData;
-      else value = Object.entries(serviceData).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('\n');
-    }
+  _renderActionSelector(field) {
+    const actionData = this._config?.[field] || { action: "none" };
+    // This allows selecting any action (navigation, service call, url, etc)
+    // and returns the full structure (e.g. { action: "perform-action", perform_action: "...", ... })
     return html`
-      <div class="code-wrap">
-        <div class="code-label">Service data (YAML)</div>
-        <ha-code-editor .hass=${this.hass} .value=${value} mode="yaml" ?autocomplete-entities=${true} ?autocomplete-icons=${true} data-field="${field}.service_data" @value-changed=${this._changed}></ha-code-editor>
-      </div>
-    `;
-  }
-
-  _renderActionEditor(label, field) {
-    const action = this._config?.[field] || { action: "none" };
-    const actionType = action.action || "none";
-    const hasServicePicker = !!customElements.get("ha-service-picker");
-
-    return html`
-      <div class="code-wrap">
-        <div class="code-label">${label}</div>
-        <ha-select label="Action type" .value=${actionType} data-field="${field}.action" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-          <mwc-list-item value="none">None</mwc-list-item>
-          <mwc-list-item value="navigate">Navigate</mwc-list-item>
-          <mwc-list-item value="url">URL</mwc-list-item>
-          <mwc-list-item value="call-service">Call service</mwc-list-item>
-          <mwc-list-item value="more-info">More info</mwc-list-item>
-          <mwc-list-item value="toggle">Toggle</mwc-list-item>
-        </ha-select>
-        
-        ${actionType === "navigate" ? this._renderNavigationPicker("Navigation path", `${field}.navigation_path`, action.navigation_path || "", "Pick a view or enter a custom path") : ""}
-        ${actionType === "url" ? html`<ha-textfield label="URL" .value=${action.url_path || ""} data-field="${field}.url_path" @input=${this._changed}></ha-textfield>` : ""}
-        ${actionType === "call-service" ? html`
-          ${hasServicePicker
-            ? html`<ha-service-picker style="width:100%;display:block;" .hass=${this.hass} .value=${action.service || ""} @value-changed=${(ev) => this._changed(ev, `${field}.service`)}></ha-service-picker>`
-            : html`<ha-textfield label="Service" helper="e.g., light.turn_on" .value=${action.service || ""} data-field="${field}.service" @input=${this._changed}></ha-textfield>`}
-          ${this._renderServiceDataEditor(field, action.service_data)}
-        ` : ""}
-        ${actionType === "more-info" || actionType === "toggle" ? this._renderEntityPicker("Entity", `${field}.entity`, action.entity || "", "Entity to show info for or toggle") : ""}
-      </div>
+        <div class="code-wrap">
+            <div class="code-label">Tap Action</div>
+            <ha-selector
+                .hass=${this.hass}
+                .selector=${{ action: {} }}
+                .value=${actionData}
+                .label="Tap Action"
+                @value-changed=${(ev) => this._changed(ev, field)}
+            ></ha-selector>
+        </div>
     `;
   }
 
@@ -1644,7 +1629,7 @@ class HkiHeaderCardEditor extends LitElement {
         </div>
       ` : ""}
 
-      ${this._renderActionEditor("Tap action", "info_tap_action")}
+      ${this._renderActionSelector("info_tap_action")}
     `;
 
     // Type-specific options
@@ -1929,9 +1914,11 @@ class HkiHeaderCardEditor extends LitElement {
       .code-wrap { display: flex; flex-direction: column; gap: 6px; }
       .code-label { font-size: 0.9rem; opacity: 0.9; }
       ha-code-editor { height: 180px; border-radius: 8px; overflow: hidden; }
-      .color-field { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-      .color-field label { flex: 1; color: var(--secondary-text-color); }
-      .color-field ha-selector { width: auto; }
+      .color-field { display: flex; flex-direction: column; gap: 4px; background: var(--secondary-background-color); padding: 8px; border-radius: 8px; }
+      .color-field label { color: var(--secondary-text-color); font-size: 0.9rem; }
+      .color-field ha-selector { 
+        --ha-selector-color-height: 32px;
+      }
     `;
   }
 }
