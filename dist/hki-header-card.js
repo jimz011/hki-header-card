@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.5.0 ',
+  '%c HKI-HEADER-CARD %c v1.5.1 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -1652,6 +1652,15 @@ class HkiHeaderCardEditor extends LitElement {
     `;
   }
 
+  _renderSection(title, content, expanded = true) {
+      return html`
+        <details ?open=${expanded} class="box-section">
+            <summary>${title}</summary>
+            <div class="box-content">${content}</div>
+        </details>
+      `;
+  }
+
   _renderInfoTypeOptions() {
     const cfg = this._config;
     // We check both the legacy info_type OR if any of the top bar slots use a type
@@ -1720,13 +1729,12 @@ class HkiHeaderCardEditor extends LitElement {
       ${this._renderActionEditor("Tap action", "info_tap_action")}
     `;
 
-    // Type-specific options
-    let typeSpecificHTML = html``;
-    
+    // Render Global Styles Section
+    let optionsHTML = this._renderSection("Global Slot Styles", sharedOptions);
+
+    // Weather Section
     if (usesWeather) {
-      typeSpecificHTML = html`
-        ${typeSpecificHTML}
-        <div class="section">Weather Configuration</div>
+      const weatherContent = html`
         ${this._renderEntityPicker("Weather entity", "weather_entity", cfg.weather_entity, "Select a weather entity", "weather")}
 
         ${cfg.weather_entity ? html`
@@ -1765,12 +1773,12 @@ class HkiHeaderCardEditor extends LitElement {
           <ha-alert alert-type="warning">Please select a weather entity to configure weather display.</ha-alert>
         `}
       `;
+      optionsHTML = html`${optionsHTML} ${this._renderSection("Weather Settings", weatherContent)}`;
     }
 
+    // Date & Time Section
     if (usesDate) {
-      typeSpecificHTML = html`
-        ${typeSpecificHTML}
-        <div class="section">Date & Time Configuration</div>
+      const dateContent = html`
         <div class="inline-fields-3">
           <div class="switch-row"><ha-switch .checked=${cfg.datetime_show_day !== false} data-field="datetime_show_day" @change=${this._changed}></ha-switch><span>Day</span></div>
           <div class="switch-row"><ha-switch .checked=${cfg.datetime_show_date !== false} data-field="datetime_show_date" @change=${this._changed}></ha-switch><span>Date</span></div>
@@ -1792,12 +1800,12 @@ class HkiHeaderCardEditor extends LitElement {
           </ha-select>
         </div>
       `;
+      optionsHTML = html`${optionsHTML} ${this._renderSection("Date & Time Settings", dateContent)}`;
     }
 
+    // Custom Section
     if (usesCustom) {
-        typeSpecificHTML = html`
-          ${typeSpecificHTML}
-          <div class="section">Custom Card Configuration</div>
+        const customContent = html`
           <ha-alert alert-type="warning" style="margin-bottom: 8px;">
             This requires the <b>hki-notify</b> integration and the <b>custom:hki-notification-card</b> resource.
           </ha-alert>
@@ -1810,12 +1818,10 @@ class HkiHeaderCardEditor extends LitElement {
             ></hui-card-element-editor>
           </div>
         `;
+        optionsHTML = html`${optionsHTML} ${this._renderSection("Notification Settings", customContent)}`;
     }
 
-    return html`
-      ${typeSpecificHTML}
-      ${sharedOptions}
-    `;
+    return optionsHTML;
   }
 
   render() {
@@ -1873,21 +1879,21 @@ class HkiHeaderCardEditor extends LitElement {
                   <mwc-list-item value="none">None</mwc-list-item>
                   <mwc-list-item value="weather">Weather</mwc-list-item>
                   <mwc-list-item value="datetime">Time</mwc-list-item>
-                  <mwc-list-item value="custom">Custom</mwc-list-item>
+                  <mwc-list-item value="custom">Notifications</mwc-list-item>
                 </ha-select>
 
                 <ha-select label="Center Slot" .value=${this._config.top_bar_center || "none"} data-field="top_bar_center" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
                   <mwc-list-item value="none">None</mwc-list-item>
                   <mwc-list-item value="weather">Weather</mwc-list-item>
                   <mwc-list-item value="datetime">Time</mwc-list-item>
-                  <mwc-list-item value="custom">Custom</mwc-list-item>
+                  <mwc-list-item value="custom">Notifications</mwc-list-item>
                 </ha-select>
 
                 <ha-select label="Right Slot" .value=${this._config.top_bar_right || "none"} data-field="top_bar_right" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
                   <mwc-list-item value="none">None</mwc-list-item>
                   <mwc-list-item value="weather">Weather</mwc-list-item>
                   <mwc-list-item value="datetime">Time</mwc-list-item>
-                  <mwc-list-item value="custom">Custom</mwc-list-item>
+                  <mwc-list-item value="custom">Notifications</mwc-list-item>
                 </ha-select>
             </div>
             <div class="inline-fields-2">
@@ -2035,6 +2041,41 @@ class HkiHeaderCardEditor extends LitElement {
       .code-wrap { display: flex; flex-direction: column; gap: 6px; }
       .code-label { font-size: 0.9rem; opacity: 0.9; }
       ha-code-editor { height: 180px; border-radius: 8px; overflow: hidden; }
+      
+      /* Collapsible Sections */
+      details.box-section {
+        background: var(--secondary-background-color);
+        border-radius: 4px;
+        margin-bottom: 8px;
+        overflow: hidden;
+        border: 1px solid var(--divider-color);
+      }
+      summary {
+        padding: 12px;
+        cursor: pointer;
+        font-weight: 600;
+        background: var(--primary-background-color);
+        border-bottom: 1px solid var(--divider-color);
+        list-style: none; /* Hide default triangle in some browsers */
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      summary::-webkit-details-marker { display: none; } /* Hide Chrome marker */
+      summary::after {
+        content: '+'; 
+        font-weight: bold;
+        font-size: 1.2em;
+      }
+      details[open] summary::after {
+        content: '-';
+      }
+      .box-content {
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
     `;
   }
 }
