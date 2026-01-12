@@ -383,6 +383,8 @@ class HkiHeaderCard extends LitElement {
         gap: 8px;
         color: var(--hki-header-text-color, #fff);
         text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+        flex-shrink: 0;
+        flex-grow: 0;
       }
 
       .info-clickable {
@@ -432,17 +434,21 @@ class HkiHeaderCard extends LitElement {
         display: flex;
         align-items: center;
         min-height: 20px;
-        flex: 1;
+        flex: 1 1 0%;
+        min-width: 0;
       }
 
       .slot-left {
         justify-content: flex-start;
+        text-align: left;
       }
       .slot-center {
         justify-content: center;
+        text-align: center;
       }
       .slot-right {
         justify-content: flex-end;
+        text-align: right;
       }
 
       .animate-float { animation: hki-float 3s ease-in-out infinite; }
@@ -1205,7 +1211,7 @@ class HkiHeaderCard extends LitElement {
     // If using Top Bar, simply render the content relative
     if (isTopBar) {
         return html`
-            <div class="info-item" style="${infoInline} display: block; min-width: 50px;">
+            <div class="info-item" style="${infoInline} min-width: 50px;">
                 ${this._infoCardEl}
             </div>
         `;
