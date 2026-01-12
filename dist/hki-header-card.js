@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.5.0 ',
+  '%c HKI-HEADER-CARD %c v1.5.1 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -1413,31 +1413,63 @@ class HkiHeaderCardEditor extends LitElement {
   static get properties() { return { hass: {}, _config: { attribute: false } }; }
 
   setConfig(config) { this._config = { ...DEFAULTS, ...config }; }
+  
+  _val(ev) {
+    return ev.detail?.value ?? ev.target?.value;
+  }
 
-  _changed(ev) {
-      if (!this._config || !ev.target) return;
-      const target = ev.target;
-      const field = target.dataset.field; 
-      let value = ev.detail?.value ?? target.value;
-      
-      if (target.type === 'number') value = Number(value);
-      if (target.type === 'checkbox' || target.tagName === 'HA-SWITCH') value = target.checked;
-      
-      // Handle nested
-      if (field.includes('.')) {
-          const [p, c] = field.split('.');
-          const prev = this._config[p] || {};
-          // Specific logic for notification card yaml
-          if (field.includes('_content')) {
-             // Handled by custom event usually, but if manually edited:
-             // We generally skip text editing for object props to avoid complexity in this snippet
-          }
-          this._config = { ...this._config, [p]: { ...prev, [c]: value } };
-      } else {
-          this._config = { ...this._config, [field]: value };
+  _changed(ev, explicitField = null) {
+    ev.stopPropagation();
+    const field = explicitField || ev.target?.dataset?.field;
+    if (!field || !this._config) return;
+
+    let value = this._val(ev);
+
+    const numeric = new Set([
+      "height_vh", "min_height", "max_height", "blend_stop", "fixed_top",
+      "title_offset_x", "title_offset_y", "subtitle_offset_x", "subtitle_offset_y",
+      "title_size_px", "subtitle_size_px", "badges_offset_pinned", "badges_offset_unpinned",
+      "badges_gap", "info_offset_x", "info_offset_y", "info_size_px",
+      "mobile_breakpoint", "info_pill_padding_x", "info_pill_padding_y",
+      "info_pill_radius", "info_pill_blur", 
+      "left_offset_x", "left_offset_y", "center_offset_x", "center_offset_y", "right_offset_x", "right_offset_y"
+    ]);
+
+    const nullableNumeric = new Set(["info_offset_x_mobile", "info_offset_y_mobile"]);
+
+    if (nullableNumeric.has(field)) {
+      value = value === "" || value == null ? null : toNum(value, null);
+      if (value === null || !Number.isFinite(value)) value = null;
+    } else if (numeric.has(field)) {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return;
+      value = n;
+    }
+
+    const bools = new Set([
+      "fixed", "badges_fixed", "weather_show_icon", "weather_show_condition",
+      "weather_show_temperature", "weather_show_humidity", "weather_show_wind",
+      "weather_show_pressure", "weather_colored_icons", "info_pill",
+      "datetime_show_time", "datetime_show_date", "datetime_show_day",
+    ]);
+    if (bools.has(field)) value = !!(ev.target?.checked ?? value);
+
+    let next;
+
+    if (field.includes(".")) {
+      const [rootField, subField] = field.split(".");
+      const currentValue = this._config[rootField] || {};
+      next = { ...this._config, [rootField]: { ...currentValue, [subField]: value } };
+
+      if (subField === "action" && value === "call-service") {
+        next[rootField] = { ...next[rootField], service: next[rootField].service ?? "", service_data: next[rootField].service_data ?? "entity_id: \n" };
       }
-      
-      this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config } }));
+    } else {
+      next = { ...this._config, [field]: value };
+    }
+
+    this._config = next;
+    this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: next } }));
   }
 
   _handleCustomCardChange(ev, field) {
@@ -1446,7 +1478,26 @@ class HkiHeaderCardEditor extends LitElement {
       this._config = { ...this._config, [field]: newCardConfig };
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config } }));
   }
-
+  
+  _renderTemplateEditor(label, field, options = {}) {
+    const value = this._config?.[field] ?? "";
+    const { autocompleteIcons = false } = options;
+    return html`
+      <div class="code-wrap">
+        <div class="code-label">${label}</div>
+        <ha-code-editor 
+          .hass=${this.hass} 
+          .value=${value} 
+          mode="jinja2" 
+          data-field=${field} 
+          ?autocomplete-entities=${true}
+          ?autocomplete-icons=${autocompleteIcons}
+          @value-changed=${this._changed}
+        ></ha-code-editor>
+      </div>
+    `;
+  }
+  
   _renderSlotSettings(label, prefix) {
       const cfg = this._config;
       const type = cfg[`${prefix}_type`] || 'none';
@@ -1463,8 +1514,8 @@ class HkiHeaderCardEditor extends LitElement {
             
             ${type !== 'none' ? html`
                 <div class="inline-fields-2" style="margin-top:8px;">
-                    <ha-textfield label="Offset X (px)" type="number" .value=${cfg[`${prefix}_offset_x`]||0} data-field="${prefix}_offset_x" @change=${(e)=>this._changed(e)}></ha-textfield>
-                    <ha-textfield label="Offset Y (px)" type="number" .value=${cfg[`${prefix}_offset_y`]||0} data-field="${prefix}_offset_y" @change=${(e)=>this._changed(e)}></ha-textfield>
+                    <ha-textfield label="Offset X (px)" type="number" .value=${String(cfg[`${prefix}_offset_x`]||0)} data-field="${prefix}_offset_x" @input=${(e)=>this._changed(e)}></ha-textfield>
+                    <ha-textfield label="Offset Y (px)" type="number" .value=${String(cfg[`${prefix}_offset_y`]||0)} data-field="${prefix}_offset_y" @input=${(e)=>this._changed(e)}></ha-textfield>
                 </div>
             ` : ''}
 
@@ -1494,9 +1545,20 @@ class HkiHeaderCardEditor extends LitElement {
   render() {
     if (!this._config) return html``;
     const cfg = this._config;
+    const showCustomFont = cfg.font_family === "custom";
 
     return html`
       <div class="card-config">
+        <div class="disclaimer">
+          <ha-alert alert-type="info" title="Documentation">
+            This card should be placed in the header section! Please read the documentation at 
+            <a href="https://github.com/jimz011/hki-header-card" target="_blank" rel="noopener noreferrer">github.com/jimz011/hki-header-card</a>
+            to set up this card. <br><br>
+            This card may contain bugs. Use at your own risk!
+          </ha-alert>
+        </div>
+      
+        <div class="section">Layout Configuration</div>
         <ha-select label="Layout Mode" .value=${cfg.layout_mode} data-field="layout_mode" @selected=${(e)=>this._changed(e)} @closed=${(e)=>e.stopPropagation()}>
             <mwc-list-item value="default">Legacy (Floating)</mwc-list-item>
             <mwc-list-item value="top_bar">Top Bar (Slots)</mwc-list-item>
@@ -1521,8 +1583,8 @@ class HkiHeaderCardEditor extends LitElement {
                  <hui-card-element-editor .hass=${this.hass} .value=${cfg.info_card} @config-changed=${(e)=>this._handleCustomCardChange(e, 'info_card')}></hui-card-element-editor>
             ` : ''}
             <div class="inline-fields-2">
-                <ha-textfield label="Offset X" type="number" .value=${cfg.info_offset_x} data-field="info_offset_x" @change=${(e)=>this._changed(e)}></ha-textfield>
-                <ha-textfield label="Offset Y" type="number" .value=${cfg.info_offset_y} data-field="info_offset_y" @change=${(e)=>this._changed(e)}></ha-textfield>
+                <ha-textfield label="Offset X" type="number" .value=${String(cfg.info_offset_x)} data-field="info_offset_x" @input=${(e)=>this._changed(e)}></ha-textfield>
+                <ha-textfield label="Offset Y" type="number" .value=${String(cfg.info_offset_y)} data-field="info_offset_y" @input=${(e)=>this._changed(e)}></ha-textfield>
             </div>
             <ha-select label="Alignment" .value=${cfg.info_align} data-field="info_align" @selected=${(e)=>this._changed(e)} @closed=${(e)=>e.stopPropagation()}>
                 <mwc-list-item value="left">Left</mwc-list-item>
@@ -1530,10 +1592,10 @@ class HkiHeaderCardEditor extends LitElement {
             </ha-select>
         `}
 
-        <div class="section">Global Settings (Weather/Date)</div>
+        <div class="section">Slot/Info Styling (Global)</div>
         <div class="inline-fields-2">
-             <ha-textfield label="Font Size (px)" type="number" .value=${cfg.info_size_px} data-field="info_size_px" @change=${(e)=>this._changed(e)}></ha-textfield>
-             <ha-textfield label="Color" .value=${cfg.info_color} data-field="info_color" @change=${(e)=>this._changed(e)}></ha-textfield>
+             <ha-textfield label="Font Size (px)" type="number" .value=${String(cfg.info_size_px)} data-field="info_size_px" @input=${(e)=>this._changed(e)}></ha-textfield>
+             <ha-textfield label="Color" .value=${cfg.info_color} data-field="info_color" @input=${(e)=>this._changed(e)}></ha-textfield>
         </div>
         ${cfg.layout_mode === 'default' || cfg.left_type === 'weather' || cfg.center_type === 'weather' || cfg.right_type === 'weather' || cfg.info_type === 'weather' ? html`
              <ha-entity-picker label="Global Weather Entity" .hass=${this.hass} .value=${cfg.weather_entity} .includeDomains=${['weather']} data-field="weather_entity" @value-changed=${(e)=>this._changed(e)}></ha-entity-picker>
@@ -1541,11 +1603,140 @@ class HkiHeaderCardEditor extends LitElement {
              <div class="switch-row"><ha-switch .checked=${cfg.weather_show_temperature} data-field="weather_show_temperature" @change=${(e)=>this._changed(e)}></ha-switch><span>Show Temp</span></div>
              <div class="switch-row"><ha-switch .checked=${cfg.weather_show_condition} data-field="weather_show_condition" @change=${(e)=>this._changed(e)}></ha-switch><span>Show Condition</span></div>
         ` : ''}
+        
+        <div class="section" style="border-top: 2px solid var(--divider-color); margin-top: 20px; padding-top: 20px;">Main Card Configuration</div>
+        
+        ${this._renderTemplateEditor("Title (Accepts jinja2 templates)", "title")}
+        ${this._renderTemplateEditor("Subtitle (Accepts jinja2 templates)", "subtitle")}
 
-        <div class="section">Main Header Config</div>
-        <ha-textfield label="Title" .value=${cfg.title} data-field="title" @change=${(e)=>this._changed(e)}></ha-textfield>
-        <ha-textfield label="Subtitle" .value=${cfg.subtitle} data-field="subtitle" @change=${(e)=>this._changed(e)}></ha-textfield>
-        <ha-textfield label="Background" .value=${cfg.background} data-field="background" @change=${(e)=>this._changed(e)}></ha-textfield>
+        <ha-select label="Text alignment" .value=${cfg.text_align} data-field="text_align" @selected=${this._changed} @closed=${this._changed}>
+          <mwc-list-item value="left">Left</mwc-list-item>
+          <mwc-list-item value="center">Center</mwc-list-item>
+          <mwc-list-item value="right">Right</mwc-list-item>
+        </ha-select>
+
+        <div class="section">Colors</div>
+        <div class="inline-fields-2">
+          <ha-textfield label="Title color (CSS)" placeholder="inherit" .value=${cfg.title_color || ""} data-field="title_color" @input=${this._changed}></ha-textfield>
+          <ha-textfield label="Subtitle color (CSS)" placeholder="inherit" .value=${cfg.subtitle_color || ""} data-field="subtitle_color" @input=${this._changed}></ha-textfield>
+        </div>
+
+        <div class="section">Title position</div>
+        <div class="inline-fields-2">
+          <ha-textfield label="Title horizontal offset (px)" type="number" .value=${String(cfg.title_offset_x)} data-field="title_offset_x" @input=${this._changed}></ha-textfield>
+          <ha-textfield label="Title vertical offset (px)" type="number" .value=${String(cfg.title_offset_y)} data-field="title_offset_y" @input=${this._changed}></ha-textfield>
+        </div>
+
+        <div class="section">Subtitle position</div>
+        <div class="inline-fields-2">
+          <ha-textfield label="Subtitle horizontal offset (px)" type="number" .value=${String(cfg.subtitle_offset_x)} data-field="subtitle_offset_x" @input=${this._changed}></ha-textfield>
+          <ha-textfield label="Subtitle vertical offset (px)" type="number" .value=${String(cfg.subtitle_offset_y)} data-field="subtitle_offset_y" @input=${this._changed}></ha-textfield>
+        </div>
+
+        <div class="section">Background</div>
+        <ha-textfield label="Background (color/gradient/url)" helper="Auto-wraps image paths in url() - just enter /local/image.jpg or color value" .value=${cfg.background} data-field="background" @input=${this._changed}></ha-textfield>
+
+        <ha-select label="Background position" .value=${cfg.background_position} data-field="background_position" @selected=${this._changed} @closed=${this._changed}>
+          <mwc-list-item value="top">Top</mwc-list-item>
+          <mwc-list-item value="center">Center</mwc-list-item>
+          <mwc-list-item value="bottom">Bottom</mwc-list-item>
+          <mwc-list-item value="left">Left</mwc-list-item>
+          <mwc-list-item value="right">Right</mwc-list-item>
+        </ha-select>
+
+        <ha-select label="Background repeat" .value=${cfg.background_repeat} data-field="background_repeat" @selected=${this._changed} @closed=${this._changed}>
+          <mwc-list-item value="no-repeat">No repeat</mwc-list-item>
+          <mwc-list-item value="repeat">Repeat</mwc-list-item>
+          <mwc-list-item value="repeat-x">Repeat horizontally</mwc-list-item>
+          <mwc-list-item value="repeat-y">Repeat vertically</mwc-list-item>
+        </ha-select>
+
+        <ha-select label="Background size" .value=${cfg.background_size} data-field="background_size" @selected=${this._changed} @closed=${this._changed}>
+          <mwc-list-item value="cover">Cover</mwc-list-item>
+          <mwc-list-item value="contain">Contain</mwc-list-item>
+          <mwc-list-item value="auto">Auto</mwc-list-item>
+        </ha-select>
+
+        <div class="inline-fields-2">
+          <ha-textfield label="Min height (px)" type="number" .value=${String(cfg.min_height)} data-field="min_height" @input=${this._changed}></ha-textfield>
+          <ha-textfield label="Max height (px)" type="number" .value=${String(cfg.max_height)} data-field="max_height" @input=${this._changed}></ha-textfield>
+        </div>
+
+        <div class="section">Blend</div>
+        <ha-textfield label="Blend color (CSS)" .value=${cfg.blend_color} data-field="blend_color" @input=${this._changed}></ha-textfield>
+        <ha-textfield label="Blend stop (%)" type="number" .value=${String(cfg.blend_stop)} data-field="blend_stop" @input=${this._changed}></ha-textfield>
+
+        <div class="section">Typography</div>
+        <ha-select label="Font family" .value=${cfg.font_family} data-field="font_family" @selected=${this._changed} @closed=${this._changed}>
+          <mwc-list-item value="inherit">Inherit</mwc-list-item>
+          <mwc-list-item value="system">System</mwc-list-item>
+          <mwc-list-item value="roboto">Roboto</mwc-list-item>
+          <mwc-list-item value="inter">Inter</mwc-list-item>
+          <mwc-list-item value="arial">Arial</mwc-list-item>
+          <mwc-list-item value="georgia">Georgia</mwc-list-item>
+          <mwc-list-item value="mono">Monospace</mwc-list-item>
+          <mwc-list-item value="custom">Custom…</mwc-list-item>
+        </ha-select>
+
+        ${showCustomFont ? html`<ha-textfield label="Custom font-family (CSS)" .value=${cfg.font_family_custom} data-field="font_family_custom" @input=${this._changed}></ha-textfield>` : ""}
+
+        <ha-select label="Font style" .value=${cfg.font_style} data-field="font_style" @selected=${this._changed} @closed=${this._changed}>
+          <mwc-list-item value="normal">Normal</mwc-list-item>
+          <mwc-list-item value="italic">Italic</mwc-list-item>
+        </ha-select>
+
+        <div class="inline-fields-2">
+          <ha-textfield label="Title size (px)" type="number" .value=${String(cfg.title_size_px)} data-field="title_size_px" @input=${this._changed}></ha-textfield>
+          <ha-textfield label="Subtitle size (px)" type="number" .value=${String(cfg.subtitle_size_px)} data-field="subtitle_size_px" @input=${this._changed}></ha-textfield>
+        </div>
+
+        <div class="inline-fields-2">
+          <ha-select label="Title weight" .value=${cfg.title_weight} data-field="title_weight" @selected=${this._changed} @closed=${this._changed}>
+            <mwc-list-item value="light">Light</mwc-list-item>
+            <mwc-list-item value="regular">Regular</mwc-list-item>
+            <mwc-list-item value="medium">Medium</mwc-list-item>
+            <mwc-list-item value="semibold">Semi-bold</mwc-list-item>
+            <mwc-list-item value="bold">Bold</mwc-list-item>
+            <mwc-list-item value="black">Black</mwc-list-item>
+          </ha-select>
+
+          <ha-select label="Subtitle weight" .value=${cfg.subtitle_weight} data-field="subtitle_weight" @selected=${this._changed} @closed=${this._changed}>
+            <mwc-list-item value="light">Light</mwc-list-item>
+            <mwc-list-item value="regular">Regular</mwc-list-item>
+            <mwc-list-item value="medium">Medium</mwc-list-item>
+            <mwc-list-item value="semibold">Semi-bold</mwc-list-item>
+            <mwc-list-item value="bold">Bold</mwc-list-item>
+            <mwc-list-item value="black">Black</mwc-list-item>
+          </ha-select>
+        </div>
+
+        <div class="section">Fixed header</div>
+        <div class="switch-row">
+          <ha-formfield label="Keep header fixed to top">
+            <ha-switch .checked=${!!cfg.fixed} data-field="fixed" @change=${this._changed}></ha-switch>
+          </ha-formfield>
+        </div>
+
+        ${cfg.fixed ? html`<ha-textfield label="Fixed top offset (px)" type="number" .value=${String(cfg.fixed_top)} data-field="fixed_top" @input=${this._changed}></ha-textfield>` : ""}
+
+        <div class="section">Badge positioning</div>
+        
+        <ha-alert alert-type="warning" class="badge-warning">
+          For badge positioning to work, this card must be placed in the <strong>header slot</strong> of your view/section. Otherwise, these badge settings will have no effect. <br><br>
+          NOTE: This card does not manage or display any badges itself. Badges must be added separately using Home Assistant's native badge support (e.g. via the "badges" option in your Lovelace view/section configuration).
+        </ha-alert>
+        
+        <div class="switch-row">
+          <ha-formfield label="Pin badges in place (content scrolls beneath)">
+            <ha-switch .checked=${!!cfg.badges_fixed} data-field="badges_fixed" @change=${this._changed}></ha-switch>
+          </ha-formfield>
+        </div>
+        
+        ${cfg.badges_fixed
+          ? html`<ha-textfield label="Badges vertical offset when pinned (px)" helper="Negative values pull badges up (into header), positive values push down" type="number" .value=${String(cfg.badges_offset_pinned)} data-field="badges_offset_pinned" @input=${this._changed}></ha-textfield>`
+          : html`<ha-textfield label="Badges vertical offset when unpinned (px)" helper="Negative values pull badges up (into header), positive values push down" type="number" .value=${String(cfg.badges_offset_unpinned)} data-field="badges_offset_unpinned" @input=${this._changed}></ha-textfield>`}
+        
+        <ha-textfield label="Gap under badges (px)" helper="Space between badges and next content (auto-adjusts -48px when pinned, +48px in kiosk mode)" type="number" .value=${String(cfg.badges_gap)} data-field="badges_gap" @input=${this._changed}></ha-textfield>
       </div>
     `;
   }
@@ -1553,11 +1744,19 @@ class HkiHeaderCardEditor extends LitElement {
   static get styles() {
     return css`
       .card-config { display: flex; flex-direction: column; gap: 12px; padding: 8px; }
+      .disclaimer { margin-bottom: 8px; }
+      .disclaimer ha-alert { margin-bottom: 0; }
+      .disclaimer a { color: var(--primary-color); text-decoration: none; }
+      .disclaimer a:hover { text-decoration: underline; }
+      .badge-warning { margin-bottom: 12px; }
       .section { margin-top: 12px; font-weight: 600; text-transform: uppercase; font-size: 0.9em; opacity: 0.8; }
       .description { font-size: 0.85em; opacity: 0.7; margin: -8px 0 8px 0; }
       .inline-fields-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
       .switch-row { display: flex; align-items: center; gap: 12px; margin: 4px 0; }
-      ha-select, ha-textfield { width: 100%; }
+      ha-select, ha-textfield, ha-code-editor { width: 100%; }
+      .code-wrap { display: flex; flex-direction: column; gap: 6px; }
+      .code-label { font-size: 0.9rem; opacity: 0.9; }
+      ha-code-editor { height: 180px; border-radius: 8px; overflow: hidden; }
     `;
   }
 }
