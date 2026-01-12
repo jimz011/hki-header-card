@@ -103,7 +103,7 @@ const DEFAULTS = Object.freeze({
   top_bar_center: "none",
   top_bar_right: "none",
   top_bar_offset_y: 10,
-  top_bar_padding_x: 10,
+  top_bar_padding_x: 5,
   // Per-slot offsets
   top_bar_left_offset_x: 0,
   top_bar_left_offset_y: 0,
@@ -817,7 +817,7 @@ class HkiHeaderCard extends LitElement {
     // Top Bar Settings
     m.top_bar_enabled = !!m.top_bar_enabled;
     m.top_bar_offset_y = toNum(m.top_bar_offset_y, 10);
-    m.top_bar_padding_x = toNum(m.top_bar_padding_x, 10);
+    m.top_bar_padding_x = toNum(m.top_bar_padding_x, 5);
     m.top_bar_left = ["none", "weather", "datetime", "custom"].includes(m.top_bar_left) ? m.top_bar_left : "none";
     m.top_bar_center = ["none", "weather", "datetime", "custom"].includes(m.top_bar_center) ? m.top_bar_center : "none";
     m.top_bar_right = ["none", "weather", "datetime", "custom"].includes(m.top_bar_right) ? m.top_bar_right : "none";
@@ -1353,7 +1353,9 @@ class HkiHeaderCard extends LitElement {
       if (!this._config.top_bar_enabled) return html``;
 
       const cfg = this._config;
-      const topStyle = `top: ${cfg.top_bar_offset_y || 10}px; padding: 0 ${cfg.top_bar_padding_x || 10}px;`;
+      const offsetY = cfg.top_bar_offset_y !== undefined ? cfg.top_bar_offset_y : 10;
+      const paddingX = cfg.top_bar_padding_x !== undefined ? cfg.top_bar_padding_x : 5;
+      const topStyle = `top: ${offsetY}px; padding: 0 ${paddingX}px;`;
       
       // Per-slot offset styles
       const leftOffsetX = cfg.top_bar_left_offset_x || 0;
@@ -1929,8 +1931,8 @@ class HkiHeaderCardEditor extends LitElement {
                 </ha-select>
             </div>
             <div class="inline-fields-2">
-                <ha-textfield label="Bar vertical offset (px)" type="number" .value=${String(this._config.top_bar_offset_y || 10)} data-field="top_bar_offset_y" @input=${this._changed}></ha-textfield>
-                <ha-textfield label="Bar padding X (px)" type="number" .value=${String(this._config.top_bar_padding_x || 10)} data-field="top_bar_padding_x" @input=${this._changed}></ha-textfield>
+                <ha-textfield label="Bar vertical offset (px)" type="number" .value=${String(this._config.top_bar_offset_y ?? 10)} data-field="top_bar_offset_y" @input=${this._changed}></ha-textfield>
+                <ha-textfield label="Bar padding X (px)" type="number" .value=${String(this._config.top_bar_padding_x ?? 5)} data-field="top_bar_padding_x" @input=${this._changed}></ha-textfield>
             </div>
             
             <details class="box-section">
