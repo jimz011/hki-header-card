@@ -1221,12 +1221,30 @@ class HkiHeaderCard extends LitElement {
     
     const cfg = this._config;
     // Reuse the positioning logic
-    const { posStyle, infoInline } = this._getInfoContainerStyle(cfg, isTopBar);
+    const { posStyle, infoInline, iconSize } = this._getInfoContainerStyle(cfg, isTopBar);
+    const fontFamily = this._resolveFontFamily();
+    
+    // CSS variables for nested notification card to inherit styling
+    const notifyVars = [
+      `--hki-notify-font-size: ${cfg.info_size_px || 12}px`,
+      `--hki-notify-font-weight: ${this._resolveWeight("info_weight")}`,
+      `--hki-notify-color: ${cfg.info_color?.trim() || "var(--hki-header-text-color, #fff)"}`,
+      `--hki-notify-icon-size: ${iconSize}px`,
+      `--hki-notify-font-family: ${fontFamily}`,
+      `--hki-notify-font-style: ${cfg.font_style || "normal"}`,
+      // Pill styling
+      `--hki-notify-pill-enabled: ${cfg.info_pill ? '1' : '0'}`,
+      `--hki-notify-pill-bg: ${cfg.info_pill_background || 'rgba(0, 0, 0, 0.25)'}`,
+      `--hki-notify-pill-padding-x: ${cfg.info_pill_padding_x ?? 10}px`,
+      `--hki-notify-pill-padding-y: ${cfg.info_pill_padding_y ?? 6}px`,
+      `--hki-notify-pill-radius: ${cfg.info_pill_radius ?? 999}px`,
+      `--hki-notify-pill-blur: ${cfg.info_pill_blur ?? 0}px`
+    ].join(';');
 
     // If using Top Bar, simply render the content relative
     if (isTopBar) {
         return html`
-            <div class="info-item" style="${infoInline} min-width: 50px;">
+            <div class="info-item" style="${infoInline} ${notifyVars}; min-width: 50px;">
                 ${this._infoCardEl}
             </div>
         `;
@@ -1234,7 +1252,7 @@ class HkiHeaderCard extends LitElement {
 
     // Legacy absolute positioning
     return html`
-      <div class="info-container" style="${posStyle} ${infoInline} display: block; min-width: 100px;">
+      <div class="info-container" style="${posStyle} ${infoInline} ${notifyVars}; display: block; min-width: 100px;">
         ${this._infoCardEl}
       </div>
     `;
