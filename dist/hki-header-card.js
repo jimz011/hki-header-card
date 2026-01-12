@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.5.2 ',
+  '%c HKI-HEADER-CARD %c v1.5.3 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -106,6 +106,11 @@ const DEFAULTS = Object.freeze({
   top_bar_left: "none",
   top_bar_center: "none",
   top_bar_right: "none",
+  
+  // Default custom cards for slots
+  top_bar_left_card: { type: "custom:hki-notification-card" },
+  top_bar_center_card: { type: "custom:hki-notification-card" },
+  top_bar_right_card: { type: "custom:hki-notification-card" },
 
   // Global Info Styling (defaults for all slots)
   info_size_px: 12,
@@ -121,9 +126,6 @@ const DEFAULTS = Object.freeze({
   info_pill_border_width: 0,
   info_pill_border_color: "rgba(255,255,255,0.1)",
 
-  // Notification card config (for custom slot)
-  info_card: { type: "custom:hki-notification-card" },
-
   // Defaults fallback if per-slot is missing (Legacy)
   weather_entity: "",
   weather_show_icon: true,
@@ -135,6 +137,7 @@ const DEFAULTS = Object.freeze({
   weather_colored_icons: true,
   weather_icon_color_mode: "state",
   weather_animate_icon: "none",
+  weather_icon_pack_path: "",
   datetime_show_time: true,
   datetime_show_date: true,
   datetime_show_day: true,
@@ -240,7 +243,7 @@ class HkiHeaderCard extends LitElement {
       _renderedTitle: { type: String },
       _renderedSubtitle: { type: String },
       _currentTime: { type: Number },
-      _infoCardEl: { attribute: false },
+      _customCards: { attribute: false }, // Store elements for left/center/right
     };
   }
 
@@ -257,7 +260,7 @@ class HkiHeaderCard extends LitElement {
     this._renderedTitle = "";
     this._renderedSubtitle = "";
     this._currentTime = Date.now();
-    this._infoCardEl = null;
+    this._customCards = { left: null, center: null, right: null };
 
     // Handlers & observers
     this._resizeHandler = null;
@@ -346,17 +349,6 @@ class HkiHeaderCard extends LitElement {
       .header-spacer {
         width: 100%;
         display: block;
-      }
-
-      /* INFO CONTAINER (Legacy Absolute) */
-      .info-container {
-        position: absolute;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        color: var(--hki-header-text-color, #fff);
-        text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
-        z-index: 2;
       }
 
       /* INFO ITEM (Flex Child for Top Bar) */
@@ -556,7 +548,7 @@ class HkiHeaderCard extends LitElement {
 
     // Time update interval for datetime display
     this._timeInterval = setInterval(() => {
-      if (this._config?.info_type === "datetime" || this._config?.top_bar_enabled) {
+      if (this._config?.top_bar_enabled) {
         this._currentTime = Date.now();
         this.requestUpdate();
       }
@@ -577,9 +569,7 @@ class HkiHeaderCard extends LitElement {
     this._scheduleTemplateSetup(0);
     this._debouncedBadgesZIndex();
 
-    if (this._config && (this._config.info_type === "custom" || this._config.top_bar_enabled) && this._config.info_card) {
-      this._createCustomCard();
-    }
+    this._updateCustomCards();
   }
 
   updated(changed) {
@@ -588,10 +578,7 @@ class HkiHeaderCard extends LitElement {
       this._debouncedMeasure(true);
       this._scheduleTemplateSetup(80);
       this._debouncedBadgesZIndex();
-
-      if (this._config && (this._config.info_type === "custom" || this._config.top_bar_enabled) && this._config.info_card) {
-        this._createCustomCard();
-      }
+      this._updateCustomCards();
       return;
     }
 
@@ -609,9 +596,10 @@ class HkiHeaderCard extends LitElement {
       }
       this._debouncedBadgesZIndex();
 
-      if (this._infoCardEl) {
-        this._infoCardEl.hass = this.hass;
-      }
+      // Pass hass to custom cards
+      Object.values(this._customCards).forEach(el => {
+        if (el) el.hass = this.hass;
+      });
     }
 
     if (changed.has("_kioskMode")) {
@@ -780,28 +768,6 @@ class HkiHeaderCard extends LitElement {
 
     const m = { ...DEFAULTS, ...config };
 
-    // Backward compatibility: migrate old weather_* positioning to info_*
-    if (config.weather_align !== undefined && config.info_align === undefined) m.info_align = config.weather_align;
-    if (config.weather_offset_x !== undefined && config.info_offset_x === undefined) m.info_offset_x = config.weather_offset_x;
-    if (config.weather_offset_y !== undefined && config.info_offset_y === undefined) m.info_offset_y = config.weather_offset_y;
-    if (config.weather_offset_x_mobile !== undefined && config.info_offset_x_mobile === undefined) m.info_offset_x_mobile = config.weather_offset_x_mobile;
-    if (config.weather_offset_y_mobile !== undefined && config.info_offset_y_mobile === undefined) m.info_offset_y_mobile = config.weather_offset_y_mobile;
-    if (config.weather_size_px !== undefined && config.info_size_px === undefined) m.info_size_px = config.weather_size_px;
-    if (config.weather_weight !== undefined && config.info_weight === undefined) m.info_weight = config.weather_weight;
-    if (config.weather_color !== undefined && config.info_color === undefined) m.info_color = config.weather_color;
-    if (config.weather_pill !== undefined && config.info_pill === undefined) m.info_pill = config.weather_pill;
-    if (config.weather_pill_background !== undefined && config.info_pill_background === undefined) m.info_pill_background = config.weather_pill_background;
-    if (config.weather_pill_padding_x !== undefined && config.info_pill_padding_x === undefined) m.info_pill_padding_x = config.weather_pill_padding_x;
-    if (config.weather_pill_padding_y !== undefined && config.info_pill_padding_y === undefined) m.info_pill_padding_y = config.weather_pill_padding_y;
-    if (config.weather_pill_radius !== undefined && config.info_pill_radius === undefined) m.info_pill_radius = config.weather_pill_radius;
-    if (config.weather_pill_blur !== undefined && config.info_pill_blur === undefined) m.info_pill_blur = config.weather_pill_blur;
-    if (config.weather_tap_action !== undefined && config.info_tap_action === undefined) m.info_tap_action = config.weather_tap_action;
-
-    // Auto-detect info_type for backward compatibility
-    if (config.info_type === undefined && config.weather_entity) {
-      m.info_type = "weather";
-    }
-
     // Numeric clamping
     m.height_vh = clamp(+m.height_vh, 10, 100);
     m.min_height = clamp(+m.min_height, 60, 2000);
@@ -887,9 +853,6 @@ class HkiHeaderCard extends LitElement {
     m.subtitle_size_px = clamp(+m.subtitle_size_px || 15, 8, 128);
     m.title_weight = normalizeWeightKey(m.title_weight ?? "bold", "bold");
     m.subtitle_weight = normalizeWeightKey(m.subtitle_weight ?? "medium", "medium");
-
-    // Info type validation
-    m.info_type = ["none", "weather", "datetime", "custom"].includes(m.info_type) ? m.info_type : "none";
 
     this._config = m;
     this._scheduleTemplateSetup(0);
@@ -1163,8 +1126,12 @@ class HkiHeaderCard extends LitElement {
     switch (action.action) {
       case "navigate":
         if (action.navigation_path) {
-          history.pushState(null, "", action.navigation_path);
-          window.dispatchEvent(new CustomEvent("location-changed", { bubbles: true, composed: true, detail: { replace: false } }));
+          if (action.navigation_path === "back") {
+             history.back();
+          } else {
+             history.pushState(null, "", action.navigation_path);
+             window.dispatchEvent(new CustomEvent("location-changed", { bubbles: true, composed: true, detail: { replace: false } }));
+          }
         }
         break;
       case "url":
@@ -1202,186 +1169,36 @@ class HkiHeaderCard extends LitElement {
     if (isTopBar) {
         return { posStyle: "", infoInline, pillStyle, iconSize };
     }
-
-    const isMobile = this._viewportWidth > 0 && this._viewportWidth <= (cfg.mobile_breakpoint || 768);
-    const offsetX = isMobile && cfg.info_offset_x_mobile != null ? cfg.info_offset_x_mobile : cfg.info_offset_x;
-    const offsetY = isMobile && cfg.info_offset_y_mobile != null ? cfg.info_offset_y_mobile : cfg.info_offset_y;
-
-    const posStyle = cfg.info_align === "left"
-      ? `left:${offsetX}px;top:${offsetY}px;--info-icon-size:${iconSize}px;`
-      : `right:${offsetX}px;top:${offsetY}px;--info-icon-size:${iconSize}px;`;
-
-    return { posStyle, infoInline, pillStyle, iconSize };
+    
+    return { posStyle: "", infoInline, pillStyle, iconSize };
   }
 
-  async _createCustomCard() {
+  async _updateCustomCards() {
     if (!window.loadCardHelpers) return;
     
-    // cleanup old card
-    if (this._infoCardEl) this._infoCardEl = null;
-
-    try {
-      const helpers = await window.loadCardHelpers();
-      const element = await helpers.createCardElement(this._config.info_card);
-      
-      if (this.hass) element.hass = this.hass;
-      
-      // Style adjustments to make it fit nicely
-      element.style.display = "block";
-      
-      this._infoCardEl = element;
-    } catch (e) {
-      console.error("Failed to create custom card", e);
-    }
-  }
-
-  _renderCustomCard(isTopBar = false) {
-    if (!this._infoCardEl) return html``;
+    const slots = ['left', 'center', 'right'];
+    const helpers = await window.loadCardHelpers();
     
-    const cfg = this._config;
-    // Reuse the positioning logic
-    const { posStyle, infoInline, iconSize } = this._getInfoContainerStyle(cfg, isTopBar);
-    const fontFamily = this._resolveFontFamily();
-    
-    // CSS variables for nested notification card to inherit styling
-    const notifyVars = [
-      `--hki-notify-font-size: ${cfg.info_size_px || 12}px`,
-      `--hki-notify-font-weight: ${this._resolveWeight("info_weight")}`,
-      `--hki-notify-color: ${cfg.info_color?.trim() || "var(--hki-header-text-color, #fff)"}`,
-      `--hki-notify-icon-size: ${iconSize}px`,
-      `--hki-notify-font-family: ${fontFamily}`,
-      `--hki-notify-font-style: ${cfg.font_style || "normal"}`,
-      // Pill styling
-      `--hki-notify-pill-enabled: ${cfg.info_pill ? '1' : '0'}`,
-      `--hki-notify-pill-bg: ${cfg.info_pill_background || 'rgba(0, 0, 0, 0.25)'}`,
-      `--hki-notify-pill-padding-x: ${cfg.info_pill_padding_x ?? 10}px`,
-      `--hki-notify-pill-padding-y: ${cfg.info_pill_padding_y ?? 6}px`,
-      `--hki-notify-pill-radius: ${cfg.info_pill_radius ?? 999}px`,
-      `--hki-notify-pill-blur: ${cfg.info_pill_blur ?? 0}px`
-    ].join(';');
-
-    // If using Top Bar, simply render the content relative
-    if (isTopBar) {
-        return html`
-            <div class="info-item" style="${infoInline} ${notifyVars}; min-width: 50px;">
-                ${this._infoCardEl}
-            </div>
-        `;
+    for (const slot of slots) {
+        const type = this._config[`top_bar_${slot}`];
+        if (type === 'custom') {
+            const cardConfig = this._config[`top_bar_${slot}_card`] || { type: "custom:hki-notification-card" };
+            
+            // If already created and config matches hash, skip (optimization possible later)
+            // For now, recreate if type is custom
+            try {
+                const element = await helpers.createCardElement(cardConfig);
+                if (this.hass) element.hass = this.hass;
+                element.style.display = "block";
+                this._customCards[slot] = element;
+            } catch (e) {
+                console.error(`Failed to create custom card for ${slot}`, e);
+            }
+        } else {
+            this._customCards[slot] = null;
+        }
     }
-
-    // Legacy absolute positioning
-    return html`
-      <div class="info-container" style="${posStyle} ${infoInline} ${notifyVars}; display: block; min-width: 100px;">
-        ${this._infoCardEl}
-      </div>
-    `;
-  }
-
-  _renderWeather(isTopBar = false) {
-    if (!this._config.weather_entity || !this.hass) return html``;
-
-    const weatherEntity = this.hass.states[this._config.weather_entity];
-    if (!weatherEntity) return html``;
-
-    const cfg = this._config;
-    const state = weatherEntity.state;
-    const attrs = weatherEntity.attributes || {};
-
-    const icon = WEATHER_ICON_MAP[state] || "mdi:weather-partly-cloudy";
-    const iconColor = cfg.weather_icon_color_mode === "custom" && cfg.weather_icon_color?.trim()
-      ? cfg.weather_icon_color.trim()
-      : cfg.weather_icon_color_mode === "inherit" || !cfg.weather_colored_icons
-        ? "inherit"
-        : WEATHER_COLOR_MAP[state] || "inherit";
-
-    let conditionText = String(state || "").replace(/-/g, " ");
-    if (this.hass.formatEntityState) conditionText = this.hass.formatEntityState(weatherEntity);
-
-    const temperature = attrs.temperature;
-    const tempUnit = this.hass.config.unit_system.temperature;
-    const humidity = attrs.humidity;
-    const windSpeed = attrs.wind_speed;
-    const speedUnit = this.hass.config.unit_system.speed || attrs.wind_speed_unit || "";
-    const pressure = attrs.pressure;
-    const pressureUnit = this.hass.config.unit_system.pressure || attrs.pressure_unit || "";
-
-    const { posStyle, infoInline, pillStyle, iconSize } = this._getInfoContainerStyle(cfg, isTopBar);
-
-    const hasAction = cfg.info_tap_action?.action !== "none";
-    const baseClass = hasAction ? "info-clickable" : "";
-    const containerClass = isTopBar ? `info-item ${baseClass}` : `info-container ${baseClass}`;
-    const pillClass = cfg.info_pill ? "info-pill" : "";
-    const iconAnimClass = cfg.weather_animate_icon === "float" ? "animate-float"
-                        : cfg.weather_animate_icon === "pulse" ? "animate-pulse"
-                        : cfg.weather_animate_icon === "spin" ? "animate-spin" : "";
-
-    const useSvg = !!cfg.weather_icon_pack_path;
-    const svgUrl = useSvg ? `${cfg.weather_icon_pack_path}/${state}.svg` : "";
-
-    const handleTap = (e) => { e.stopPropagation(); if (cfg.info_tap_action) this._handleAction(cfg.info_tap_action); };
-
-    return html`
-      <div class="${containerClass} ${pillClass}" style="${posStyle}${infoInline}${pillStyle}" @click=${handleTap}>
-        ${cfg.weather_show_icon
-          ? useSvg
-            ? html`<img src="${svgUrl}" class="info-icon ${iconAnimClass}" style="width:${iconSize}px;height:${iconSize}px;" alt="${state}" />`
-            : html`<ha-icon icon="${icon}" class="info-icon ${iconAnimClass}" style="color:${iconColor};"></ha-icon>`
-          : html``}
-        ${cfg.weather_show_condition ? html`<span class="info-text">${conditionText}</span>` : html``}
-        ${cfg.weather_show_temperature && Number.isFinite(+temperature) ? html`<span class="info-temperature">${Math.round(+temperature)}${tempUnit}</span>` : html``}
-        ${cfg.weather_show_humidity && Number.isFinite(+humidity) ? html`<span>${Math.round(+humidity)}%</span>` : html``}
-        ${cfg.weather_show_wind && Number.isFinite(+windSpeed) ? html`<span>${Math.round(+windSpeed)}${speedUnit ? " " + speedUnit : ""}</span>` : html``}
-        ${cfg.weather_show_pressure && Number.isFinite(+pressure) ? html`<span>${Math.round(+pressure)}${pressureUnit ? " " + pressureUnit : ""}</span>` : html``}
-      </div>
-    `;
-  }
-
-  _renderDatetime(isTopBar = false) {
-    const cfg = this._config;
-    const now = new Date(this._currentTime);
-    const locale = this.hass?.language || 'en';
-
-    const parts = [];
-    if (cfg.datetime_show_day) {
-      parts.push(formatDateTime(now, "DDDD", locale));
-    }
-    if (cfg.datetime_show_date) {
-      parts.push(formatDateTime(now, cfg.datetime_date_format || "D MMM", locale));
-    }
-    if (cfg.datetime_show_time) {
-      parts.push(formatDateTime(now, cfg.datetime_time_format || "HH:mm", locale));
-    }
-
-    if (parts.length === 0) return html``;
-
-    const separator = cfg.datetime_separator || " • ";
-    const displayText = parts.join(separator);
-
-    const { posStyle, infoInline, pillStyle, iconSize } = this._getInfoContainerStyle(cfg, isTopBar);
-
-    const hasAction = cfg.info_tap_action?.action !== "none";
-    const baseClass = hasAction ? "info-clickable" : "";
-    const containerClass = isTopBar ? `info-item ${baseClass}` : `info-container ${baseClass}`;
-    const pillClass = cfg.info_pill ? "info-pill" : "";
-    const iconAnimClass = cfg.datetime_animate_icon === "float" ? "animate-float"
-                        : cfg.datetime_animate_icon === "pulse" ? "animate-pulse"
-                        : cfg.datetime_animate_icon === "spin" ? "animate-spin" : "";
-
-    const handleTap = (e) => { e.stopPropagation(); if (cfg.info_tap_action) this._handleAction(cfg.info_tap_action); };
-
-    const iconColor = cfg.datetime_icon_color?.trim() || "inherit";
-
-    return html`
-      <div class="${containerClass} ${pillClass}" style="${posStyle}${infoInline}${pillStyle}" @click=${handleTap}>
-        ${cfg.datetime_icon ? html`<ha-icon icon="${cfg.datetime_icon}" class="info-icon ${iconAnimClass}" style="color:${iconColor};"></ha-icon>` : html``}
-        <span class="info-text">${displayText}</span>
-      </div>
-    `;
-  }
-
-  _renderInfoDisplay() {
-    // Legacy support removed - top bar is now the default
-    return html``;
+    this.requestUpdate();
   }
 
   _getSlotStyle(slotName) {
@@ -1473,6 +1290,7 @@ class HkiHeaderCard extends LitElement {
     const prefix = `top_bar_${slotName}_`;
     const icon = cfg[prefix + "icon"] || "mdi:chevron-left";
     const label = cfg[prefix + "label"] || "";
+    // Back button defaults to navigate back
     const tapAction = cfg[prefix + "tap_action"] || { action: "navigate", navigation_path: "back" };
     
     const pillClass = slotStyle.pill ? "info-pill" : "";
@@ -1491,13 +1309,24 @@ class HkiHeaderCard extends LitElement {
     const prefix = `top_bar_${slotName}_`;
     const icon = cfg[prefix + "icon"] || "mdi:menu";
     const label = cfg[prefix + "label"] || "";
-    const tapAction = cfg[prefix + "tap_action"] || { action: "fire-dom-event", browser_mod: { service: "browser_mod.popup" } };
+    // Menu button default action is empty because we handle the click specifically below,
+    // unless the user overrides it.
+    const tapAction = cfg[prefix + "tap_action"] || { action: "none" };
     
     const pillClass = slotStyle.pill ? "info-pill" : "";
     const combinedStyle = `${slotStyle.inlineStyle} ${slotStyle.pillStyle}`;
     
+    const handleClick = () => {
+        // If action is none (default), we fire the standard sidebar toggle event
+        if (!tapAction || tapAction.action === "none") {
+            this.dispatchEvent(new CustomEvent("hass-toggle-menu", { bubbles: true, composed: true }));
+        } else {
+            this._handleSlotTapAction(tapAction, slotName);
+        }
+    };
+    
     return html`
-      <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${() => this._handleSlotTapAction(tapAction, slotName)}>
+      <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${handleClick}>
         <ha-icon .icon=${icon} style="--mdc-icon-size:${slotStyle.iconSize}px;"></ha-icon>
         ${label ? html`<span>${label}</span>` : ''}
       </div>
@@ -1506,47 +1335,7 @@ class HkiHeaderCard extends LitElement {
 
   _handleSlotTapAction(action, slotName) {
     if (!action || action.action === "none") return;
-    
-    switch (action.action) {
-      case "navigate":
-        if (action.navigation_path === "back") {
-          history.back();
-        } else if (action.navigation_path) {
-          window.location.href = action.navigation_path;
-        }
-        break;
-      case "url":
-        if (action.url_path) window.open(action.url_path, "_blank");
-        break;
-      case "call-service":
-      case "perform-action": {
-        const [domain, service] = (action.service || action.perform_action || "").split(".");
-        if (domain && service) {
-          this.hass.callService(domain, service, {
-            ...(action.data || {}),
-            ...(action.service_data || {}),
-            ...(action.target || {})
-          });
-        }
-        break;
-      }
-      case "fire-dom-event":
-        // Open sidebar
-        this.dispatchEvent(new CustomEvent("hass-toggle-menu", { bubbles: true, composed: true }));
-        break;
-      case "more-info": {
-        const entity = action.entity;
-        if (entity) {
-          this.dispatchEvent(new CustomEvent("hass-more-info", { bubbles: true, composed: true, detail: { entityId: entity } }));
-        }
-        break;
-      }
-      case "toggle": {
-        const toggleEntity = action.entity;
-        if (toggleEntity) this.hass.callService("homeassistant", "toggle", { entity_id: toggleEntity });
-        break;
-      }
-    }
+    this._handleAction(action);
   }
 
   _renderWeatherSlot(slotName, slotStyle) {
@@ -1565,7 +1354,15 @@ class HkiHeaderCard extends LitElement {
     const attrs = weatherEntity.attributes || {};
 
     const weatherIcon = WEATHER_ICON_MAP[state] || "mdi:weather-cloudy";
-    const conditionText = attrs.friendly_name || state;
+    
+    // Translate condition state
+    let conditionText = state;
+    if (this.hass.formatEntityState) {
+        conditionText = this.hass.formatEntityState(weatherEntity);
+    } else {
+        conditionText = (attrs.friendly_name || state).replace(/-/g, " ");
+    }
+    
     const temperature = attrs.temperature;
     const humidity = attrs.humidity;
     const wind = attrs.wind_speed;
@@ -1585,6 +1382,10 @@ class HkiHeaderCard extends LitElement {
     const animateIcon = cfg[prefix + "animate_icon"] || cfg.weather_animate_icon;
     const animClass = animateIcon && animateIcon !== "none" ? `animate-${animateIcon}` : "";
 
+    const iconPack = cfg[prefix + "icon_pack_path"] || cfg.weather_icon_pack_path;
+    const useSvg = !!iconPack;
+    const svgUrl = useSvg ? `${iconPack}/${state}.svg` : "";
+
     const pillClass = slotStyle.pill ? "info-pill" : "";
     const combinedStyle = `${slotStyle.inlineStyle} ${slotStyle.pillStyle}`;
     
@@ -1592,10 +1393,11 @@ class HkiHeaderCard extends LitElement {
 
     return html`
       <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${() => this._handleSlotTapAction(tapAction, slotName)}>
-        ${showIcon ? html`
-          <ha-icon class="info-weather-icon ${animClass}" .icon=${weatherIcon}
-                   style="--mdc-icon-size:${slotStyle.iconSize}px;color:${iconColor};"></ha-icon>
-        ` : ""}
+        ${showIcon ? (useSvg 
+            ? html`<img src="${svgUrl}" class="info-icon ${animClass}" style="width:${slotStyle.iconSize}px;height:${slotStyle.iconSize}px;" alt="${state}" />`
+            : html`<ha-icon class="info-weather-icon ${animClass}" .icon=${weatherIcon}
+                   style="--mdc-icon-size:${slotStyle.iconSize}px;color:${iconColor};"></ha-icon>`)
+        : ""}
         ${showCondition ? html`<span class="info-condition">${conditionText}</span>` : ""}
         ${showTemp && temperature != null ? html`<span class="info-temperature">${Math.round(temperature)}${unit}</span>` : ""}
         ${showHum && humidity != null ? html`<span class="info-humidity">${humidity}%</span>` : ""}
@@ -1649,13 +1451,14 @@ class HkiHeaderCard extends LitElement {
   }
 
   _renderCustomCardSlot(slotName, slotStyle) {
-    if (!this._infoCardEl) return html``;
+    const cardEl = this._customCards[slotName];
+    if (!cardEl) return html``;
     
     const combinedStyle = `${slotStyle.inlineStyle} ${slotStyle.notifyVars}; min-width: 50px;`;
 
     return html`
       <div class="info-item" style="${combinedStyle}">
-        ${this._infoCardEl}
+        ${cardEl}
       </div>
     `;
   }
@@ -1692,6 +1495,10 @@ class HkiHeaderCard extends LitElement {
             <div class="slot slot-right ${rightEmpty ? 'slot-empty' : ''}" style="${rightStyle}">${this._renderSlotContent(cfg.top_bar_right, "right")}</div>
         </div>
       `;
+  }
+
+  _renderInfoDisplay() {
+    return html``;
   }
 
   render() {
@@ -1864,11 +1671,12 @@ class HkiHeaderCardEditor extends LitElement {
     return ev.detail?.value ?? ev.target?.value;
   }
 
-  _handleCustomCardChange(ev) {
+  _handleCustomCardChange(ev, slot) {
     ev.stopPropagation();
     if (!this._config) return;
     const newCardConfig = ev.detail.config;
-    this._config = { ...this._config, info_card: newCardConfig };
+    const field = `top_bar_${slot}_card`;
+    this._config = { ...this._config, [field]: newCardConfig };
     this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config } }));
   }
 
@@ -1890,14 +1698,7 @@ class HkiHeaderCardEditor extends LitElement {
 
     const nullableNumeric = new Set(["info_offset_x_mobile", "info_offset_y_mobile"]);
 
-    if (field === "info_card") {
-        try {
-          value = window.jsyaml.load(value);
-        } catch (e) {
-          console.error("Invalid YAML", e);
-          return;
-        }
-    } else if (nullableNumeric.has(field)) {
+    if (nullableNumeric.has(field)) {
       value = value === "" || value == null ? null : toNum(value, null);
       if (value === null || !Number.isFinite(value)) value = null;
     } else if (numeric.has(field)) {
@@ -1996,7 +1797,7 @@ class HkiHeaderCardEditor extends LitElement {
     const useGlobal = this._config[prefix + "use_global"] !== false;
     
     return html`
-      <ha-select label="Content Type" .value=${type} data-field="top_bar_${slotName}" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+      <ha-select label="Content Type" .value=${type} .fixedMenuPosition=${true} data-field="top_bar_${slotName}" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
         <mwc-list-item value="none">None</mwc-list-item>
         <mwc-list-item value="spacer">Spacer</mwc-list-item>
         <mwc-list-item value="weather">Weather</mwc-list-item>
@@ -2026,6 +1827,8 @@ class HkiHeaderCardEditor extends LitElement {
             <div class="switch-row"><ha-switch .checked=${!!this._config[prefix + "show_wind"]} data-field="${prefix}show_wind" @change=${this._changed}></ha-switch><span>Wind</span></div>
             <div class="switch-row"><ha-switch .checked=${!!this._config[prefix + "show_pressure"]} data-field="${prefix}show_pressure" @change=${this._changed}></ha-switch><span>Pressure</span></div>
         </div>
+        
+        <ha-textfield label="Icon pack path (SVG)" helper="Path to folder (e.g., /local/icons/weather)" .value=${this._config[prefix + "icon_pack_path"] || ""} data-field="${prefix}icon_pack_path" @input=${this._changed}></ha-textfield>
 
         <div class="switch-row" style="margin-top: 8px;">
             <ha-switch .checked=${this._config[prefix + "weather_colored_icons"] !== false} data-field="${prefix}weather_colored_icons" @change=${this._changed}></ha-switch>
@@ -2033,12 +1836,12 @@ class HkiHeaderCardEditor extends LitElement {
         </div>
         
         <div class="inline-fields-2">
-          <ha-select label="Icon color mode" .value=${this._config[prefix + "weather_icon_color_mode"] || "state"} data-field="${prefix}weather_icon_color_mode" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+          <ha-select label="Icon color mode" .value=${this._config[prefix + "weather_icon_color_mode"] || "state"} .fixedMenuPosition=${true} data-field="${prefix}weather_icon_color_mode" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
             <mwc-list-item value="state">By condition</mwc-list-item>
             <mwc-list-item value="custom">Custom</mwc-list-item>
             <mwc-list-item value="inherit">Inherit</mwc-list-item>
           </ha-select>
-          <ha-select label="Icon animation" .value=${this._config[prefix + "animate_icon"] || "none"} data-field="${prefix}animate_icon" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+          <ha-select label="Icon animation" .value=${this._config[prefix + "animate_icon"] || "none"} .fixedMenuPosition=${true} data-field="${prefix}animate_icon" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
             <mwc-list-item value="none">None</mwc-list-item>
             <mwc-list-item value="float">Float</mwc-list-item>
             <mwc-list-item value="pulse">Pulse</mwc-list-item>
@@ -2063,7 +1866,7 @@ class HkiHeaderCardEditor extends LitElement {
         <ha-textfield label="Separator" .value=${this._config[prefix + "separator"] || " • "} data-field="${prefix}separator" @input=${this._changed}></ha-textfield>
         
         ${this._renderIconPicker("Icon", prefix + "icon", this._config[prefix + "icon"] || "", "Optional icon")}
-        <ha-select label="Icon animation" .value=${this._config[prefix + "animate_icon"] || "none"} data-field="${prefix}animate_icon" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+        <ha-select label="Icon animation" .value=${this._config[prefix + "animate_icon"] || "none"} .fixedMenuPosition=${true} data-field="${prefix}animate_icon" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
             <mwc-list-item value="none">None</mwc-list-item>
             <mwc-list-item value="float">Float</mwc-list-item>
             <mwc-list-item value="pulse">Pulse</mwc-list-item>
@@ -2083,17 +1886,32 @@ class HkiHeaderCardEditor extends LitElement {
         `}
       ` : ''}
       
+      ${type === "custom" ? html`
+          <ha-alert alert-type="warning" style="margin-bottom: 8px;">
+            This requires the <b>hki-notify</b> integration and the <b>custom:hki-notification-card</b> resource.
+          </ha-alert>
+          <p style="opacity: 0.7; font-size: 0.9em; margin-top: 8px;">Enable "Use Header Styling" in the notification card below to inherit styling from the Global Styling (Defaults) settings.</p>
+          <div class="card-config">
+            <hui-card-element-editor
+              .hass=${this.hass}
+              .lovelace=${this.lovelace}
+              .value=${this._config[`top_bar_${slotName}_card`] || { type: "custom:hki-notification-card" }}
+              @config-changed=${(ev) => this._handleCustomCardChange(ev, slotName)}
+            ></hui-card-element-editor>
+          </div>
+      ` : ''}
+      
       ${type === "spacer" ? html`
         <div class="section" style="margin-top: 12px;">Spacer Tap Action</div>
         ${this._renderSlotActionEditor(prefix + "tap_action")}
       ` : ''}
       
-      ${(type === "weather" || type === "datetime") ? html`
+      ${(type === "weather" || type === "datetime" || type === "chevron" || type === "menu") ? html`
         <div class="section" style="margin-top: 12px;">Tap Action</div>
         ${this._renderSlotActionEditor(prefix + "tap_action")}
       ` : ''}
       
-      ${type !== "none" && type !== "custom" ? html`
+      ${type !== "none" && type !== "custom" && type !== "spacer" ? html`
         <div class="section" style="margin-top: 12px;">Styling</div>
         <div class="switch-row">
           <ha-switch .checked=${useGlobal} data-field="${prefix}use_global" @change=${this._changed}></ha-switch>
@@ -2103,7 +1921,7 @@ class HkiHeaderCardEditor extends LitElement {
         ${!useGlobal ? html`
           <div class="inline-fields-2">
             <ha-textfield label="Font Size (px)" type="number" .value=${String(this._config[prefix + "size_px"] ?? "")} data-field="${prefix}size_px" @input=${this._changed}></ha-textfield>
-            <ha-select label="Font Weight" .value=${this._config[prefix + "weight"] || ""} data-field="${prefix}weight" @selected=${this._changed} @closed=${this._changed}>
+            <ha-select label="Font Weight" .value=${this._config[prefix + "weight"] || ""} .fixedMenuPosition=${true} data-field="${prefix}weight" @selected=${this._changed} @closed=${this._changed}>
               <mwc-list-item value="">Use Global</mwc-list-item>
               ${["light", "regular", "medium", "semibold", "bold", "extrabold"].map(w => html`<mwc-list-item .value=${w}>${w.charAt(0).toUpperCase() + w.slice(1)}</mwc-list-item>`)}
             </ha-select>
@@ -2127,10 +1945,6 @@ class HkiHeaderCardEditor extends LitElement {
           ` : ''}
         ` : ''}
       ` : ''}
-      
-      ${type === "custom" ? html`
-        <p style="opacity: 0.7; font-size: 0.9em; margin-top: 8px;">Notifications styling is controlled in the notification card. Enable "Use Header Styling" in the notification card to inherit styling from the Global Styling (Defaults) settings.</p>
-      ` : ''}
     `;
   }
 
@@ -2139,7 +1953,7 @@ class HkiHeaderCardEditor extends LitElement {
     const actionType = action.action || "none";
     
     return html`
-      <ha-select label="Action" .value=${actionType} data-field="${field}.action" @selected=${this._changed} @closed=${this._changed}>
+      <ha-select label="Action" .value=${actionType} .fixedMenuPosition=${true} data-field="${field}.action" @selected=${this._changed} @closed=${this._changed}>
         <mwc-list-item value="none">None</mwc-list-item>
         <mwc-list-item value="navigate">Navigate</mwc-list-item>
         <mwc-list-item value="url">Open URL</mwc-list-item>
@@ -2158,102 +1972,9 @@ class HkiHeaderCardEditor extends LitElement {
       ` : ''}
       ${actionType === "call-service" ? html`
         <ha-textfield label="Service" .value=${action.service || ""} data-field="${field}.service" @input=${this._changed}></ha-textfield>
+        ${this._renderServiceDataEditor(field, action.service_data)}
       ` : ''}
     `;
-  }
-
-  _renderActionEditor(label, field) {
-    const action = this._config?.[field] || { action: "none" };
-    const actionType = action.action || "none";
-    const hasServicePicker = !!customElements.get("ha-service-picker");
-
-    return html`
-      <div class="code-wrap">
-        <div class="code-label">${label}</div>
-        <ha-select label="Action type" .value=${actionType} data-field="${field}.action" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-          <mwc-list-item value="none">None</mwc-list-item>
-          <mwc-list-item value="navigate">Navigate</mwc-list-item>
-          <mwc-list-item value="url">URL</mwc-list-item>
-          <mwc-list-item value="call-service">Call service</mwc-list-item>
-          <mwc-list-item value="more-info">More info</mwc-list-item>
-          <mwc-list-item value="toggle">Toggle</mwc-list-item>
-        </ha-select>
-        
-        ${actionType === "navigate" ? this._renderNavigationPicker("Navigation path", `${field}.navigation_path`, action.navigation_path || "", "Pick a view or enter a custom path") : ""}
-        ${actionType === "url" ? html`<ha-textfield label="URL" .value=${action.url_path || ""} data-field="${field}.url_path" @input=${this._changed}></ha-textfield>` : ""}
-        ${actionType === "call-service" ? html`
-          ${hasServicePicker
-            ? html`<ha-service-picker style="width:100%;display:block;" .hass=${this.hass} .value=${action.service || ""} @value-changed=${(ev) => this._changed(ev, `${field}.service`)}></ha-service-picker>`
-            : html`<ha-textfield label="Service" helper="e.g., light.turn_on" .value=${action.service || ""} data-field="${field}.service" @input=${this._changed}></ha-textfield>`}
-          ${this._renderServiceDataEditor(field, action.service_data)}
-        ` : ""}
-        ${actionType === "more-info" || actionType === "toggle" ? this._renderEntityPicker("Entity", `${field}.entity`, action.entity || "", "Entity to show info for or toggle") : ""}
-      </div>
-    `;
-  }
-
-  _renderSection(title, content, expanded = true) {
-      return html`
-        <details ?open=${expanded} class="box-section">
-            <summary>${title}</summary>
-            <div class="box-content">${content}</div>
-        </details>
-      `;
-  }
-
-  _renderInfoTypeOptions() {
-    const cfg = this._config;
-    // We check both the legacy info_type OR if any of the top bar slots use a type
-    const infoType = cfg.info_type || "none";
-    
-    // Only show these legacy options if Top Bar is NOT enabled
-    // If top bar is enabled, these settings are handled within the slot editors or the global defaults
-    if (cfg.top_bar_enabled) {
-        // Just show custom card editor if required
-        const usesCustom = infoType === "custom" || [cfg.top_bar_left, cfg.top_bar_center, cfg.top_bar_right].includes("custom");
-        if (usesCustom) {
-            const customContent = html`
-              <ha-alert alert-type="warning" style="margin-bottom: 8px;">
-                This requires the <b>hki-notify</b> integration and the <b>custom:hki-notification-card</b> resource.
-              </ha-alert>
-              <div class="card-config">
-                <hui-card-element-editor
-                  .hass=${this.hass}
-                  .lovelace=${this.lovelace}
-                  .value=${this._config.info_card}
-                  @config-changed=${this._handleCustomCardChange}
-                ></hui-card-element-editor>
-              </div>
-            `;
-            return this._renderSection("Notification Settings", customContent);
-        }
-        return html``;
-    }
-
-    // Legacy (Non-Top Bar) Settings
-    const legacyOptions = html`
-      <div class="section">Legacy Positioning</div>
-      <ha-select label="Alignment" .value=${cfg.info_align || "right"} data-field="info_align" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-        <mwc-list-item value="left">Left</mwc-list-item>
-        <mwc-list-item value="right">Right</mwc-list-item>
-      </ha-select>
-
-      <div class="inline-fields-2">
-        <ha-textfield label="Horizontal offset (px)" type="number" .value=${String(cfg.info_offset_x ?? 5)} data-field="info_offset_x" @input=${this._changed}></ha-textfield>
-        <ha-textfield label="Vertical offset (px)" type="number" .value=${String(cfg.info_offset_y ?? 40)} data-field="info_offset_y" @input=${this._changed}></ha-textfield>
-      </div>
-
-      <div class="section">Position (mobile phone)</div>
-      <div class="inline-fields-2">
-        <ha-textfield label="Mobile horizontal (px)" type="number" .value=${cfg.info_offset_x_mobile == null ? "" : String(cfg.info_offset_x_mobile)} data-field="info_offset_x_mobile" @input=${this._changed}></ha-textfield>
-        <ha-textfield label="Mobile vertical (px)" type="number" .value=${cfg.info_offset_y_mobile == null ? "" : String(cfg.info_offset_y_mobile)} data-field="info_offset_y_mobile" @input=${this._changed}></ha-textfield>
-      </div>
-      <ha-textfield label="Mobile breakpoint (px)" type="number" .value=${String(cfg.mobile_breakpoint || 768)} data-field="mobile_breakpoint" @input=${this._changed}></ha-textfield>
-
-      ${this._renderActionEditor("Tap action", "info_tap_action")}
-    `;
-
-    return this._renderSection("Legacy Positioning", legacyOptions);
   }
 
   render() {
@@ -2275,7 +1996,7 @@ class HkiHeaderCardEditor extends LitElement {
         ${this._renderTemplateEditor("Title (Accepts jinja2 templates)", "title")}
         ${this._renderTemplateEditor("Subtitle (Accepts jinja2 templates)", "subtitle")}
 
-        <ha-select label="Text alignment" .value=${this._config.text_align} data-field="text_align" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+        <ha-select label="Text alignment" .value=${this._config.text_align} .fixedMenuPosition=${true} data-field="text_align" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
           <mwc-list-item value="left">Left</mwc-list-item>
           <mwc-list-item value="center">Center</mwc-list-item>
           <mwc-list-item value="right">Right</mwc-list-item>
@@ -2316,7 +2037,7 @@ class HkiHeaderCardEditor extends LitElement {
               <div class="box-content">
                 <div class="inline-fields-2">
                   <ha-textfield label="Font Size (px)" type="number" .value=${String(this._config.info_size_px || 12)} data-field="info_size_px" @input=${this._changed}></ha-textfield>
-                  <ha-select label="Font Weight" .value=${this._config.info_weight || "medium"} data-field="info_weight" @selected=${this._changed} @closed=${this._changed}>
+                  <ha-select label="Font Weight" .value=${this._config.info_weight || "medium"} .fixedMenuPosition=${true} data-field="info_weight" @selected=${this._changed} @closed=${this._changed}>
                     ${["light", "regular", "medium", "semibold", "bold", "extrabold"].map(w => html`<mwc-list-item .value=${w}>${w.charAt(0).toUpperCase() + w.slice(1)}</mwc-list-item>`)}
                   </ha-select>
                 </div>
@@ -2337,7 +2058,7 @@ class HkiHeaderCardEditor extends LitElement {
                     <ha-textfield label="Blur (px)" type="number" .value=${String(this._config.info_pill_blur ?? 0)} data-field="info_pill_blur" @input=${this._changed}></ha-textfield>
                   </div>
                   <div class="inline-fields-3">
-                    <ha-select label="Border Style" .value=${this._config.info_pill_border_style || "none"} data-field="info_pill_border_style" @selected=${this._changed} @closed=${this._changed}>
+                    <ha-select label="Border Style" .value=${this._config.info_pill_border_style || "none"} .fixedMenuPosition=${true} data-field="info_pill_border_style" @selected=${this._changed} @closed=${this._changed}>
                       <mwc-list-item value="none">None</mwc-list-item>
                       <mwc-list-item value="solid">Solid</mwc-list-item>
                       <mwc-list-item value="dashed">Dashed</mwc-list-item>
@@ -2372,12 +2093,10 @@ class HkiHeaderCardEditor extends LitElement {
             </details>
         ` : ''}
 
-        ${this._renderInfoTypeOptions()}
-
         <div class="section">Background</div>
         <ha-textfield label="Background (color/gradient/url)" helper="Auto-wraps image paths in url() - just enter /local/image.jpg or color value" .value=${this._config.background} data-field="background" @input=${this._changed}></ha-textfield>
 
-        <ha-select label="Background position" .value=${this._config.background_position} data-field="background_position" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+        <ha-select label="Background position" .value=${this._config.background_position} .fixedMenuPosition=${true} data-field="background_position" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
           <mwc-list-item value="top">Top</mwc-list-item>
           <mwc-list-item value="center">Center</mwc-list-item>
           <mwc-list-item value="bottom">Bottom</mwc-list-item>
@@ -2385,14 +2104,14 @@ class HkiHeaderCardEditor extends LitElement {
           <mwc-list-item value="right">Right</mwc-list-item>
         </ha-select>
 
-        <ha-select label="Background repeat" .value=${this._config.background_repeat} data-field="background_repeat" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+        <ha-select label="Background repeat" .value=${this._config.background_repeat} .fixedMenuPosition=${true} data-field="background_repeat" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
           <mwc-list-item value="no-repeat">No repeat</mwc-list-item>
           <mwc-list-item value="repeat">Repeat</mwc-list-item>
           <mwc-list-item value="repeat-x">Repeat horizontally</mwc-list-item>
           <mwc-list-item value="repeat-y">Repeat vertically</mwc-list-item>
         </ha-select>
 
-        <ha-select label="Background size" .value=${this._config.background_size} data-field="background_size" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+        <ha-select label="Background size" .value=${this._config.background_size} .fixedMenuPosition=${true} data-field="background_size" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
           <mwc-list-item value="cover">Cover</mwc-list-item>
           <mwc-list-item value="contain">Contain</mwc-list-item>
           <mwc-list-item value="auto">Auto</mwc-list-item>
@@ -2408,7 +2127,7 @@ class HkiHeaderCardEditor extends LitElement {
         <ha-textfield label="Blend stop (%)" type="number" .value=${String(this._config.blend_stop)} data-field="blend_stop" @input=${this._changed}></ha-textfield>
 
         <div class="section">Typography</div>
-        <ha-select label="Font family" .value=${this._config.font_family} data-field="font_family" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+        <ha-select label="Font family" .value=${this._config.font_family} .fixedMenuPosition=${true} data-field="font_family" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
           <mwc-list-item value="inherit">Inherit</mwc-list-item>
           <mwc-list-item value="system">System</mwc-list-item>
           <mwc-list-item value="roboto">Roboto</mwc-list-item>
@@ -2421,7 +2140,7 @@ class HkiHeaderCardEditor extends LitElement {
 
         ${showCustomFont ? html`<ha-textfield label="Custom font-family (CSS)" .value=${this._config.font_family_custom} data-field="font_family_custom" @input=${this._changed}></ha-textfield>` : ""}
 
-        <ha-select label="Font style" .value=${this._config.font_style} data-field="font_style" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+        <ha-select label="Font style" .value=${this._config.font_style} .fixedMenuPosition=${true} data-field="font_style" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
           <mwc-list-item value="normal">Normal</mwc-list-item>
           <mwc-list-item value="italic">Italic</mwc-list-item>
         </ha-select>
@@ -2432,7 +2151,7 @@ class HkiHeaderCardEditor extends LitElement {
         </div>
 
         <div class="inline-fields-2">
-          <ha-select label="Title weight" .value=${this._config.title_weight} data-field="title_weight" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+          <ha-select label="Title weight" .value=${this._config.title_weight} .fixedMenuPosition=${true} data-field="title_weight" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
             <mwc-list-item value="light">Light</mwc-list-item>
             <mwc-list-item value="regular">Regular</mwc-list-item>
             <mwc-list-item value="medium">Medium</mwc-list-item>
@@ -2441,7 +2160,7 @@ class HkiHeaderCardEditor extends LitElement {
             <mwc-list-item value="black">Black</mwc-list-item>
           </ha-select>
 
-          <ha-select label="Subtitle weight" .value=${this._config.subtitle_weight} data-field="subtitle_weight" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+          <ha-select label="Subtitle weight" .value=${this._config.subtitle_weight} .fixedMenuPosition=${true} data-field="subtitle_weight" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
             <mwc-list-item value="light">Light</mwc-list-item>
             <mwc-list-item value="regular">Regular</mwc-list-item>
             <mwc-list-item value="medium">Medium</mwc-list-item>
