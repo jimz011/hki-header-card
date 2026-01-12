@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.5.4 ',
+  '%c HKI-HEADER-CARD %c v1.2.0 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -1179,11 +1179,13 @@ class HkiHeaderCard extends LitElement {
         if (type === 'custom') {
             let cardConfig = this._config[`top_bar_${slot}_card`] || { type: "custom:hki-notification-card" };
             
-            // AUTOMATICALLY INJECT PRESETS AS REQUESTED
+            // AUTOMATICALLY INJECT PRESETS AS DEFAULTS
+            // Modified order so these are defaults, not forced overwrites
             cardConfig = { 
-                ...cardConfig, 
                 use_header_styling: true, 
-                show_background: false 
+                show_background: false,
+                show_empty: true,
+                ...cardConfig 
             };
 
             try {
@@ -1881,6 +1883,7 @@ class HkiHeaderCardEditor extends LitElement {
                 type: "custom:hki-notification-card", 
                 use_header_styling: true, 
                 show_background: false,
+                show_empty: true,
                 ...(this._config[`top_bar_${slotName}_card`] || {})
               }}
               @config-changed=${(ev) => this._handleCustomCardChange(ev, slotName)}
