@@ -112,7 +112,7 @@ const DEFAULTS = Object.freeze({
   top_bar_right_offset_x: 0,
   top_bar_right_offset_y: 0,
 
-  // Legacy Info display type: "none", "weather", "datetime", "custom" (Notifications)
+  // Legacy Info display type: "none", "weather", "datetime", "custom", "spacer" (Notifications)
   info_type: "none",
   info_card: { type: "custom:hki-notification-card" },
 
@@ -436,6 +436,7 @@ class HkiHeaderCard extends LitElement {
         min-height: 20px;
         flex: 1 1 0%;
         min-width: 0;
+        overflow: hidden;
       }
 
       .slot-left {
@@ -449,6 +450,20 @@ class HkiHeaderCard extends LitElement {
       .slot-right {
         justify-content: flex-end;
         text-align: right;
+      }
+      
+      /* Empty slots collapse to allow more space for occupied slots */
+      .slot.slot-empty {
+        flex: 0 0 auto;
+        overflow: visible;
+      }
+      
+      /* Spacer is invisible but takes up layout space */
+      .slot-spacer {
+        display: block;
+        width: 1px;
+        height: 1px;
+        visibility: hidden;
       }
 
       .animate-float { animation: hki-float 3s ease-in-out infinite; }
@@ -818,9 +833,9 @@ class HkiHeaderCard extends LitElement {
     m.top_bar_enabled = !!m.top_bar_enabled;
     m.top_bar_offset_y = toNum(m.top_bar_offset_y, 10);
     m.top_bar_padding_x = toNum(m.top_bar_padding_x, 5);
-    m.top_bar_left = ["none", "weather", "datetime", "custom"].includes(m.top_bar_left) ? m.top_bar_left : "none";
-    m.top_bar_center = ["none", "weather", "datetime", "custom"].includes(m.top_bar_center) ? m.top_bar_center : "none";
-    m.top_bar_right = ["none", "weather", "datetime", "custom"].includes(m.top_bar_right) ? m.top_bar_right : "none";
+    m.top_bar_left = ["none", "weather", "datetime", "custom", "spacer"].includes(m.top_bar_left) ? m.top_bar_left : "none";
+    m.top_bar_center = ["none", "weather", "datetime", "custom", "spacer"].includes(m.top_bar_center) ? m.top_bar_center : "none";
+    m.top_bar_right = ["none", "weather", "datetime", "custom", "spacer"].includes(m.top_bar_right) ? m.top_bar_right : "none";
     // Per-slot offsets
     m.top_bar_left_offset_x = toNum(m.top_bar_left_offset_x, 0);
     m.top_bar_left_offset_y = toNum(m.top_bar_left_offset_y, 0);
@@ -1345,6 +1360,7 @@ class HkiHeaderCard extends LitElement {
           case "weather": return this._renderWeather(true);
           case "datetime": return this._renderDatetime(true);
           case "custom": return this._renderCustomCard(true);
+          case "spacer": return html`<div class="slot-spacer"></div>`;
           default: return html``;
       }
   }
@@ -1368,12 +1384,17 @@ class HkiHeaderCard extends LitElement {
       const leftStyle = (leftOffsetX || leftOffsetY) ? `transform: translate(${leftOffsetX}px, ${leftOffsetY}px);` : "";
       const centerStyle = (centerOffsetX || centerOffsetY) ? `transform: translate(${centerOffsetX}px, ${centerOffsetY}px);` : "";
       const rightStyle = (rightOffsetX || rightOffsetY) ? `transform: translate(${rightOffsetX}px, ${rightOffsetY}px);` : "";
+      
+      // Determine which slots are occupied (spacer counts as occupied for layout purposes)
+      const leftEmpty = cfg.top_bar_left === "none";
+      const centerEmpty = cfg.top_bar_center === "none";
+      const rightEmpty = cfg.top_bar_right === "none";
 
       return html`
         <div class="top-bar-container" style="${topStyle}">
-            <div class="slot slot-left" style="${leftStyle}">${this._renderSlotContent(cfg.top_bar_left)}</div>
-            <div class="slot slot-center" style="${centerStyle}">${this._renderSlotContent(cfg.top_bar_center)}</div>
-            <div class="slot slot-right" style="${rightStyle}">${this._renderSlotContent(cfg.top_bar_right)}</div>
+            <div class="slot slot-left ${leftEmpty ? 'slot-empty' : ''}" style="${leftStyle}">${this._renderSlotContent(cfg.top_bar_left)}</div>
+            <div class="slot slot-center ${centerEmpty ? 'slot-empty' : ''}" style="${centerStyle}">${this._renderSlotContent(cfg.top_bar_center)}</div>
+            <div class="slot slot-right ${rightEmpty ? 'slot-empty' : ''}" style="${rightStyle}">${this._renderSlotContent(cfg.top_bar_right)}</div>
         </div>
       `;
   }
@@ -1911,6 +1932,7 @@ class HkiHeaderCardEditor extends LitElement {
             <div class="inline-fields-3">
                 <ha-select label="Left Slot" .value=${this._config.top_bar_left || "none"} data-field="top_bar_left" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
                   <mwc-list-item value="none">None</mwc-list-item>
+                  <mwc-list-item value="spacer">Spacer</mwc-list-item>
                   <mwc-list-item value="weather">Weather</mwc-list-item>
                   <mwc-list-item value="datetime">Time</mwc-list-item>
                   <mwc-list-item value="custom">Notifications</mwc-list-item>
@@ -1918,6 +1940,7 @@ class HkiHeaderCardEditor extends LitElement {
 
                 <ha-select label="Center Slot" .value=${this._config.top_bar_center || "none"} data-field="top_bar_center" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
                   <mwc-list-item value="none">None</mwc-list-item>
+                  <mwc-list-item value="spacer">Spacer</mwc-list-item>
                   <mwc-list-item value="weather">Weather</mwc-list-item>
                   <mwc-list-item value="datetime">Time</mwc-list-item>
                   <mwc-list-item value="custom">Notifications</mwc-list-item>
@@ -1925,6 +1948,7 @@ class HkiHeaderCardEditor extends LitElement {
 
                 <ha-select label="Right Slot" .value=${this._config.top_bar_right || "none"} data-field="top_bar_right" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
                   <mwc-list-item value="none">None</mwc-list-item>
+                  <mwc-list-item value="spacer">Spacer</mwc-list-item>
                   <mwc-list-item value="weather">Weather</mwc-list-item>
                   <mwc-list-item value="datetime">Time</mwc-list-item>
                   <mwc-list-item value="custom">Notifications</mwc-list-item>
@@ -1938,28 +1962,28 @@ class HkiHeaderCardEditor extends LitElement {
             <details class="box-section">
               <summary>Slot Fine-Tuning</summary>
               <div class="box-content">
-                ${this._config.top_bar_left !== "none" ? html`
+                ${this._config.top_bar_left !== "none" && this._config.top_bar_left !== "spacer" ? html`
                   <div class="section">Left Slot Offset</div>
                   <div class="inline-fields-2">
                     <ha-textfield label="X offset (px)" type="number" .value=${String(this._config.top_bar_left_offset_x || 0)} data-field="top_bar_left_offset_x" @input=${this._changed}></ha-textfield>
                     <ha-textfield label="Y offset (px)" type="number" .value=${String(this._config.top_bar_left_offset_y || 0)} data-field="top_bar_left_offset_y" @input=${this._changed}></ha-textfield>
                   </div>
                 ` : ''}
-                ${this._config.top_bar_center !== "none" ? html`
+                ${this._config.top_bar_center !== "none" && this._config.top_bar_center !== "spacer" ? html`
                   <div class="section">Center Slot Offset</div>
                   <div class="inline-fields-2">
                     <ha-textfield label="X offset (px)" type="number" .value=${String(this._config.top_bar_center_offset_x || 0)} data-field="top_bar_center_offset_x" @input=${this._changed}></ha-textfield>
                     <ha-textfield label="Y offset (px)" type="number" .value=${String(this._config.top_bar_center_offset_y || 0)} data-field="top_bar_center_offset_y" @input=${this._changed}></ha-textfield>
                   </div>
                 ` : ''}
-                ${this._config.top_bar_right !== "none" ? html`
+                ${this._config.top_bar_right !== "none" && this._config.top_bar_right !== "spacer" ? html`
                   <div class="section">Right Slot Offset</div>
                   <div class="inline-fields-2">
                     <ha-textfield label="X offset (px)" type="number" .value=${String(this._config.top_bar_right_offset_x || 0)} data-field="top_bar_right_offset_x" @input=${this._changed}></ha-textfield>
                     <ha-textfield label="Y offset (px)" type="number" .value=${String(this._config.top_bar_right_offset_y || 0)} data-field="top_bar_right_offset_y" @input=${this._changed}></ha-textfield>
                   </div>
                 ` : ''}
-                ${this._config.top_bar_left === "none" && this._config.top_bar_center === "none" && this._config.top_bar_right === "none" ? html`
+                ${["none", "spacer"].includes(this._config.top_bar_left) && ["none", "spacer"].includes(this._config.top_bar_center) && ["none", "spacer"].includes(this._config.top_bar_right) ? html`
                   <p style="opacity: 0.7; font-size: 0.9em;">Select content for at least one slot to see offset options.</p>
                 ` : ''}
               </div>
