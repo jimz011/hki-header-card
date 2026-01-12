@@ -97,32 +97,17 @@ const DEFAULTS = Object.freeze({
   title_weight: "bold",
   subtitle_weight: "medium",
 
-  // Top Bar (New Feature)
-  top_bar_enabled: false,
+  // Top Bar Layout
+  top_bar_enabled: true,
+  top_bar_offset_y: 10,
+  top_bar_padding_x: 5,
+  
+  // Slot types: "none", "spacer", "weather", "datetime", "custom", "chevron", "menu"
   top_bar_left: "none",
   top_bar_center: "none",
   top_bar_right: "none",
-  top_bar_offset_y: 10,
-  top_bar_padding_x: 5,
-  // Per-slot offsets
-  top_bar_left_offset_x: 0,
-  top_bar_left_offset_y: 0,
-  top_bar_center_offset_x: 0,
-  top_bar_center_offset_y: 0,
-  top_bar_right_offset_x: 0,
-  top_bar_right_offset_y: 0,
 
-  // Legacy Info display type: "none", "weather", "datetime", "custom", "spacer" (Notifications)
-  info_type: "none",
-  info_card: { type: "custom:hki-notification-card" },
-
-  // Shared info positioning
-  info_align: "right",
-  info_offset_x: 5,
-  info_offset_y: 40,
-  info_offset_x_mobile: null,
-  info_offset_y_mobile: null,
-  mobile_breakpoint: 768,
+  // Global Info Styling (defaults for all slots)
   info_size_px: 12,
   info_weight: "medium",
   info_color: "",
@@ -132,7 +117,72 @@ const DEFAULTS = Object.freeze({
   info_pill_padding_y: 6,
   info_pill_radius: 999,
   info_pill_blur: 0,
-  info_tap_action: { action: "none" },
+  info_pill_border_style: "none",
+  info_pill_border_width: 0,
+  info_pill_border_color: "rgba(255,255,255,0.1)",
+
+  // Per-slot config - Left
+  top_bar_left_use_global: true,
+  top_bar_left_icon: "",
+  top_bar_left_label: "",
+  top_bar_left_tap_action: { action: "none" },
+  top_bar_left_size_px: null,
+  top_bar_left_weight: null,
+  top_bar_left_color: null,
+  top_bar_left_pill: null,
+  top_bar_left_pill_background: null,
+  top_bar_left_pill_padding_x: null,
+  top_bar_left_pill_padding_y: null,
+  top_bar_left_pill_radius: null,
+  top_bar_left_pill_blur: null,
+  top_bar_left_pill_border_style: null,
+  top_bar_left_pill_border_width: null,
+  top_bar_left_pill_border_color: null,
+  top_bar_left_offset_x: 0,
+  top_bar_left_offset_y: 0,
+
+  // Per-slot config - Center
+  top_bar_center_use_global: true,
+  top_bar_center_icon: "",
+  top_bar_center_label: "",
+  top_bar_center_tap_action: { action: "none" },
+  top_bar_center_size_px: null,
+  top_bar_center_weight: null,
+  top_bar_center_color: null,
+  top_bar_center_pill: null,
+  top_bar_center_pill_background: null,
+  top_bar_center_pill_padding_x: null,
+  top_bar_center_pill_padding_y: null,
+  top_bar_center_pill_radius: null,
+  top_bar_center_pill_blur: null,
+  top_bar_center_pill_border_style: null,
+  top_bar_center_pill_border_width: null,
+  top_bar_center_pill_border_color: null,
+  top_bar_center_offset_x: 0,
+  top_bar_center_offset_y: 0,
+
+  // Per-slot config - Right
+  top_bar_right_use_global: true,
+  top_bar_right_icon: "",
+  top_bar_right_label: "",
+  top_bar_right_tap_action: { action: "none" },
+  top_bar_right_size_px: null,
+  top_bar_right_weight: null,
+  top_bar_right_color: null,
+  top_bar_right_pill: null,
+  top_bar_right_pill_background: null,
+  top_bar_right_pill_padding_x: null,
+  top_bar_right_pill_padding_y: null,
+  top_bar_right_pill_radius: null,
+  top_bar_right_pill_blur: null,
+  top_bar_right_pill_border_style: null,
+  top_bar_right_pill_border_width: null,
+  top_bar_right_pill_border_color: null,
+  top_bar_right_offset_x: 0,
+  top_bar_right_offset_y: 0,
+
+  // Notification card config (for custom slot)
+  info_card: { type: "custom:hki-notification-card" },
 
   // Weather-specific
   weather_entity: "",
@@ -415,6 +465,10 @@ class HkiHeaderCard extends LitElement {
         padding: var(--hki-info-pill-padding-y, 6px) var(--hki-info-pill-padding-x, 10px);
         backdrop-filter: blur(var(--hki-info-pill-blur, 0px));
         -webkit-backdrop-filter: blur(var(--hki-info-pill-blur, 0px));
+        border-style: var(--hki-info-pill-border-style, none);
+        border-width: var(--hki-info-pill-border-width, 0);
+        border-color: var(--hki-info-pill-border-color, rgba(255,255,255,0.1));
+        box-sizing: border-box;
       }
 
       /* TOP BAR LAYOUT */
@@ -830,26 +884,39 @@ class HkiHeaderCard extends LitElement {
     m.badges_gap = toNum(m.badges_gap, 0);
 
     // Top Bar Settings
-    m.top_bar_enabled = !!m.top_bar_enabled;
+    m.top_bar_enabled = m.top_bar_enabled !== false;
     m.top_bar_offset_y = toNum(m.top_bar_offset_y, 10);
     m.top_bar_padding_x = toNum(m.top_bar_padding_x, 5);
-    m.top_bar_left = ["none", "weather", "datetime", "custom", "spacer"].includes(m.top_bar_left) ? m.top_bar_left : "none";
-    m.top_bar_center = ["none", "weather", "datetime", "custom", "spacer"].includes(m.top_bar_center) ? m.top_bar_center : "none";
-    m.top_bar_right = ["none", "weather", "datetime", "custom", "spacer"].includes(m.top_bar_right) ? m.top_bar_right : "none";
-    // Per-slot offsets
-    m.top_bar_left_offset_x = toNum(m.top_bar_left_offset_x, 0);
-    m.top_bar_left_offset_y = toNum(m.top_bar_left_offset_y, 0);
-    m.top_bar_center_offset_x = toNum(m.top_bar_center_offset_x, 0);
-    m.top_bar_center_offset_y = toNum(m.top_bar_center_offset_y, 0);
-    m.top_bar_right_offset_x = toNum(m.top_bar_right_offset_x, 0);
-    m.top_bar_right_offset_y = toNum(m.top_bar_right_offset_y, 0);
+    
+    const validSlotTypes = ["none", "spacer", "weather", "datetime", "custom", "chevron", "menu"];
+    m.top_bar_left = validSlotTypes.includes(m.top_bar_left) ? m.top_bar_left : "none";
+    m.top_bar_center = validSlotTypes.includes(m.top_bar_center) ? m.top_bar_center : "none";
+    m.top_bar_right = validSlotTypes.includes(m.top_bar_right) ? m.top_bar_right : "none";
+    
+    // Per-slot config processing for each slot
+    ["left", "center", "right"].forEach(slot => {
+      const prefix = `top_bar_${slot}_`;
+      m[prefix + "use_global"] = m[prefix + "use_global"] !== false;
+      m[prefix + "icon"] = m[prefix + "icon"] || "";
+      m[prefix + "label"] = m[prefix + "label"] || "";
+      m[prefix + "tap_action"] = m[prefix + "tap_action"] || { action: "none" };
+      m[prefix + "size_px"] = m[prefix + "size_px"] != null ? clamp(+m[prefix + "size_px"], 8, 64) : null;
+      m[prefix + "weight"] = m[prefix + "weight"] ? normalizeWeightKey(m[prefix + "weight"], "medium") : null;
+      m[prefix + "color"] = m[prefix + "color"] || null;
+      m[prefix + "pill"] = m[prefix + "pill"] != null ? !!m[prefix + "pill"] : null;
+      m[prefix + "pill_background"] = m[prefix + "pill_background"] || null;
+      m[prefix + "pill_padding_x"] = m[prefix + "pill_padding_x"] != null ? clamp(+m[prefix + "pill_padding_x"], 0, 80) : null;
+      m[prefix + "pill_padding_y"] = m[prefix + "pill_padding_y"] != null ? clamp(+m[prefix + "pill_padding_y"], 0, 80) : null;
+      m[prefix + "pill_radius"] = m[prefix + "pill_radius"] != null ? clamp(+m[prefix + "pill_radius"], 0, 999) : null;
+      m[prefix + "pill_blur"] = m[prefix + "pill_blur"] != null ? clamp(+m[prefix + "pill_blur"], 0, 40) : null;
+      m[prefix + "pill_border_style"] = ["none", "solid", "dashed", "dotted"].includes(m[prefix + "pill_border_style"]) ? m[prefix + "pill_border_style"] : null;
+      m[prefix + "pill_border_width"] = m[prefix + "pill_border_width"] != null ? clamp(+m[prefix + "pill_border_width"], 0, 10) : null;
+      m[prefix + "pill_border_color"] = m[prefix + "pill_border_color"] || null;
+      m[prefix + "offset_x"] = toNum(m[prefix + "offset_x"], 0);
+      m[prefix + "offset_y"] = toNum(m[prefix + "offset_y"], 0);
+    });
 
-    // Info positioning
-    m.info_offset_x = toNum(m.info_offset_x, 5);
-    m.info_offset_y = toNum(m.info_offset_y, 40);
-    m.info_offset_x_mobile = m.info_offset_x_mobile == null || m.info_offset_x_mobile === "" ? null : toNum(m.info_offset_x_mobile, null);
-    m.info_offset_y_mobile = m.info_offset_y_mobile == null || m.info_offset_y_mobile === "" ? null : toNum(m.info_offset_y_mobile, null);
-    m.mobile_breakpoint = clamp(+m.mobile_breakpoint || 768, 240, 2500);
+    // Global info styling
     m.info_size_px = clamp(+m.info_size_px || 12, 8, 64);
     m.info_weight = normalizeWeightKey(m.info_weight ?? "medium", "medium");
     m.info_pill = !!m.info_pill;
@@ -857,6 +924,9 @@ class HkiHeaderCard extends LitElement {
     m.info_pill_padding_y = clamp(+m.info_pill_padding_y || 6, 0, 80);
     m.info_pill_radius = clamp(+m.info_pill_radius || 999, 0, 999);
     m.info_pill_blur = clamp(+m.info_pill_blur || 0, 0, 40);
+    m.info_pill_border_style = ["none", "solid", "dashed", "dotted"].includes(m.info_pill_border_style) ? m.info_pill_border_style : "none";
+    m.info_pill_border_width = clamp(+m.info_pill_border_width || 0, 0, 10);
+    m.info_pill_border_color = m.info_pill_border_color || "rgba(255,255,255,0.1)";
 
     // Weather options
     m.weather_show_icon = m.weather_show_icon !== false;
@@ -1031,6 +1101,10 @@ class HkiHeaderCard extends LitElement {
 
   _resolveWeight(key) {
     return WEIGHT_MAP[this._config?.[key]] ?? 400;
+  }
+
+  _resolveWeightValue(weight) {
+    return WEIGHT_MAP[weight] ?? 400;
   }
 
   _resolveBackground(bg) {
@@ -1361,26 +1435,259 @@ class HkiHeaderCard extends LitElement {
   }
 
   _renderInfoDisplay() {
-    // Legacy support: if top bar is disabled, render info display as absolute
-    if (this._config.top_bar_enabled) return html``;
+    // Legacy support removed - top bar is now the default
+    return html``;
+  }
 
+  _getSlotStyle(slotName) {
     const cfg = this._config;
-    switch (cfg.info_type) {
-      case "weather": return this._renderWeather(false);
-      case "datetime": return this._renderDatetime(false);
-      case "custom": return this._renderCustomCard(false);
-      default: return html``;
+    const prefix = `top_bar_${slotName}_`;
+    const useGlobal = cfg[prefix + "use_global"] !== false;
+    
+    const fontFamily = this._resolveFontFamily();
+    
+    // Get values, preferring per-slot if not using global, otherwise use global
+    const sizePx = (!useGlobal && cfg[prefix + "size_px"] != null) ? cfg[prefix + "size_px"] : cfg.info_size_px;
+    const weight = (!useGlobal && cfg[prefix + "weight"] != null) ? cfg[prefix + "weight"] : cfg.info_weight;
+    const color = (!useGlobal && cfg[prefix + "color"]) ? cfg[prefix + "color"] : (cfg.info_color?.trim() || "var(--hki-header-text-color, #fff)");
+    const iconSize = Math.round(sizePx * 2);
+    
+    const pill = (!useGlobal && cfg[prefix + "pill"] != null) ? cfg[prefix + "pill"] : cfg.info_pill;
+    const pillBg = (!useGlobal && cfg[prefix + "pill_background"]) ? cfg[prefix + "pill_background"] : cfg.info_pill_background;
+    const pillPaddingX = (!useGlobal && cfg[prefix + "pill_padding_x"] != null) ? cfg[prefix + "pill_padding_x"] : cfg.info_pill_padding_x;
+    const pillPaddingY = (!useGlobal && cfg[prefix + "pill_padding_y"] != null) ? cfg[prefix + "pill_padding_y"] : cfg.info_pill_padding_y;
+    const pillRadius = (!useGlobal && cfg[prefix + "pill_radius"] != null) ? cfg[prefix + "pill_radius"] : cfg.info_pill_radius;
+    const pillBlur = (!useGlobal && cfg[prefix + "pill_blur"] != null) ? cfg[prefix + "pill_blur"] : cfg.info_pill_blur;
+    const pillBorderStyle = (!useGlobal && cfg[prefix + "pill_border_style"]) ? cfg[prefix + "pill_border_style"] : cfg.info_pill_border_style;
+    const pillBorderWidth = (!useGlobal && cfg[prefix + "pill_border_width"] != null) ? cfg[prefix + "pill_border_width"] : cfg.info_pill_border_width;
+    const pillBorderColor = (!useGlobal && cfg[prefix + "pill_border_color"]) ? cfg[prefix + "pill_border_color"] : cfg.info_pill_border_color;
+    
+    const inlineStyle = `font-family:${fontFamily};font-style:${cfg.font_style || "normal"};font-size:${sizePx}px;font-weight:${this._resolveWeightValue(weight)};color:${color};`;
+    
+    const pillStyle = pill ? [
+      `--hki-info-pill-background:${pillBg}`,
+      `--hki-info-pill-padding-x:${pillPaddingX}px`,
+      `--hki-info-pill-padding-y:${pillPaddingY}px`,
+      `--hki-info-pill-radius:${pillRadius}px`,
+      `--hki-info-pill-blur:${pillBlur}px`,
+      `--hki-info-pill-border-style:${pillBorderStyle}`,
+      `--hki-info-pill-border-width:${pillBorderWidth}px`,
+      `--hki-info-pill-border-color:${pillBorderColor}`
+    ].join(';') : "";
+    
+    // CSS variables for notification card
+    const notifyVars = [
+      `--hki-notify-font-size: ${sizePx}px`,
+      `--hki-notify-font-weight: ${this._resolveWeightValue(weight)}`,
+      `--hki-notify-color: ${color}`,
+      `--hki-notify-icon-size: ${iconSize}px`,
+      `--hki-notify-font-family: ${fontFamily}`,
+      `--hki-notify-font-style: ${cfg.font_style || "normal"}`,
+      `--hki-notify-pill-enabled: ${pill ? '1' : '0'}`,
+      `--hki-notify-pill-bg: ${pillBg}`,
+      `--hki-notify-pill-padding-x: ${pillPaddingX}px`,
+      `--hki-notify-pill-padding-y: ${pillPaddingY}px`,
+      `--hki-notify-pill-radius: ${pillRadius}px`,
+      `--hki-notify-pill-blur: ${pillBlur}px`,
+      `--hki-notify-pill-border-style: ${pillBorderStyle}`,
+      `--hki-notify-pill-border-width: ${pillBorderWidth}px`,
+      `--hki-notify-pill-border-color: ${pillBorderColor}`
+    ].join(';');
+    
+    return { 
+      inlineStyle, 
+      pillStyle, 
+      notifyVars, 
+      iconSize, 
+      pill, 
+      sizePx, 
+      color,
+      pillBorderStyle,
+      pillBorderWidth,
+      pillBorderColor
+    };
+  }
+
+  _renderSlotContent(type, slotName) {
+      const cfg = this._config;
+      const prefix = `top_bar_${slotName}_`;
+      const slotStyle = this._getSlotStyle(slotName);
+      
+      switch (type) {
+          case "weather": return this._renderWeatherSlot(slotName, slotStyle);
+          case "datetime": return this._renderDatetimeSlot(slotName, slotStyle);
+          case "custom": return this._renderCustomCardSlot(slotName, slotStyle);
+          case "spacer": return html`<div class="slot-spacer"></div>`;
+          case "chevron": return this._renderChevronSlot(slotName, slotStyle);
+          case "menu": return this._renderMenuSlot(slotName, slotStyle);
+          default: return html``;
+      }
+  }
+
+  _renderChevronSlot(slotName, slotStyle) {
+    const cfg = this._config;
+    const prefix = `top_bar_${slotName}_`;
+    const icon = cfg[prefix + "icon"] || "mdi:chevron-left";
+    const label = cfg[prefix + "label"] || "";
+    const tapAction = cfg[prefix + "tap_action"] || { action: "navigate", navigation_path: "back" };
+    
+    const pillClass = slotStyle.pill ? "info-pill" : "";
+    const combinedStyle = `${slotStyle.inlineStyle} ${slotStyle.pillStyle}`;
+    
+    return html`
+      <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${() => this._handleSlotTapAction(tapAction, slotName)}>
+        <ha-icon .icon=${icon} style="--mdc-icon-size:${slotStyle.iconSize}px;"></ha-icon>
+        ${label ? html`<span>${label}</span>` : ''}
+      </div>
+    `;
+  }
+
+  _renderMenuSlot(slotName, slotStyle) {
+    const cfg = this._config;
+    const prefix = `top_bar_${slotName}_`;
+    const icon = cfg[prefix + "icon"] || "mdi:menu";
+    const label = cfg[prefix + "label"] || "";
+    const tapAction = cfg[prefix + "tap_action"] || { action: "fire-dom-event", browser_mod: { service: "browser_mod.popup" } };
+    
+    const pillClass = slotStyle.pill ? "info-pill" : "";
+    const combinedStyle = `${slotStyle.inlineStyle} ${slotStyle.pillStyle}`;
+    
+    return html`
+      <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${() => this._handleSlotTapAction(tapAction, slotName)}>
+        <ha-icon .icon=${icon} style="--mdc-icon-size:${slotStyle.iconSize}px;"></ha-icon>
+        ${label ? html`<span>${label}</span>` : ''}
+      </div>
+    `;
+  }
+
+  _handleSlotTapAction(action, slotName) {
+    if (!action || action.action === "none") return;
+    
+    switch (action.action) {
+      case "navigate":
+        if (action.navigation_path === "back") {
+          history.back();
+        } else if (action.navigation_path) {
+          window.location.href = action.navigation_path;
+        }
+        break;
+      case "url":
+        if (action.url_path) window.open(action.url_path, "_blank");
+        break;
+      case "call-service":
+      case "perform-action": {
+        const [domain, service] = (action.service || action.perform_action || "").split(".");
+        if (domain && service) {
+          this.hass.callService(domain, service, {
+            ...(action.data || {}),
+            ...(action.service_data || {}),
+            ...(action.target || {})
+          });
+        }
+        break;
+      }
+      case "fire-dom-event":
+        // Open sidebar
+        this.dispatchEvent(new CustomEvent("hass-toggle-menu", { bubbles: true, composed: true }));
+        break;
+      case "more-info": {
+        const entity = action.entity;
+        if (entity) {
+          this.dispatchEvent(new CustomEvent("hass-more-info", { bubbles: true, composed: true, detail: { entityId: entity } }));
+        }
+        break;
+      }
+      case "toggle": {
+        const toggleEntity = action.entity;
+        if (toggleEntity) this.hass.callService("homeassistant", "toggle", { entity_id: toggleEntity });
+        break;
+      }
     }
   }
 
-  _renderSlotContent(type) {
-      switch (type) {
-          case "weather": return this._renderWeather(true);
-          case "datetime": return this._renderDatetime(true);
-          case "custom": return this._renderCustomCard(true);
-          case "spacer": return html`<div class="slot-spacer"></div>`;
-          default: return html``;
-      }
+  _renderWeatherSlot(slotName, slotStyle) {
+    if (!this._config.weather_entity || !this.hass) return html``;
+
+    const weatherEntity = this.hass.states[this._config.weather_entity];
+    if (!weatherEntity) return html``;
+
+    const cfg = this._config;
+    const prefix = `top_bar_${slotName}_`;
+    const state = weatherEntity.state;
+    const attrs = weatherEntity.attributes || {};
+
+    const weatherIcon = WEATHER_ICON_MAP[state] || "mdi:weather-cloudy";
+    const conditionText = attrs.friendly_name || state;
+    const temperature = attrs.temperature;
+    const humidity = attrs.humidity;
+    const wind = attrs.wind_speed;
+    const pressure = attrs.pressure;
+    const unit = this.hass.config?.unit_system?.temperature || "°C";
+
+    const iconColor = this._resolveWeatherIconColor(cfg, state);
+    const animClass = cfg.weather_animate_icon !== "none" ? `animate-${cfg.weather_animate_icon}` : "";
+
+    const pillClass = slotStyle.pill ? "info-pill" : "";
+    const combinedStyle = `${slotStyle.inlineStyle} ${slotStyle.pillStyle}`;
+    
+    const tapAction = cfg[prefix + "tap_action"] || cfg.info_tap_action || { action: "none" };
+
+    return html`
+      <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${() => this._handleSlotTapAction(tapAction, slotName)}>
+        ${cfg.weather_show_icon ? html`
+          <ha-icon class="info-weather-icon ${animClass}" .icon=${weatherIcon}
+                   style="--mdc-icon-size:${slotStyle.iconSize}px;color:${iconColor};"></ha-icon>
+        ` : ""}
+        ${cfg.weather_show_condition ? html`<span class="info-condition">${conditionText}</span>` : ""}
+        ${cfg.weather_show_temperature && temperature != null ? html`<span class="info-temperature">${Math.round(temperature)}${unit}</span>` : ""}
+        ${cfg.weather_show_humidity && humidity != null ? html`<span class="info-humidity">${humidity}%</span>` : ""}
+        ${cfg.weather_show_wind && wind != null ? html`<span class="info-wind">${wind} ${attrs.wind_speed_unit || "km/h"}</span>` : ""}
+        ${cfg.weather_show_pressure && pressure != null ? html`<span class="info-pressure">${pressure} ${attrs.pressure_unit || "hPa"}</span>` : ""}
+      </div>
+    `;
+  }
+
+  _renderDatetimeSlot(slotName, slotStyle) {
+    const cfg = this._config;
+    const prefix = `top_bar_${slotName}_`;
+    
+    const now = new Date();
+    const parts = [];
+
+    if (cfg.datetime_show_day) parts.push(this._formatDay(now));
+    if (cfg.datetime_show_date) parts.push(this._formatDate(now, cfg.datetime_date_format));
+    if (cfg.datetime_show_time) parts.push(this._formatTime(now, cfg.datetime_time_format));
+
+    const sep = cfg.datetime_separator || " • ";
+    const displayText = parts.join(sep);
+
+    const pillClass = slotStyle.pill ? "info-pill" : "";
+    const combinedStyle = `${slotStyle.inlineStyle} ${slotStyle.pillStyle}`;
+    
+    const animClass = cfg.datetime_animate_icon !== "none" ? `animate-${cfg.datetime_animate_icon}` : "";
+    const tapAction = cfg[prefix + "tap_action"] || cfg.info_tap_action || { action: "none" };
+
+    return html`
+      <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${() => this._handleSlotTapAction(tapAction, slotName)}>
+        ${cfg.datetime_icon ? html`
+          <ha-icon class="${animClass}" .icon=${cfg.datetime_icon}
+                   style="--mdc-icon-size:${slotStyle.iconSize}px;${cfg.datetime_icon_color ? `color:${cfg.datetime_icon_color};` : ""}"></ha-icon>
+        ` : ""}
+        <span>${displayText}</span>
+      </div>
+    `;
+  }
+
+  _renderCustomCardSlot(slotName, slotStyle) {
+    if (!this._infoCardEl) return html``;
+    
+    const combinedStyle = `${slotStyle.inlineStyle} ${slotStyle.notifyVars}; min-width: 50px;`;
+
+    return html`
+      <div class="info-item" style="${combinedStyle}">
+        ${this._infoCardEl}
+      </div>
+    `;
   }
 
   _renderTopBar() {
@@ -1403,16 +1710,16 @@ class HkiHeaderCard extends LitElement {
       const centerStyle = (centerOffsetX || centerOffsetY) ? `transform: translate(${centerOffsetX}px, ${centerOffsetY}px);` : "";
       const rightStyle = (rightOffsetX || rightOffsetY) ? `transform: translate(${rightOffsetX}px, ${rightOffsetY}px);` : "";
       
-      // Determine which slots are occupied (spacer counts as occupied for layout purposes)
+      // Determine which slots are occupied
       const leftEmpty = cfg.top_bar_left === "none";
       const centerEmpty = cfg.top_bar_center === "none";
       const rightEmpty = cfg.top_bar_right === "none";
 
       return html`
         <div class="top-bar-container" style="${topStyle}">
-            <div class="slot slot-left ${leftEmpty ? 'slot-empty' : ''}" style="${leftStyle}">${this._renderSlotContent(cfg.top_bar_left)}</div>
-            <div class="slot slot-center ${centerEmpty ? 'slot-empty' : ''}" style="${centerStyle}">${this._renderSlotContent(cfg.top_bar_center)}</div>
-            <div class="slot slot-right ${rightEmpty ? 'slot-empty' : ''}" style="${rightStyle}">${this._renderSlotContent(cfg.top_bar_right)}</div>
+            <div class="slot slot-left ${leftEmpty ? 'slot-empty' : ''}" style="${leftStyle}">${this._renderSlotContent(cfg.top_bar_left, "left")}</div>
+            <div class="slot slot-center ${centerEmpty ? 'slot-empty' : ''}" style="${centerStyle}">${this._renderSlotContent(cfg.top_bar_center, "center")}</div>
+            <div class="slot slot-right ${rightEmpty ? 'slot-empty' : ''}" style="${rightStyle}">${this._renderSlotContent(cfg.top_bar_right, "right")}</div>
         </div>
       `;
   }
@@ -1633,7 +1940,11 @@ class HkiHeaderCardEditor extends LitElement {
       "fixed", "badges_fixed", "weather_show_icon", "weather_show_condition",
       "weather_show_temperature", "weather_show_humidity", "weather_show_wind",
       "weather_show_pressure", "weather_colored_icons", "info_pill",
-      "datetime_show_time", "datetime_show_date", "datetime_show_day", "top_bar_enabled"
+      "datetime_show_time", "datetime_show_date", "datetime_show_day", "top_bar_enabled",
+      // Per-slot booleans
+      "top_bar_left_use_global", "top_bar_left_pill",
+      "top_bar_center_use_global", "top_bar_center_pill",
+      "top_bar_right_use_global", "top_bar_right_pill"
     ]);
     if (bools.has(field)) value = !!(ev.target?.checked ?? value);
 
@@ -1692,6 +2003,139 @@ class HkiHeaderCardEditor extends LitElement {
         <div class="code-label">Service data (YAML)</div>
         <ha-code-editor .hass=${this.hass} .value=${value} mode="yaml" ?autocomplete-entities=${true} ?autocomplete-icons=${true} data-field="${field}.service_data" @value-changed=${this._changed}></ha-code-editor>
       </div>
+    `;
+  }
+
+  _getSlotLabel(type) {
+    const labels = {
+      none: "Empty",
+      spacer: "Spacer",
+      weather: "Weather",
+      datetime: "Date/Time",
+      custom: "Notifications",
+      chevron: "Back Button",
+      menu: "Menu Button"
+    };
+    return labels[type] || "Empty";
+  }
+
+  _renderSlotEditor(slotName) {
+    const prefix = `top_bar_${slotName}_`;
+    const type = this._config[`top_bar_${slotName}`] || "none";
+    const useGlobal = this._config[prefix + "use_global"] !== false;
+    
+    return html`
+      <ha-select label="Content Type" .value=${type} data-field="top_bar_${slotName}" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+        <mwc-list-item value="none">None</mwc-list-item>
+        <mwc-list-item value="spacer">Spacer</mwc-list-item>
+        <mwc-list-item value="weather">Weather</mwc-list-item>
+        <mwc-list-item value="datetime">Date/Time</mwc-list-item>
+        <mwc-list-item value="custom">Notifications</mwc-list-item>
+        <mwc-list-item value="chevron">Back Button</mwc-list-item>
+        <mwc-list-item value="menu">Menu Button</mwc-list-item>
+      </ha-select>
+      
+      ${type !== "none" && type !== "spacer" ? html`
+        <!-- Offset settings for all visible content -->
+        <div class="section" style="margin-top: 12px;">Position Offset</div>
+        <div class="inline-fields-2">
+          <ha-textfield label="X offset (px)" type="number" .value=${String(this._config[prefix + "offset_x"] || 0)} data-field="${prefix}offset_x" @input=${this._changed}></ha-textfield>
+          <ha-textfield label="Y offset (px)" type="number" .value=${String(this._config[prefix + "offset_y"] || 0)} data-field="${prefix}offset_y" @input=${this._changed}></ha-textfield>
+        </div>
+      ` : ''}
+      
+      ${type === "chevron" || type === "menu" ? html`
+        <!-- Icon and label settings for buttons -->
+        <div class="section" style="margin-top: 12px;">Button Settings</div>
+        <ha-icon-picker label="Icon" .value=${this._config[prefix + "icon"] || (type === "chevron" ? "mdi:chevron-left" : "mdi:menu")} data-field="${prefix}icon" @value-changed=${(e) => this._changed({target: {value: e.detail.value, dataset: {field: prefix + "icon"}}})}></ha-icon-picker>
+        <ha-textfield label="Label (optional)" .value=${this._config[prefix + "label"] || ""} data-field="${prefix}label" @input=${this._changed}></ha-textfield>
+        
+        ${type === "chevron" ? html`
+          <p style="opacity: 0.7; font-size: 0.9em; margin-top: 8px;">Back button navigates to the previous page by default.</p>
+        ` : html`
+          <p style="opacity: 0.7; font-size: 0.9em; margin-top: 8px;">Menu button opens the sidebar by default.</p>
+        `}
+      ` : ''}
+      
+      ${type === "spacer" ? html`
+        <!-- Spacer can have tap action -->
+        <div class="section" style="margin-top: 12px;">Spacer Tap Action</div>
+        ${this._renderSlotActionEditor(prefix + "tap_action")}
+      ` : ''}
+      
+      ${(type === "weather" || type === "datetime") ? html`
+        <!-- Tap action for weather/datetime -->
+        <div class="section" style="margin-top: 12px;">Tap Action</div>
+        ${this._renderSlotActionEditor(prefix + "tap_action")}
+      ` : ''}
+      
+      ${type !== "none" && type !== "custom" ? html`
+        <!-- Style override section -->
+        <div class="section" style="margin-top: 12px;">Styling</div>
+        <div class="switch-row">
+          <ha-switch .checked=${useGlobal} data-field="${prefix}use_global" @change=${this._changed}></ha-switch>
+          <span>Use global styling</span>
+        </div>
+        
+        ${!useGlobal ? html`
+          <div class="inline-fields-2">
+            <ha-textfield label="Font Size (px)" type="number" .value=${String(this._config[prefix + "size_px"] ?? "")} data-field="${prefix}size_px" @input=${this._changed}></ha-textfield>
+            <ha-select label="Font Weight" .value=${this._config[prefix + "weight"] || ""} data-field="${prefix}weight" @selected=${this._changed} @closed=${this._changed}>
+              <mwc-list-item value="">Use Global</mwc-list-item>
+              ${["light", "regular", "medium", "semibold", "bold", "extrabold"].map(w => html`<mwc-list-item .value=${w}>${w.charAt(0).toUpperCase() + w.slice(1)}</mwc-list-item>`)}
+            </ha-select>
+          </div>
+          <ha-textfield label="Text Color" .value=${this._config[prefix + "color"] || ""} data-field="${prefix}color" @input=${this._changed}></ha-textfield>
+          
+          <div class="switch-row">
+            <ha-switch .checked=${this._config[prefix + "pill"] === true} data-field="${prefix}pill" @change=${this._changed}></ha-switch>
+            <span>Enable Pill Style</span>
+          </div>
+          ${this._config[prefix + "pill"] ? html`
+            <ha-textfield label="Pill Background" .value=${this._config[prefix + "pill_background"] || ""} data-field="${prefix}pill_background" @input=${this._changed}></ha-textfield>
+            <div class="inline-fields-2">
+              <ha-textfield label="Padding X" type="number" .value=${String(this._config[prefix + "pill_padding_x"] ?? "")} data-field="${prefix}pill_padding_x" @input=${this._changed}></ha-textfield>
+              <ha-textfield label="Padding Y" type="number" .value=${String(this._config[prefix + "pill_padding_y"] ?? "")} data-field="${prefix}pill_padding_y" @input=${this._changed}></ha-textfield>
+            </div>
+            <div class="inline-fields-2">
+              <ha-textfield label="Border Radius" type="number" .value=${String(this._config[prefix + "pill_radius"] ?? "")} data-field="${prefix}pill_radius" @input=${this._changed}></ha-textfield>
+              <ha-textfield label="Blur" type="number" .value=${String(this._config[prefix + "pill_blur"] ?? "")} data-field="${prefix}pill_blur" @input=${this._changed}></ha-textfield>
+            </div>
+          ` : ''}
+        ` : ''}
+      ` : ''}
+      
+      ${type === "custom" ? html`
+        <p style="opacity: 0.7; font-size: 0.9em; margin-top: 8px;">Notifications styling is controlled in the notification card. Enable "Use Header Styling" in the notification card to inherit styling from the global settings above.</p>
+      ` : ''}
+    `;
+  }
+
+  _renderSlotActionEditor(field) {
+    const action = this._config?.[field] || { action: "none" };
+    const actionType = action.action || "none";
+    
+    return html`
+      <ha-select label="Action" .value=${actionType} data-field="${field}.action" @selected=${this._changed} @closed=${this._changed}>
+        <mwc-list-item value="none">None</mwc-list-item>
+        <mwc-list-item value="navigate">Navigate</mwc-list-item>
+        <mwc-list-item value="url">Open URL</mwc-list-item>
+        <mwc-list-item value="more-info">More Info</mwc-list-item>
+        <mwc-list-item value="toggle">Toggle Entity</mwc-list-item>
+        <mwc-list-item value="call-service">Call Service</mwc-list-item>
+      </ha-select>
+      ${actionType === "navigate" ? html`
+        <ha-textfield label="Navigation path" .value=${action.navigation_path || ""} data-field="${field}.navigation_path" @input=${this._changed}></ha-textfield>
+      ` : ''}
+      ${actionType === "url" ? html`
+        <ha-textfield label="URL" .value=${action.url_path || ""} data-field="${field}.url_path" @input=${this._changed}></ha-textfield>
+      ` : ''}
+      ${actionType === "more-info" || actionType === "toggle" ? html`
+        <ha-entity-picker .hass=${this.hass} .value=${action.entity || ""} @value-changed=${(e) => this._changed({target: {value: e.detail.value, dataset: {field: field + ".entity"}}})}></ha-entity-picker>
+      ` : ''}
+      ${actionType === "call-service" ? html`
+        <ha-textfield label="Service" .value=${action.service || ""} data-field="${field}.service" @input=${this._changed}></ha-textfield>
+      ` : ''}
     `;
   }
 
@@ -1942,79 +2386,80 @@ class HkiHeaderCardEditor extends LitElement {
 
         <div class="section">Top Bar Layout</div>
         <div class="switch-row">
-            <ha-switch .checked=${!!this._config.top_bar_enabled} data-field="top_bar_enabled" @change=${this._changed}></ha-switch>
-            <span>Enable top slot bar</span>
+            <ha-switch .checked=${this._config.top_bar_enabled !== false} data-field="top_bar_enabled" @change=${this._changed}></ha-switch>
+            <span>Enable top bar</span>
         </div>
 
-        ${this._config.top_bar_enabled ? html`
-            <div class="inline-fields-3">
-                <ha-select label="Left Slot" .value=${this._config.top_bar_left || "none"} data-field="top_bar_left" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-                  <mwc-list-item value="none">None</mwc-list-item>
-                  <mwc-list-item value="spacer">Spacer</mwc-list-item>
-                  <mwc-list-item value="weather">Weather</mwc-list-item>
-                  <mwc-list-item value="datetime">Time</mwc-list-item>
-                  <mwc-list-item value="custom">Notifications</mwc-list-item>
-                </ha-select>
-
-                <ha-select label="Center Slot" .value=${this._config.top_bar_center || "none"} data-field="top_bar_center" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-                  <mwc-list-item value="none">None</mwc-list-item>
-                  <mwc-list-item value="spacer">Spacer</mwc-list-item>
-                  <mwc-list-item value="weather">Weather</mwc-list-item>
-                  <mwc-list-item value="datetime">Time</mwc-list-item>
-                  <mwc-list-item value="custom">Notifications</mwc-list-item>
-                </ha-select>
-
-                <ha-select label="Right Slot" .value=${this._config.top_bar_right || "none"} data-field="top_bar_right" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-                  <mwc-list-item value="none">None</mwc-list-item>
-                  <mwc-list-item value="spacer">Spacer</mwc-list-item>
-                  <mwc-list-item value="weather">Weather</mwc-list-item>
-                  <mwc-list-item value="datetime">Time</mwc-list-item>
-                  <mwc-list-item value="custom">Notifications</mwc-list-item>
-                </ha-select>
-            </div>
+        ${this._config.top_bar_enabled !== false ? html`
             <div class="inline-fields-2">
                 <ha-textfield label="Bar vertical offset (px)" type="number" .value=${String(this._config.top_bar_offset_y ?? 10)} data-field="top_bar_offset_y" @input=${this._changed}></ha-textfield>
                 <ha-textfield label="Bar padding X (px)" type="number" .value=${String(this._config.top_bar_padding_x ?? 5)} data-field="top_bar_padding_x" @input=${this._changed}></ha-textfield>
             </div>
             
+            <!-- Global Styling Section -->
             <details class="box-section">
-              <summary>Slot Fine-Tuning</summary>
+              <summary>Global Styling (Defaults)</summary>
               <div class="box-content">
-                ${this._config.top_bar_left !== "none" && this._config.top_bar_left !== "spacer" ? html`
-                  <div class="section">Left Slot Offset</div>
+                <div class="inline-fields-2">
+                  <ha-textfield label="Font Size (px)" type="number" .value=${String(this._config.info_size_px || 12)} data-field="info_size_px" @input=${this._changed}></ha-textfield>
+                  <ha-select label="Font Weight" .value=${this._config.info_weight || "medium"} data-field="info_weight" @selected=${this._changed} @closed=${this._changed}>
+                    ${["light", "regular", "medium", "semibold", "bold", "extrabold"].map(w => html`<mwc-list-item .value=${w}>${w.charAt(0).toUpperCase() + w.slice(1)}</mwc-list-item>`)}
+                  </ha-select>
+                </div>
+                <ha-textfield label="Text Color" .value=${this._config.info_color || ""} data-field="info_color" @input=${this._changed}></ha-textfield>
+                
+                <div class="switch-row">
+                  <ha-switch .checked=${!!this._config.info_pill} data-field="info_pill" @change=${this._changed}></ha-switch>
+                  <span>Enable Pill Style</span>
+                </div>
+                ${this._config.info_pill ? html`
+                  <ha-textfield label="Pill Background" .value=${this._config.info_pill_background || "rgba(0,0,0,0.25)"} data-field="info_pill_background" @input=${this._changed}></ha-textfield>
                   <div class="inline-fields-2">
-                    <ha-textfield label="X offset (px)" type="number" .value=${String(this._config.top_bar_left_offset_x || 0)} data-field="top_bar_left_offset_x" @input=${this._changed}></ha-textfield>
-                    <ha-textfield label="Y offset (px)" type="number" .value=${String(this._config.top_bar_left_offset_y || 0)} data-field="top_bar_left_offset_y" @input=${this._changed}></ha-textfield>
+                    <ha-textfield label="Padding X (px)" type="number" .value=${String(this._config.info_pill_padding_x ?? 10)} data-field="info_pill_padding_x" @input=${this._changed}></ha-textfield>
+                    <ha-textfield label="Padding Y (px)" type="number" .value=${String(this._config.info_pill_padding_y ?? 6)} data-field="info_pill_padding_y" @input=${this._changed}></ha-textfield>
                   </div>
-                ` : ''}
-                ${this._config.top_bar_center !== "none" && this._config.top_bar_center !== "spacer" ? html`
-                  <div class="section">Center Slot Offset</div>
                   <div class="inline-fields-2">
-                    <ha-textfield label="X offset (px)" type="number" .value=${String(this._config.top_bar_center_offset_x || 0)} data-field="top_bar_center_offset_x" @input=${this._changed}></ha-textfield>
-                    <ha-textfield label="Y offset (px)" type="number" .value=${String(this._config.top_bar_center_offset_y || 0)} data-field="top_bar_center_offset_y" @input=${this._changed}></ha-textfield>
+                    <ha-textfield label="Border Radius (px)" type="number" .value=${String(this._config.info_pill_radius ?? 999)} data-field="info_pill_radius" @input=${this._changed}></ha-textfield>
+                    <ha-textfield label="Blur (px)" type="number" .value=${String(this._config.info_pill_blur ?? 0)} data-field="info_pill_blur" @input=${this._changed}></ha-textfield>
                   </div>
-                ` : ''}
-                ${this._config.top_bar_right !== "none" && this._config.top_bar_right !== "spacer" ? html`
-                  <div class="section">Right Slot Offset</div>
-                  <div class="inline-fields-2">
-                    <ha-textfield label="X offset (px)" type="number" .value=${String(this._config.top_bar_right_offset_x || 0)} data-field="top_bar_right_offset_x" @input=${this._changed}></ha-textfield>
-                    <ha-textfield label="Y offset (px)" type="number" .value=${String(this._config.top_bar_right_offset_y || 0)} data-field="top_bar_right_offset_y" @input=${this._changed}></ha-textfield>
+                  <div class="inline-fields-3">
+                    <ha-select label="Border Style" .value=${this._config.info_pill_border_style || "none"} data-field="info_pill_border_style" @selected=${this._changed} @closed=${this._changed}>
+                      <mwc-list-item value="none">None</mwc-list-item>
+                      <mwc-list-item value="solid">Solid</mwc-list-item>
+                      <mwc-list-item value="dashed">Dashed</mwc-list-item>
+                      <mwc-list-item value="dotted">Dotted</mwc-list-item>
+                    </ha-select>
+                    <ha-textfield label="Border Width" type="number" .value=${String(this._config.info_pill_border_width ?? 0)} data-field="info_pill_border_width" @input=${this._changed}></ha-textfield>
+                    <ha-textfield label="Border Color" .value=${this._config.info_pill_border_color || "rgba(255,255,255,0.1)"} data-field="info_pill_border_color" @input=${this._changed}></ha-textfield>
                   </div>
-                ` : ''}
-                ${["none", "spacer"].includes(this._config.top_bar_left) && ["none", "spacer"].includes(this._config.top_bar_center) && ["none", "spacer"].includes(this._config.top_bar_right) ? html`
-                  <p style="opacity: 0.7; font-size: 0.9em;">Select content for at least one slot to see offset options.</p>
                 ` : ''}
               </div>
             </details>
-        ` : html`
-             <div class="section">Info Display (Legacy)</div>
-             <ha-select label="Display type" .value=${this._config.info_type || "none"} data-field="info_type" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-              <mwc-list-item value="none">None</mwc-list-item>
-              <mwc-list-item value="weather">Weather</mwc-list-item>
-              <mwc-list-item value="datetime">Date & Time</mwc-list-item>
-              <mwc-list-item value="custom">Notifications</mwc-list-item>
-            </ha-select>
-        `}
+
+            <!-- Left Slot -->
+            <details class="box-section">
+              <summary>Left Slot: ${this._getSlotLabel(this._config.top_bar_left)}</summary>
+              <div class="box-content">
+                ${this._renderSlotEditor('left')}
+              </div>
+            </details>
+
+            <!-- Center Slot -->
+            <details class="box-section">
+              <summary>Center Slot: ${this._getSlotLabel(this._config.top_bar_center)}</summary>
+              <div class="box-content">
+                ${this._renderSlotEditor('center')}
+              </div>
+            </details>
+
+            <!-- Right Slot -->
+            <details class="box-section">
+              <summary>Right Slot: ${this._getSlotLabel(this._config.top_bar_right)}</summary>
+              <div class="box-content">
+                ${this._renderSlotEditor('right')}
+              </div>
+            </details>
+        ` : ''}
 
         ${this._renderInfoTypeOptions()}
 
