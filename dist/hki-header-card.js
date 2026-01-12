@@ -312,7 +312,7 @@ class HkiHeaderCard extends LitElement {
         min-height: 180px;
         max-height: 340px;
         margin: 0;
-        border-radius: 0;
+        border-radius: 0; /* Overridden by inline style when not fixed */
         overflow: hidden;
         box-sizing: border-box;
         color: var(--hki-header-text-color, #fff);
@@ -1370,6 +1370,8 @@ class HkiHeaderCard extends LitElement {
       cfg.background_position ? `background-position:${cfg.background_position}` : "",
       cfg.background_repeat ? `background-repeat:${cfg.background_repeat}` : "",
       cfg.background_size ? `background-size:${cfg.background_size}` : "",
+      // Use system border-radius when not fixed, 0 when fixed
+      effectiveFixed ? "" : "border-radius:var(--ha-card-border-radius, 12px)",
     ].filter(Boolean).join(";");
 
     const overlayStyle = `background:linear-gradient(to bottom, transparent 0%, ${cfg.blend_color} ${cfg.blend_stop}%, ${cfg.blend_color} 100%);`;
