@@ -104,6 +104,13 @@ const DEFAULTS = Object.freeze({
   top_bar_right: "none",
   top_bar_offset_y: 10,
   top_bar_padding_x: 10,
+  // Per-slot offsets
+  top_bar_left_offset_x: 0,
+  top_bar_left_offset_y: 0,
+  top_bar_center_offset_x: 0,
+  top_bar_center_offset_y: 0,
+  top_bar_right_offset_x: 0,
+  top_bar_right_offset_y: 0,
 
   // Legacy Info display type: "none", "weather", "datetime", "custom" (Notifications)
   info_type: "none",
@@ -416,7 +423,7 @@ class HkiHeaderCard extends LitElement {
         right: 0;
         display: flex;
         justify-content: space-between;
-        align-items: flex-start;
+        align-items: center;
         z-index: 3;
         box-sizing: border-box;
       }
@@ -425,19 +432,17 @@ class HkiHeaderCard extends LitElement {
         display: flex;
         align-items: center;
         min-height: 20px;
+        flex: 1;
       }
 
       .slot-left {
         justify-content: flex-start;
-        margin-right: auto;
       }
       .slot-center {
         justify-content: center;
-        margin: 0 auto;
       }
       .slot-right {
         justify-content: flex-end;
-        margin-left: auto;
       }
 
       .animate-float { animation: hki-float 3s ease-in-out infinite; }
@@ -810,6 +815,13 @@ class HkiHeaderCard extends LitElement {
     m.top_bar_left = ["none", "weather", "datetime", "custom"].includes(m.top_bar_left) ? m.top_bar_left : "none";
     m.top_bar_center = ["none", "weather", "datetime", "custom"].includes(m.top_bar_center) ? m.top_bar_center : "none";
     m.top_bar_right = ["none", "weather", "datetime", "custom"].includes(m.top_bar_right) ? m.top_bar_right : "none";
+    // Per-slot offsets
+    m.top_bar_left_offset_x = toNum(m.top_bar_left_offset_x, 0);
+    m.top_bar_left_offset_y = toNum(m.top_bar_left_offset_y, 0);
+    m.top_bar_center_offset_x = toNum(m.top_bar_center_offset_x, 0);
+    m.top_bar_center_offset_y = toNum(m.top_bar_center_offset_y, 0);
+    m.top_bar_right_offset_x = toNum(m.top_bar_right_offset_x, 0);
+    m.top_bar_right_offset_y = toNum(m.top_bar_right_offset_y, 0);
 
     // Info positioning
     m.info_offset_x = toNum(m.info_offset_x, 5);
@@ -1336,12 +1348,24 @@ class HkiHeaderCard extends LitElement {
 
       const cfg = this._config;
       const topStyle = `top: ${cfg.top_bar_offset_y || 10}px; padding: 0 ${cfg.top_bar_padding_x || 10}px;`;
+      
+      // Per-slot offset styles
+      const leftOffsetX = cfg.top_bar_left_offset_x || 0;
+      const leftOffsetY = cfg.top_bar_left_offset_y || 0;
+      const centerOffsetX = cfg.top_bar_center_offset_x || 0;
+      const centerOffsetY = cfg.top_bar_center_offset_y || 0;
+      const rightOffsetX = cfg.top_bar_right_offset_x || 0;
+      const rightOffsetY = cfg.top_bar_right_offset_y || 0;
+      
+      const leftStyle = (leftOffsetX || leftOffsetY) ? `transform: translate(${leftOffsetX}px, ${leftOffsetY}px);` : "";
+      const centerStyle = (centerOffsetX || centerOffsetY) ? `transform: translate(${centerOffsetX}px, ${centerOffsetY}px);` : "";
+      const rightStyle = (rightOffsetX || rightOffsetY) ? `transform: translate(${rightOffsetX}px, ${rightOffsetY}px);` : "";
 
       return html`
         <div class="top-bar-container" style="${topStyle}">
-            <div class="slot slot-left">${this._renderSlotContent(cfg.top_bar_left)}</div>
-            <div class="slot slot-center">${this._renderSlotContent(cfg.top_bar_center)}</div>
-            <div class="slot slot-right">${this._renderSlotContent(cfg.top_bar_right)}</div>
+            <div class="slot slot-left" style="${leftStyle}">${this._renderSlotContent(cfg.top_bar_left)}</div>
+            <div class="slot slot-center" style="${centerStyle}">${this._renderSlotContent(cfg.top_bar_center)}</div>
+            <div class="slot slot-right" style="${rightStyle}">${this._renderSlotContent(cfg.top_bar_right)}</div>
         </div>
       `;
   }
@@ -1902,6 +1926,36 @@ class HkiHeaderCardEditor extends LitElement {
                 <ha-textfield label="Bar vertical offset (px)" type="number" .value=${String(this._config.top_bar_offset_y || 10)} data-field="top_bar_offset_y" @input=${this._changed}></ha-textfield>
                 <ha-textfield label="Bar padding X (px)" type="number" .value=${String(this._config.top_bar_padding_x || 10)} data-field="top_bar_padding_x" @input=${this._changed}></ha-textfield>
             </div>
+            
+            <details class="box-section">
+              <summary>Slot Fine-Tuning</summary>
+              <div class="box-content">
+                ${this._config.top_bar_left !== "none" ? html`
+                  <div class="section">Left Slot Offset</div>
+                  <div class="inline-fields-2">
+                    <ha-textfield label="X offset (px)" type="number" .value=${String(this._config.top_bar_left_offset_x || 0)} data-field="top_bar_left_offset_x" @input=${this._changed}></ha-textfield>
+                    <ha-textfield label="Y offset (px)" type="number" .value=${String(this._config.top_bar_left_offset_y || 0)} data-field="top_bar_left_offset_y" @input=${this._changed}></ha-textfield>
+                  </div>
+                ` : ''}
+                ${this._config.top_bar_center !== "none" ? html`
+                  <div class="section">Center Slot Offset</div>
+                  <div class="inline-fields-2">
+                    <ha-textfield label="X offset (px)" type="number" .value=${String(this._config.top_bar_center_offset_x || 0)} data-field="top_bar_center_offset_x" @input=${this._changed}></ha-textfield>
+                    <ha-textfield label="Y offset (px)" type="number" .value=${String(this._config.top_bar_center_offset_y || 0)} data-field="top_bar_center_offset_y" @input=${this._changed}></ha-textfield>
+                  </div>
+                ` : ''}
+                ${this._config.top_bar_right !== "none" ? html`
+                  <div class="section">Right Slot Offset</div>
+                  <div class="inline-fields-2">
+                    <ha-textfield label="X offset (px)" type="number" .value=${String(this._config.top_bar_right_offset_x || 0)} data-field="top_bar_right_offset_x" @input=${this._changed}></ha-textfield>
+                    <ha-textfield label="Y offset (px)" type="number" .value=${String(this._config.top_bar_right_offset_y || 0)} data-field="top_bar_right_offset_y" @input=${this._changed}></ha-textfield>
+                  </div>
+                ` : ''}
+                ${this._config.top_bar_left === "none" && this._config.top_bar_center === "none" && this._config.top_bar_right === "none" ? html`
+                  <p style="opacity: 0.7; font-size: 0.9em;">Select content for at least one slot to see offset options.</p>
+                ` : ''}
+              </div>
+            </details>
         ` : html`
              <div class="section">Info Display (Legacy)</div>
              <ha-select label="Display type" .value=${this._config.info_type || "none"} data-field="info_type" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
