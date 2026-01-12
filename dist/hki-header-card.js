@@ -1,11 +1,11 @@
-// HKI Header Card - Optimized & Updated with Native Visual Editor for Custom Cards
+// HKI Header Card - Optimized
 
 import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?module";
 
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.3.0 ',
+  '%c HKI-HEADER-CARD %c v1.1.1 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -97,9 +97,11 @@ const DEFAULTS = Object.freeze({
   title_weight: "bold",
   subtitle_weight: "medium",
 
-  // Info display type: "none", "weather", "datetime", "badge", "custom"
+  // Info display type: "none", "weather", "datetime", "badge", "card"
   info_type: "none",
-  info_card: { type: "markdown", content: "Custom Card" },
+
+  // Card displayed when info_type is "card" (Lovelace card config)
+  info_card: null,
 
   // Shared info positioning
   info_align: "right",
@@ -250,7 +252,6 @@ class HkiHeaderCard extends LitElement {
       _renderedBadgeText: { type: String },
       _renderedBadgeIcon: { type: String },
       _currentTime: { type: Number },
-      _infoCardEl: { attribute: false },
     };
   }
 
@@ -269,7 +270,11 @@ class HkiHeaderCard extends LitElement {
     this._renderedBadgeText = "";
     this._renderedBadgeIcon = "";
     this._currentTime = Date.now();
+
+    // Embedded info card
+    this._cardHelpers = null;
     this._infoCardEl = null;
+    this._infoCardSig = "";
 
     // Handlers & observers
     this._resizeHandler = null;
@@ -371,6 +376,31 @@ class HkiHeaderCard extends LitElement {
         text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
         z-index: 2;
       }
+
+      .info-card {
+        pointer-events: auto;
+        display: block;
+      }
+
+      /* Optional: make embedded cards blend into the header nicely */
+      .info-card ha-card {
+        background: transparent !important;
+        box-shadow: none !important;
+        border: none !important;
+      }
+
+      /* Reduce padding on common card wrappers */
+      .info-card ha-card .card-content,
+      .info-card ha-card .content,
+      .info-card ha-card .card-content > *:first-child {
+        padding: 0 !important;
+      }
+
+      /* Prevent overly-wide cards in the header */
+      .info-card > * {
+        max-width: min(420px, 90vw);
+      }
+
 
       .info-clickable {
         cursor: pointer;
@@ -526,10 +556,6 @@ class HkiHeaderCard extends LitElement {
     requestAnimationFrame(() => this._measure(true));
     this._scheduleTemplateSetup(0);
     this._debouncedBadgesZIndex();
-
-    if (this._config?.info_type === "custom" && this._config.info_card) {
-      this._createCustomCard();
-    }
   }
 
   updated(changed) {
@@ -539,9 +565,7 @@ class HkiHeaderCard extends LitElement {
       this._scheduleTemplateSetup(80);
       this._debouncedBadgesZIndex();
 
-      if (this._config?.info_type === "custom" && this._config.info_card) {
-        this._createCustomCard();
-      }
+      if (this._config?.info_type === "card") this._ensureInfoCard();
       return;
     }
 
@@ -557,11 +581,8 @@ class HkiHeaderCard extends LitElement {
         this._cachedHeader = null;
         this._detectKioskMode();
       }
+      if (this._config?.info_type === "card") this._ensureInfoCard();
       this._debouncedBadgesZIndex();
-
-      if (this._infoCardEl) {
-        this._infoCardEl.hass = this.hass;
-      }
     }
 
     if (changed.has("_kioskMode")) {
@@ -840,7 +861,7 @@ class HkiHeaderCard extends LitElement {
     m.subtitle_weight = normalizeWeightKey(m.subtitle_weight ?? "medium", "medium");
 
     // Info type validation
-    m.info_type = ["none", "weather", "datetime", "badge", "custom"].includes(m.info_type) ? m.info_type : "none";
+    m.info_type = ["none", "weather", "datetime", "badge", "card"].includes(m.info_type) ? m.info_type : "none";
 
     this._config = m;
     this._scheduleTemplateSetup(0);
@@ -1152,42 +1173,58 @@ class HkiHeaderCard extends LitElement {
     return { posStyle, infoInline, pillStyle, iconSize };
   }
 
-  async _createCustomCard() {
-    if (!window.loadCardHelpers) return;
-    
-    // cleanup old card
-    if (this._infoCardEl) this._infoCardEl = null;
-
-    try {
-      const helpers = await window.loadCardHelpers();
-      const element = await helpers.createCardElement(this._config.info_card);
-      
-      if (this.hass) element.hass = this.hass;
-      
-      // Style adjustments to make it fit nicely
-      element.style.display = "block";
-      
-      this._infoCardEl = element;
-    } catch (e) {
-      console.error("Failed to create custom card", e);
+  async _getCardHelpers() {
+    if (this._cardHelpers) return this._cardHelpers;
+    if (window.loadCardHelpers) {
+      this._cardHelpers = await window.loadCardHelpers();
+      return this._cardHelpers;
     }
+    return null;
   }
 
-  _renderCustomCard() {
-    if (!this._infoCardEl) return html``;
-    
+  async _ensureInfoCard() {
     const cfg = this._config;
-    // Reuse the positioning logic
-    const { posStyle, infoInline } = this._getInfoContainerStyle(cfg);
+    if (!this.hass || !cfg?.info_card) {
+      this._infoCardEl = null;
+      this._infoCardSig = "";
+      return;
+    }
 
-    // We override specific styles because a card is a block element, not inline text
-    // We allow the user to control width via the card config, but we anchor it.
+    const sig = JSON.stringify(cfg.info_card);
+
+    if (this._infoCardEl && this._infoCardSig === sig) {
+      this._infoCardEl.hass = this.hass;
+      return;
+    }
+
+    const helpers = await this._getCardHelpers();
+    if (!helpers) return;
+
+    const el = helpers.createCardElement(cfg.info_card);
+    el.hass = this.hass;
+
+    this._infoCardEl = el;
+    this._infoCardSig = sig;
+
+    this.requestUpdate();
+  }
+
+  _renderInfoCard() {
+    const cfg = this._config;
+    if (!cfg?.info_card) return html``;
+
+    const { posStyle, infoInline, pillStyle } = this._getInfoContainerStyle(cfg);
+    const pillClass = cfg.info_pill ? "info-pill" : "";
+
     return html`
-      <div class="info-container" style="${posStyle} ${infoInline} display: block; min-width: 100px;">
-        ${this._infoCardEl}
+      <div class="info-container ${pillClass}" style="${posStyle}${infoInline}${pillStyle}">
+        <div class="info-card">
+          ${this._infoCardEl ? this._infoCardEl : ""}
+        </div>
       </div>
     `;
   }
+
 
   _renderWeather() {
     if (!this._config.weather_entity || !this.hass) return html``;
@@ -1324,7 +1361,7 @@ class HkiHeaderCard extends LitElement {
       case "weather": return this._renderWeather();
       case "datetime": return this._renderDatetime();
       case "badge": return this._renderBadge();
-      case "custom": return this._renderCustomCard();
+      case "card": return this._renderInfoCard();
       default: return html``;
     }
   }
@@ -1339,9 +1376,7 @@ class HkiHeaderCard extends LitElement {
     const subtitleText = this._isTemplateString(cfg.subtitle) ? (this._renderedSubtitle ?? "") : (cfg.subtitle ?? "");
     const subtitleVisible = !!subtitleText.trim();
 
-    // Change: if not fixed (or in preview), allow normal card width
-    const cardWidth = effectiveFixed ? "100vw" : "100%";
-    
+    const cardWidth = this._inPreview ? "100%" : "100vw";
     const resolvedBackground = this._resolveBackground(cfg.background);
 
     const cardStyle = [
@@ -1356,11 +1391,7 @@ class HkiHeaderCard extends LitElement {
     ].filter(Boolean).join(";");
 
     const overlayStyle = `background:linear-gradient(to bottom, transparent 0%, ${cfg.blend_color} ${cfg.blend_stop}%, ${cfg.blend_color} 100%);`;
-    
-    // Change: if not fixed, do not apply calculated offsets
-    const contentStyle = effectiveFixed 
-      ? `margin-left:${this._offsetLeft}px;width:${this._contentWidth}px;`
-      : `width:100%;`;
+    const contentStyle = `margin-left:${this._offsetLeft}px;width:${this._contentWidth}px;`;
 
     const fontFamily = this._resolveFontFamily();
     const fontStyle = cfg.font_style || "normal";
@@ -1439,7 +1470,6 @@ class HkiHeaderCardEditor extends LitElement {
   static get properties() {
     return {
       hass: {},
-      lovelace: {},
       _config: { attribute: false },
     };
   }
@@ -1496,14 +1526,6 @@ class HkiHeaderCardEditor extends LitElement {
     return ev.detail?.value ?? ev.target?.value;
   }
 
-  _handleCustomCardChange(ev) {
-    ev.stopPropagation();
-    if (!this._config) return;
-    const newCardConfig = ev.detail.config;
-    this._config = { ...this._config, info_card: newCardConfig };
-    this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config } }));
-  }
-
   _changed(ev, explicitField = null) {
     ev.stopPropagation();
     const field = explicitField || ev.target?.dataset?.field;
@@ -1522,14 +1544,7 @@ class HkiHeaderCardEditor extends LitElement {
 
     const nullableNumeric = new Set(["info_offset_x_mobile", "info_offset_y_mobile"]);
 
-    if (field === "info_card") {
-        try {
-          value = window.jsyaml.load(value);
-        } catch (e) {
-          console.error("Invalid YAML", e);
-          return;
-        }
-    } else if (nullableNumeric.has(field)) {
+    if (nullableNumeric.has(field)) {
       value = value === "" || value == null ? null : toNum(value, null);
       if (value === null || !Number.isFinite(value)) value = null;
     } else if (numeric.has(field)) {
@@ -1640,7 +1655,7 @@ class HkiHeaderCardEditor extends LitElement {
 
     if (infoType === "none") return html``;
 
-    // Shared positioning options - visible for ALL types, including custom
+    // Shared positioning options
     const sharedOptions = html`
       <div class="section">Position & Style</div>
       <ha-select label="Alignment" .value=${cfg.info_align || "right"} data-field="info_align" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
@@ -1653,14 +1668,13 @@ class HkiHeaderCardEditor extends LitElement {
         <ha-textfield label="Vertical offset (px)" type="number" .value=${String(cfg.info_offset_y ?? 40)} data-field="info_offset_y" @input=${this._changed}></ha-textfield>
       </div>
 
-      <div class="section">Position (mobile phone)</div>
+      <div class="section">Mobile offset</div>
       <div class="inline-fields-2">
         <ha-textfield label="Mobile horizontal (px)" type="number" .value=${cfg.info_offset_x_mobile == null ? "" : String(cfg.info_offset_x_mobile)} data-field="info_offset_x_mobile" @input=${this._changed}></ha-textfield>
         <ha-textfield label="Mobile vertical (px)" type="number" .value=${cfg.info_offset_y_mobile == null ? "" : String(cfg.info_offset_y_mobile)} data-field="info_offset_y_mobile" @input=${this._changed}></ha-textfield>
       </div>
       <ha-textfield label="Mobile breakpoint (px)" type="number" .value=${String(cfg.mobile_breakpoint || 768)} data-field="mobile_breakpoint" @input=${this._changed}></ha-textfield>
 
-      <div class="section">Font Style</div>
       <div class="inline-fields-2">
         <ha-textfield label="Font size (px)" type="number" .value=${String(cfg.info_size_px || 12)} data-field="info_size_px" @input=${this._changed}></ha-textfield>
         <ha-select label="Font weight" .value=${cfg.info_weight || "medium"} data-field="info_weight" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
@@ -1772,6 +1786,50 @@ class HkiHeaderCardEditor extends LitElement {
       `;
     }
 
+
+    if (infoType === "card") {
+      const cardValue = cfg.info_card || { type: "entity", entity: "" };
+
+      return html`
+        <div class="section">Card</div>
+
+        ${
+          customElements.get("hui-card-element-editor")
+            ? html`
+                <hui-card-element-editor
+                  .hass=${this.hass}
+                  .value=${cardValue}
+                  @value-changed=${(ev) => {
+                    ev.stopPropagation();
+                    const value = ev.detail?.value;
+                    this._config = { ...this._config, info_card: value };
+                    this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config } }));
+                  }}
+                ></hui-card-element-editor>
+              `
+            : html`
+                <ha-alert alert-type="warning">
+                  Card editor UI not available in this Home Assistant version. Use YAML mode below.
+                </ha-alert>
+                <ha-code-editor
+                  .hass=${this.hass}
+                  .value=${JSON.stringify(cardValue, null, 2)}
+                  mode="json"
+                  @value-changed=${(ev) => {
+                    try {
+                      const value = JSON.parse(ev.detail.value);
+                      this._config = { ...this._config, info_card: value };
+                      this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config } }));
+                    } catch (_) {}
+                  }}
+                ></ha-code-editor>
+              `
+        }
+
+        ${sharedOptions}
+      `;
+    }
+
     if (infoType === "badge") {
       return html`
         <div class="section">Custom Badge Settings</div>
@@ -1790,22 +1848,6 @@ class HkiHeaderCardEditor extends LitElement {
 
         ${sharedOptions}
       `;
-    }
-
-    if (infoType === "custom") {
-        return html`
-          <div class="section">Custom Card Configuration</div>
-          <div class="card-config">
-            <hui-card-element-editor
-              .hass=${this.hass}
-              .lovelace=${this.lovelace}
-              .value=${this._config.info_card}
-              @config-changed=${this._handleCustomCardChange}
-            ></hui-card-element-editor>
-          </div>
-      
-          ${sharedOptions}
-        `;
     }
 
     return html``;
@@ -1860,7 +1902,7 @@ class HkiHeaderCardEditor extends LitElement {
           <mwc-list-item value="weather">Weather</mwc-list-item>
           <mwc-list-item value="datetime">Date & Time</mwc-list-item>
           <mwc-list-item value="badge">Custom Badge</mwc-list-item>
-          <mwc-list-item value="custom">Custom Card</mwc-list-item>
+          <mwc-list-item value="card">Card</mwc-list-item>
         </ha-select>
 
         ${this._renderInfoTypeOptions()}
