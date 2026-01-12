@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.4.0 ',
+  '%c HKI-HEADER-CARD %c v1.5.0 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -97,17 +97,17 @@ const DEFAULTS = Object.freeze({
   title_weight: "bold",
   subtitle_weight: "medium",
 
-  // Info display type: "none", "weather", "datetime", "custom" (Notifications)
+  // Layout Mode: "default" (legacy floating) or "top_bar" (slots)
+  layout_mode: "default",
+
+  // --- LEGACY (Floating) ---
   info_type: "none",
   info_card: { type: "custom:hki-notification-card" },
-
-  // Shared info positioning
   info_align: "right",
   info_offset_x: 5,
   info_offset_y: 40,
   info_offset_x_mobile: null,
   info_offset_y_mobile: null,
-  mobile_breakpoint: 768,
   info_size_px: 12,
   info_weight: "medium",
   info_color: "",
@@ -118,9 +118,37 @@ const DEFAULTS = Object.freeze({
   info_pill_radius: 999,
   info_pill_blur: 0,
   info_tap_action: { action: "none" },
+  
+  // --- TOP BAR SLOTS ---
+  // Left Slot
+  left_type: "none",
+  left_entity: "", 
+  left_content: { type: "custom:hki-notification-card" },
+  left_offset_x: 0,
+  left_offset_y: 0,
+  left_tap_action: { action: "none" },
+  
+  // Center Slot
+  center_type: "none",
+  center_entity: "",
+  center_content: { type: "custom:hki-notification-card" },
+  center_offset_x: 0,
+  center_offset_y: 0,
+  center_tap_action: { action: "none" },
 
-  // Weather-specific
-  weather_entity: "",
+  // Right Slot
+  right_type: "none",
+  right_entity: "",
+  right_content: { type: "custom:hki-notification-card" },
+  right_offset_x: 0,
+  right_offset_y: 0,
+  right_tap_action: { action: "none" },
+
+  // Shared Mobile Setting
+  mobile_breakpoint: 768,
+
+  // Global Weather Config (Applied to any slot using weather)
+  weather_entity: "", 
   weather_show_icon: true,
   weather_show_condition: true,
   weather_show_temperature: true,
@@ -133,7 +161,7 @@ const DEFAULTS = Object.freeze({
   weather_animate_icon: "none",
   weather_icon_pack_path: "",
 
-  // Datetime-specific
+  // Global Datetime Config (Applied to any slot using datetime)
   datetime_show_time: true,
   datetime_show_date: true,
   datetime_show_day: true,
@@ -169,30 +197,18 @@ function cacheKey(raw, vars) {
   return `hkiTpl:${hashStr(raw + (vars ? JSON.stringify(vars) : ""))}`;
 }
 
-// Date formatting helper - uses locale for proper translations
+// Date formatting helper
 function formatDateTime(date, format, locale = 'en') {
   const pad = (n) => String(n).padStart(2, '0');
   
-  // Get localized day names
   const getDayName = (d, style) => {
-    try {
-      return new Intl.DateTimeFormat(locale, { weekday: style }).format(d);
-    } catch (_) {
-      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      const daysShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-      return style === 'long' ? days[d.getDay()] : daysShort[d.getDay()];
-    }
+    try { return new Intl.DateTimeFormat(locale, { weekday: style }).format(d); } 
+    catch (_) { return style === 'long' ? ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getDay()] : ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]; }
   };
   
-  // Get localized month names
   const getMonthName = (d, style) => {
-    try {
-      return new Intl.DateTimeFormat(locale, { month: style }).format(d);
-    } catch (_) {
-      const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-      const monthsShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      return style === 'long' ? months[d.getMonth()] : monthsShort[d.getMonth()];
-    }
+    try { return new Intl.DateTimeFormat(locale, { month: style }).format(d); } 
+    catch (_) { return style === 'long' ? ['January','February','March','April','May','June','July','August','September','October','November','December'][d.getMonth()] : ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]; }
   };
 
   const h24 = date.getHours();
@@ -222,7 +238,6 @@ function formatDateTime(date, format, locale = 'en') {
     'a': ampm.toLowerCase(),
   };
 
-  // Single-pass replacement using regex with all tokens (longest first via alternation order)
   const tokenPattern = /YYYY|MMMM|DDDD|YY|MMM|DDD|MM|DD|HH|hh|mm|ss|M|D|H|h|m|s|A|a/g;
   return format.replace(tokenPattern, match => tokens[match]);
 }
@@ -242,7 +257,11 @@ class HkiHeaderCard extends LitElement {
       _renderedTitle: { type: String },
       _renderedSubtitle: { type: String },
       _currentTime: { type: Number },
-      _infoCardEl: { attribute: false },
+      // Custom cards for each slot
+      _infoCardLegacy: { attribute: false },
+      _infoCardLeft: { attribute: false },
+      _infoCardCenter: { attribute: false },
+      _infoCardRight: { attribute: false },
     };
   }
 
@@ -259,7 +278,11 @@ class HkiHeaderCard extends LitElement {
     this._renderedTitle = "";
     this._renderedSubtitle = "";
     this._currentTime = Date.now();
-    this._infoCardEl = null;
+    
+    this._infoCardLegacy = null;
+    this._infoCardLeft = null;
+    this._infoCardCenter = null;
+    this._infoCardRight = null;
 
     // Handlers & observers
     this._resizeHandler = null;
@@ -350,14 +373,57 @@ class HkiHeaderCard extends LitElement {
         display: block;
       }
 
+      /* INFO & SLOT STYLES */
       .info-container {
-        position: absolute;
         display: flex;
         align-items: center;
         gap: 8px;
         color: var(--hki-header-text-color, #fff);
         text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
         z-index: 2;
+        /* Default for legacy relative positioning */
+        position: absolute; 
+      }
+      
+      .top-bar-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: flex-start;
+        padding: 16px;
+        z-index: 5;
+        pointer-events: none; /* Let clicks pass through gaps */
+        box-sizing: border-box;
+      }
+
+      .hb-slot {
+        pointer-events: auto;
+        position: relative;
+        display: flex;
+        align-items: center;
+        /* Allow slots to shrink/grow based on content, but try to be balanced */
+        flex: 1 1 auto;
+        min-width: 0; /* Important for text truncation/wrapping in flex items */
+      }
+
+      .hb-slot.slot-left { justify-content: flex-start; }
+      .hb-slot.slot-center { justify-content: center; }
+      .hb-slot.slot-right { justify-content: flex-end; }
+
+      /* If only one slot is present, it can take full width */
+      .hb-slot.only-one { flex: 1 0 100%; }
+
+      /* Remove absolute positioning for slots inside the top bar */
+      .top-bar-container .info-container {
+        position: relative;
+        left: auto !important;
+        right: auto !important;
+        top: auto !important;
+        transform: none; /* Reset transform, we apply offsets via slot wrapper */
       }
 
       .info-clickable {
@@ -379,7 +445,7 @@ class HkiHeaderCard extends LitElement {
         display: block;
       }
 
-      .info-text { text-transform: capitalize; }
+      .info-text { text-transform: capitalize; white-space: nowrap; }
       .info-temperature { font-weight: 500; }
 
       .info-pill {
@@ -449,7 +515,6 @@ class HkiHeaderCard extends LitElement {
     this._detectKioskMode();
     this._detectEditMode();
 
-    // Consolidated resize handling
     this._resizeHandler = () => {
       this._debouncedMeasure(true);
       this._debouncedBadgesZIndex();
@@ -458,7 +523,7 @@ class HkiHeaderCard extends LitElement {
 
     this._ro = new ResizeObserver(this._resizeHandler);
     this._ro.observe(this);
-
+    
     // Mutation observer for kiosk mode
     this._kioskMutationObserver = new MutationObserver(() => this._detectKioskMode());
     this._kioskMutationObserver.observe(document.body, { attributes: true, attributeFilter: ["class"] });
@@ -488,34 +553,19 @@ class HkiHeaderCard extends LitElement {
     };
     window.addEventListener("focus", this._focusHandler);
 
-    // Reduced polling: edit mode every 2s instead of 1s
     this._editModeInterval = setInterval(() => this._detectEditMode(), 2000);
-
-    // Time update interval for datetime display
     this._timeInterval = setInterval(() => {
-      if (this._config?.info_type === "datetime") {
         this._currentTime = Date.now();
-      }
     }, 1000);
-
-    // Reduced initial checks
-    [100, 500, 1500].forEach(delay => {
-      setTimeout(() => {
-        this._cachedHeader = null;
-        this._detectKioskMode();
-      }, delay);
-    });
-
-    // Reduced kiosk polling: 10s instead of 5s
+    
+    // Reduced kiosk polling
     this._kioskCheckInterval = setInterval(() => this._detectKioskMode(), 10000);
 
     requestAnimationFrame(() => this._measure(true));
     this._scheduleTemplateSetup(0);
     this._debouncedBadgesZIndex();
 
-    if (this._config?.info_type === "custom" && this._config.info_card) {
-      this._createCustomCard();
-    }
+    this._createCustomCards();
   }
 
   updated(changed) {
@@ -524,10 +574,7 @@ class HkiHeaderCard extends LitElement {
       this._debouncedMeasure(true);
       this._scheduleTemplateSetup(80);
       this._debouncedBadgesZIndex();
-
-      if (this._config?.info_type === "custom" && this._config.info_card) {
-        this._createCustomCard();
-      }
+      this._createCustomCards();
       return;
     }
 
@@ -535,7 +582,7 @@ class HkiHeaderCard extends LitElement {
       this._detectPreview();
       this._detectEditMode();
       this._debouncedMeasure(true);
-
+      
       const nowReady = !!this.hass?.connection && typeof this.hass?.callWS === "function";
       if (nowReady && !this._hassReady) {
         this._hassReady = true;
@@ -543,11 +590,13 @@ class HkiHeaderCard extends LitElement {
         this._cachedHeader = null;
         this._detectKioskMode();
       }
+      
       this._debouncedBadgesZIndex();
-
-      if (this._infoCardEl) {
-        this._infoCardEl.hass = this.hass;
-      }
+      
+      // Update HASS for all custom cards
+      [this._infoCardLegacy, this._infoCardLeft, this._infoCardCenter, this._infoCardRight].forEach(el => {
+          if (el) el.hass = this.hass;
+      });
     }
 
     if (changed.has("_kioskMode")) {
@@ -635,44 +684,12 @@ class HkiHeaderCard extends LitElement {
       this.requestUpdate();
     }
   }
-
-  // Optimized header search - limited depth, prioritized selectors
-  _findHeader() {
-    const selectors = ["app-header", "mwc-top-app-bar-fixed", ".toolbar", "[slot='header']", "ha-tabs"];
-    
-    const search = (root, depth = 0) => {
-      if (depth > 6 || !root) return null;
-      
-      for (const sel of selectors) {
-        const el = root.querySelector?.(sel);
-        if (el) return el;
-      }
-      
-      // Limited shadowRoot traversal
-      const shadowHosts = root.querySelectorAll?.("home-assistant, hui-root, ha-panel-lovelace, hui-view");
-      if (shadowHosts) {
-        for (const host of shadowHosts) {
-          if (host.shadowRoot) {
-            const found = search(host.shadowRoot, depth + 1);
-            if (found) return found;
-          }
-        }
-      }
-      return null;
-    };
-
-    const ha = document.querySelector("home-assistant");
-    return ha?.shadowRoot ? search(ha.shadowRoot) : search(document);
+  
+  _debouncedMeasure(readCard=false) {
+      if(this._rafMeasure) return;
+      this._rafMeasure = requestAnimationFrame(() => { this._rafMeasure=0; this._measure(readCard); });
   }
-
-  _debouncedMeasure(readCard = false) {
-    if (this._rafMeasure) return;
-    this._rafMeasure = requestAnimationFrame(() => {
-      this._rafMeasure = 0;
-      this._measure(readCard);
-    });
-  }
-
+  
   _measure(readCard = false) {
     const rect = this.getBoundingClientRect?.();
     if (!rect) return;
@@ -692,7 +709,7 @@ class HkiHeaderCard extends LitElement {
       if (cr?.height) this._headerHeight = Math.round(cr.height);
     }
   }
-
+  
   _detectPreview() {
     let node = this;
     while (node) {
@@ -742,31 +759,8 @@ class HkiHeaderCard extends LitElement {
 
   setConfig(config) {
     if (!config) throw new Error("Invalid configuration");
-
     const m = { ...DEFAULTS, ...config };
-
-    // Backward compatibility: migrate old weather_* positioning to info_*
-    if (config.weather_align !== undefined && config.info_align === undefined) m.info_align = config.weather_align;
-    if (config.weather_offset_x !== undefined && config.info_offset_x === undefined) m.info_offset_x = config.weather_offset_x;
-    if (config.weather_offset_y !== undefined && config.info_offset_y === undefined) m.info_offset_y = config.weather_offset_y;
-    if (config.weather_offset_x_mobile !== undefined && config.info_offset_x_mobile === undefined) m.info_offset_x_mobile = config.weather_offset_x_mobile;
-    if (config.weather_offset_y_mobile !== undefined && config.info_offset_y_mobile === undefined) m.info_offset_y_mobile = config.weather_offset_y_mobile;
-    if (config.weather_size_px !== undefined && config.info_size_px === undefined) m.info_size_px = config.weather_size_px;
-    if (config.weather_weight !== undefined && config.info_weight === undefined) m.info_weight = config.weather_weight;
-    if (config.weather_color !== undefined && config.info_color === undefined) m.info_color = config.weather_color;
-    if (config.weather_pill !== undefined && config.info_pill === undefined) m.info_pill = config.weather_pill;
-    if (config.weather_pill_background !== undefined && config.info_pill_background === undefined) m.info_pill_background = config.weather_pill_background;
-    if (config.weather_pill_padding_x !== undefined && config.info_pill_padding_x === undefined) m.info_pill_padding_x = config.weather_pill_padding_x;
-    if (config.weather_pill_padding_y !== undefined && config.info_pill_padding_y === undefined) m.info_pill_padding_y = config.weather_pill_padding_y;
-    if (config.weather_pill_radius !== undefined && config.info_pill_radius === undefined) m.info_pill_radius = config.weather_pill_radius;
-    if (config.weather_pill_blur !== undefined && config.info_pill_blur === undefined) m.info_pill_blur = config.weather_pill_blur;
-    if (config.weather_tap_action !== undefined && config.info_tap_action === undefined) m.info_tap_action = config.weather_tap_action;
-
-    // Auto-detect info_type for backward compatibility
-    if (config.info_type === undefined && config.weather_entity) {
-      m.info_type = "weather";
-    }
-
+    
     // Numeric clamping
     m.height_vh = clamp(+m.height_vh, 10, 100);
     m.min_height = clamp(+m.min_height, 60, 2000);
@@ -796,6 +790,12 @@ class HkiHeaderCard extends LitElement {
     m.info_pill_radius = clamp(+m.info_pill_radius || 999, 0, 999);
     m.info_pill_blur = clamp(+m.info_pill_blur || 0, 0, 40);
 
+    // Slot offsets
+    ['left', 'center', 'right'].forEach(slot => {
+        m[`${slot}_offset_x`] = toNum(m[`${slot}_offset_x`], 0);
+        m[`${slot}_offset_y`] = toNum(m[`${slot}_offset_y`], 0);
+    });
+
     // Weather options
     m.weather_show_icon = m.weather_show_icon !== false;
     m.weather_show_condition = m.weather_show_condition !== false;
@@ -822,9 +822,6 @@ class HkiHeaderCard extends LitElement {
     m.title_weight = normalizeWeightKey(m.title_weight ?? "bold", "bold");
     m.subtitle_weight = normalizeWeightKey(m.subtitle_weight ?? "medium", "medium");
 
-    // Info type validation
-    m.info_type = ["none", "weather", "datetime", "custom"].includes(m.info_type) ? m.info_type : "none";
-
     this._config = m;
     this._scheduleTemplateSetup(0);
     this._debouncedBadgesZIndex();
@@ -843,7 +840,7 @@ class HkiHeaderCard extends LitElement {
   _buildTemplateVariables() {
     return { config: this._config ?? {}, user: this._getUserVariable() };
   }
-
+  
   _scheduleTemplateSetup(delayMs = 0) {
     if (this._tpl.timer) clearTimeout(this._tpl.timer);
     this._tpl.timer = setTimeout(() => {
@@ -851,12 +848,12 @@ class HkiHeaderCard extends LitElement {
       this._setupTemplates();
     }, Math.max(0, delayMs));
   }
-
+  
   _setupTemplates() {
     this._setupTemplateKey("title", this._config?.title ?? "");
     this._setupTemplateKey("subtitle", this._config?.subtitle ?? "");
   }
-
+  
   _setupTemplateKey(key, raw) {
     const isTpl = this._isTemplateString(raw);
 
@@ -888,7 +885,7 @@ class HkiHeaderCard extends LitElement {
       this._renderTemplateOnce(key, seq, raw, vars, sig);
     }
   }
-
+  
   _applyCachedTemplate(key, sig) {
     try {
       const cached = sessionStorage.getItem(sig);
@@ -980,7 +977,7 @@ class HkiHeaderCard extends LitElement {
                    /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(t);
     return isPath ? `url('${t}')` : t;
   }
-
+  
   _debouncedBadgesZIndex() {
     if (this._rafBadges) return;
     this._rafBadges = requestAnimationFrame(() => {
@@ -1038,7 +1035,7 @@ class HkiHeaderCard extends LitElement {
     }
     return null;
   }
-
+  
   _parseServiceData(serviceData) {
     if (!serviceData) return {};
     if (typeof serviceData === "object") return serviceData;
@@ -1108,77 +1105,86 @@ class HkiHeaderCard extends LitElement {
     }
   }
 
-  _getInfoContainerStyle(cfg) {
-    const isMobile = this._viewportWidth > 0 && this._viewportWidth <= (cfg.mobile_breakpoint || 768);
-    const offsetX = isMobile && cfg.info_offset_x_mobile != null ? cfg.info_offset_x_mobile : cfg.info_offset_x;
-    const offsetY = isMobile && cfg.info_offset_y_mobile != null ? cfg.info_offset_y_mobile : cfg.info_offset_y;
+  // --- STYLING HELPERS ---
 
+  _getSlotStyle(settings, isLegacy = false) {
+    const cfg = this._config;
     const fontFamily = this._resolveFontFamily();
+    
+    // Legacy positioning uses absolute specific logic
+    if (isLegacy) {
+        const isMobile = this._viewportWidth > 0 && this._viewportWidth <= (cfg.mobile_breakpoint || 768);
+        const offsetX = isMobile && cfg.info_offset_x_mobile != null ? cfg.info_offset_x_mobile : cfg.info_offset_x;
+        const offsetY = isMobile && cfg.info_offset_y_mobile != null ? cfg.info_offset_y_mobile : cfg.info_offset_y;
+        
+        const posStyle = cfg.info_align === "left"
+          ? `left:${offsetX}px;top:${offsetY}px;`
+          : `right:${offsetX}px;top:${offsetY}px;`;
+          
+        return {
+            posStyle,
+            wrapperStyle: `font-family:${fontFamily};font-size:${cfg.info_size_px}px;font-weight:${this._resolveWeight("info_weight")};color:${cfg.info_color || "inherit"};`,
+            iconSize: Math.round(cfg.info_size_px * 2)
+        };
+    }
+
+    // Top Bar Slots use generic styling + margin offsets
     const iconSize = Math.round((cfg.info_size_px || 12) * 2);
-    const infoColor = cfg.info_color?.trim() || "var(--hki-header-text-color, #fff)";
-    const infoInline = `font-family:${fontFamily};font-style:${cfg.font_style || "normal"};font-size:${cfg.info_size_px || 12}px;font-weight:${this._resolveWeight("info_weight")};color:${infoColor};`;
+    const color = cfg.info_color?.trim() || "var(--hki-header-text-color, #fff)";
+    
+    // We apply offsets via transform to not break flex flow completely
+    const transX = settings.offset_x || 0;
+    const transY = settings.offset_y || 0;
+    const transform = (transX || transY) ? `transform: translate(${transX}px, ${transY}px);` : "";
 
-    const posStyle = cfg.info_align === "left"
-      ? `left:${offsetX}px;top:${offsetY}px;--info-icon-size:${iconSize}px;`
-      : `right:${offsetX}px;top:${offsetY}px;--info-icon-size:${iconSize}px;`;
-
-    const pillStyle = cfg.info_pill
-      ? `--hki-info-pill-background:${cfg.info_pill_background};--hki-info-pill-padding-x:${cfg.info_pill_padding_x}px;--hki-info-pill-padding-y:${cfg.info_pill_padding_y}px;--hki-info-pill-radius:${cfg.info_pill_radius}px;--hki-info-pill-blur:${cfg.info_pill_blur}px;`
-      : "";
-
-    return { posStyle, infoInline, pillStyle, iconSize };
+    return {
+        posStyle: "",
+        wrapperStyle: `font-family:${fontFamily};font-size:${cfg.info_size_px}px;font-weight:${this._resolveWeight("info_weight")};color:${color};${transform}`,
+        iconSize
+    };
   }
 
-  async _createCustomCard() {
-    if (!window.loadCardHelpers) return;
-    
-    // cleanup old card
-    if (this._infoCardEl) this._infoCardEl = null;
+  // --- CARD GENERATION ---
 
-    try {
-      const helpers = await window.loadCardHelpers();
-      const element = await helpers.createCardElement(this._config.info_card);
-      
-      if (this.hass) element.hass = this.hass;
-      
-      // Style adjustments to make it fit nicely
-      element.style.display = "block";
-      
-      this._infoCardEl = element;
-    } catch (e) {
-      console.error("Failed to create custom card", e);
+  async _createCustomCards() {
+    if (!window.loadCardHelpers) return;
+    const cfg = this._config;
+
+    const loadCard = async (conf, propName) => {
+        if (!conf) return;
+        try {
+            const helpers = await window.loadCardHelpers();
+            const el = await helpers.createCardElement(conf);
+            if (this.hass) el.hass = this.hass;
+            el.style.display = "block";
+            this[propName] = el;
+        } catch (e) { console.error("HKI Header: Custom Card Error", e); }
+    };
+
+    if (cfg.layout_mode === 'default' && cfg.info_type === 'custom') {
+        loadCard(cfg.info_card, '_infoCardLegacy');
+    } else if (cfg.layout_mode === 'top_bar') {
+        if (cfg.left_type === 'custom') loadCard(cfg.left_content, '_infoCardLeft');
+        if (cfg.center_type === 'custom') loadCard(cfg.center_content, '_infoCardCenter');
+        if (cfg.right_type === 'custom') loadCard(cfg.right_content, '_infoCardRight');
     }
   }
 
-  _renderCustomCard() {
-    if (!this._infoCardEl) return html``;
-    
-    const cfg = this._config;
-    // Reuse the positioning logic
-    const { posStyle, infoInline } = this._getInfoContainerStyle(cfg);
+  // --- RENDERERS ---
 
-    // We override specific styles because a card is a block element, not inline text
-    // We allow the user to control width via the card config, but we anchor it.
-    return html`
-      <div class="info-container" style="${posStyle} ${infoInline} display: block; min-width: 100px;">
-        ${this._infoCardEl}
-      </div>
-    `;
-  }
-
-  _renderWeather() {
-    if (!this._config.weather_entity || !this.hass) return html``;
-
-    const weatherEntity = this.hass.states[this._config.weather_entity];
+  _renderWeather(settings, slotStyle) {
+    if (!settings.entity || !this.hass) return html``;
+    const weatherEntity = this.hass.states[settings.entity];
     if (!weatherEntity) return html``;
 
-    const cfg = this._config;
+    const cfg = this._config; // Global weather settings
     const state = weatherEntity.state;
     const attrs = weatherEntity.attributes || {};
-
     const icon = WEATHER_ICON_MAP[state] || "mdi:weather-partly-cloudy";
-    const iconColor = cfg.weather_icon_color_mode === "custom" && cfg.weather_icon_color?.trim()
-      ? cfg.weather_icon_color.trim()
+    
+    // Color logic
+    const iconColor = cfg.weather_icon_color_mode === "custom" && cfg.weather_icon_color 
+      ? cfg.weather_icon_color 
       : cfg.weather_icon_color_mode === "inherit" || !cfg.weather_colored_icons
         ? "inherit"
         : WEATHER_COLOR_MAP[state] || "inherit";
@@ -1186,181 +1192,204 @@ class HkiHeaderCard extends LitElement {
     let conditionText = String(state || "").replace(/-/g, " ");
     if (this.hass.formatEntityState) conditionText = this.hass.formatEntityState(weatherEntity);
 
-    const temperature = attrs.temperature;
-    const tempUnit = this.hass.config.unit_system.temperature;
-    const humidity = attrs.humidity;
-    const windSpeed = attrs.wind_speed;
-    const speedUnit = this.hass.config.unit_system.speed || attrs.wind_speed_unit || "";
-    const pressure = attrs.pressure;
-    const pressureUnit = this.hass.config.unit_system.pressure || attrs.pressure_unit || "";
-
-    const { posStyle, infoInline, pillStyle, iconSize } = this._getInfoContainerStyle(cfg);
-
-    const hasAction = cfg.info_tap_action?.action !== "none";
-    const baseClass = hasAction ? "info-container info-clickable" : "info-container";
-    const pillClass = cfg.info_pill ? "info-pill" : "";
-    const iconAnimClass = cfg.weather_animate_icon === "float" ? "animate-float"
-                        : cfg.weather_animate_icon === "pulse" ? "animate-pulse"
-                        : cfg.weather_animate_icon === "spin" ? "animate-spin" : "";
-
     const useSvg = !!cfg.weather_icon_pack_path;
     const svgUrl = useSvg ? `${cfg.weather_icon_pack_path}/${state}.svg` : "";
+    const iconAnim = cfg.weather_animate_icon;
+    const animClass = iconAnim === 'float' ? 'animate-float' : iconAnim === 'pulse' ? 'animate-pulse' : iconAnim === 'spin' ? 'animate-spin' : '';
 
-    const handleTap = (e) => { e.stopPropagation(); if (cfg.info_tap_action) this._handleAction(cfg.info_tap_action); };
+    const pillClass = cfg.info_pill ? "info-pill" : "";
+    const pillStyle = cfg.info_pill ? `--hki-info-pill-background:${cfg.info_pill_background};padding:${cfg.info_pill_padding_y}px ${cfg.info_pill_padding_x}px;border-radius:${cfg.info_pill_radius}px;backdrop-filter:blur(${cfg.info_pill_blur}px);` : "";
+
+    const handleTap = (e) => { e.stopPropagation(); if (settings.tap_action) this._handleAction(settings.tap_action); };
 
     return html`
-      <div class="${baseClass} ${pillClass}" style="${posStyle}${infoInline}${pillStyle}" @click=${handleTap}>
+      <div class="info-container ${pillClass} ${settings.tap_action?.action !== 'none' ? 'info-clickable' : ''}" 
+           style="${slotStyle.posStyle}${slotStyle.wrapperStyle}${pillStyle}" 
+           @click=${handleTap}>
         ${cfg.weather_show_icon
           ? useSvg
-            ? html`<img src="${svgUrl}" class="info-icon ${iconAnimClass}" style="width:${iconSize}px;height:${iconSize}px;" alt="${state}" />`
-            : html`<ha-icon icon="${icon}" class="info-icon ${iconAnimClass}" style="color:${iconColor};"></ha-icon>`
+            ? html`<img src="${svgUrl}" class="info-icon ${animClass}" style="width:${slotStyle.iconSize}px;height:${slotStyle.iconSize}px;" alt="${state}" />`
+            : html`<ha-icon icon="${icon}" class="info-icon ${animClass}" style="color:${iconColor};--mdc-icon-size:${slotStyle.iconSize}px"></ha-icon>`
           : html``}
         ${cfg.weather_show_condition ? html`<span class="info-text">${conditionText}</span>` : html``}
-        ${cfg.weather_show_temperature && Number.isFinite(+temperature) ? html`<span class="info-temperature">${Math.round(+temperature)}${tempUnit}</span>` : html``}
-        ${cfg.weather_show_humidity && Number.isFinite(+humidity) ? html`<span>${Math.round(+humidity)}%</span>` : html``}
-        ${cfg.weather_show_wind && Number.isFinite(+windSpeed) ? html`<span>${Math.round(+windSpeed)}${speedUnit ? " " + speedUnit : ""}</span>` : html``}
-        ${cfg.weather_show_pressure && Number.isFinite(+pressure) ? html`<span>${Math.round(+pressure)}${pressureUnit ? " " + pressureUnit : ""}</span>` : html``}
+        ${cfg.weather_show_temperature && attrs.temperature != null ? html`<span class="info-temperature">${Math.round(attrs.temperature)}${this.hass.config.unit_system.temperature}</span>` : html``}
+        ${cfg.weather_show_humidity && Number.isFinite(+attrs.humidity) ? html`<span>${Math.round(+attrs.humidity)}%</span>` : html``}
+        ${cfg.weather_show_wind && Number.isFinite(+attrs.wind_speed) ? html`<span>${Math.round(+attrs.wind_speed)}</span>` : html``}
+        ${cfg.weather_show_pressure && Number.isFinite(+attrs.pressure) ? html`<span>${Math.round(+attrs.pressure)}</span>` : html``}
       </div>
     `;
   }
 
-  _renderDatetime() {
+  _renderDatetime(settings, slotStyle) {
     const cfg = this._config;
     const now = new Date(this._currentTime);
     const locale = this.hass?.language || 'en';
 
     const parts = [];
-    if (cfg.datetime_show_day) {
-      parts.push(formatDateTime(now, "DDDD", locale));
-    }
-    if (cfg.datetime_show_date) {
-      parts.push(formatDateTime(now, cfg.datetime_date_format || "D MMM", locale));
-    }
-    if (cfg.datetime_show_time) {
-      parts.push(formatDateTime(now, cfg.datetime_time_format || "HH:mm", locale));
-    }
-
-    if (parts.length === 0) return html``;
-
-    const separator = cfg.datetime_separator || " • ";
-    const displayText = parts.join(separator);
-
-    const { posStyle, infoInline, pillStyle, iconSize } = this._getInfoContainerStyle(cfg);
-
-    const hasAction = cfg.info_tap_action?.action !== "none";
-    const baseClass = hasAction ? "info-container info-clickable" : "info-container";
+    if (cfg.datetime_show_day) parts.push(formatDateTime(now, "DDDD", locale));
+    if (cfg.datetime_show_date) parts.push(formatDateTime(now, cfg.datetime_date_format, locale));
+    if (cfg.datetime_show_time) parts.push(formatDateTime(now, cfg.datetime_time_format, locale));
+    
+    if (!parts.length) return html``;
+    
     const pillClass = cfg.info_pill ? "info-pill" : "";
-    const iconAnimClass = cfg.datetime_animate_icon === "float" ? "animate-float"
-                        : cfg.datetime_animate_icon === "pulse" ? "animate-pulse"
-                        : cfg.datetime_animate_icon === "spin" ? "animate-spin" : "";
-
-    const handleTap = (e) => { e.stopPropagation(); if (cfg.info_tap_action) this._handleAction(cfg.info_tap_action); };
-
-    const iconColor = cfg.datetime_icon_color?.trim() || "inherit";
+    const pillStyle = cfg.info_pill ? `--hki-info-pill-background:${cfg.info_pill_background};padding:${cfg.info_pill_padding_y}px ${cfg.info_pill_padding_x}px;border-radius:${cfg.info_pill_radius}px;backdrop-filter:blur(${cfg.info_pill_blur}px);` : "";
+    
+    const animClass = cfg.datetime_animate_icon === 'float' ? 'animate-float' : cfg.datetime_animate_icon === 'pulse' ? 'animate-pulse' : '';
+    const handleTap = (e) => { e.stopPropagation(); if (settings.tap_action) this._handleAction(settings.tap_action); };
 
     return html`
-      <div class="${baseClass} ${pillClass}" style="${posStyle}${infoInline}${pillStyle}" @click=${handleTap}>
-        ${cfg.datetime_icon ? html`<ha-icon icon="${cfg.datetime_icon}" class="info-icon ${iconAnimClass}" style="color:${iconColor};"></ha-icon>` : html``}
-        <span class="info-text">${displayText}</span>
+      <div class="info-container ${pillClass} ${settings.tap_action?.action !== 'none' ? 'info-clickable' : ''}" 
+           style="${slotStyle.posStyle}${slotStyle.wrapperStyle}${pillStyle}"
+           @click=${handleTap}>
+        ${cfg.datetime_icon ? html`<ha-icon icon="${cfg.datetime_icon}" class="info-icon ${animClass}" style="color:${cfg.datetime_icon_color||'inherit'};--mdc-icon-size:${slotStyle.iconSize}px"></ha-icon>` : html``}
+        <span class="info-text">${parts.join(cfg.datetime_separator)}</span>
       </div>
     `;
   }
 
-  _renderInfoDisplay() {
-    const cfg = this._config;
-    switch (cfg.info_type) {
-      case "weather": return this._renderWeather();
-      case "datetime": return this._renderDatetime();
-      case "custom": return this._renderCustomCard();
-      default: return html``;
-    }
+  _renderCustomCardElement(element, settings, slotStyle) {
+    if (!element) return html``;
+    const transform = (settings.offset_x || settings.offset_y) ? `transform: translate(${settings.offset_x}px, ${settings.offset_y}px);` : "";
+    return html`
+      <div class="info-container" style="${slotStyle.posStyle}${slotStyle.wrapperStyle}${transform} display: block; min-width: 100px;">
+        ${element}
+      </div>
+    `;
+  }
+
+  _renderSlotContent(type, settings, element, isLegacy = false) {
+    const slotStyle = this._getSlotStyle(settings, isLegacy);
+    
+    if (type === 'weather') return this._renderWeather(settings, slotStyle);
+    if (type === 'datetime') return this._renderDatetime(settings, slotStyle);
+    if (type === 'custom') return this._renderCustomCardElement(element, settings, slotStyle);
+    return html``;
   }
 
   render() {
     if (!this._config) return html``;
-
     const cfg = this._config;
     const effectiveFixed = !!cfg.fixed && !this._inPreview;
 
+    // --- MAIN RENDER ---
     const titleText = this._isTemplateString(cfg.title) ? (this._renderedTitle ?? "") : (cfg.title ?? "");
     const subtitleText = this._isTemplateString(cfg.subtitle) ? (this._renderedSubtitle ?? "") : (cfg.subtitle ?? "");
-    const subtitleVisible = !!subtitleText.trim();
 
-    // Change: if not fixed (or in preview), allow normal card width
-    const cardWidth = effectiveFixed ? "100vw" : "100%";
-    
-    const resolvedBackground = this._resolveBackground(cfg.background);
-
-    const cardStyle = [
-      `width:${cardWidth}`,
-      `height:${cfg.height_vh}vh`,
-      `min-height:${cfg.min_height}px`,
-      `max-height:${cfg.max_height}px`,
-      resolvedBackground ? `background:${resolvedBackground}` : "",
-      cfg.background_position ? `background-position:${cfg.background_position}` : "",
-      cfg.background_repeat ? `background-repeat:${cfg.background_repeat}` : "",
-      cfg.background_size ? `background-size:${cfg.background_size}` : "",
-    ].filter(Boolean).join(";");
-
+    // Background & Card Styles
+    const bgStyle = this._resolveBackground(cfg.background);
+    const cardStyle = `
+        width:${effectiveFixed ? "100vw" : "100%"};
+        height:${cfg.height_vh}vh;
+        min-height:${cfg.min_height}px;max-height:${cfg.max_height}px;
+        background:${bgStyle};
+        background-position:${cfg.background_position};
+        background-repeat:${cfg.background_repeat};
+        background-size:${cfg.background_size};
+    `;
     const overlayStyle = `background:linear-gradient(to bottom, transparent 0%, ${cfg.blend_color} ${cfg.blend_stop}%, ${cfg.blend_color} 100%);`;
+
+    // Content Styles
+    const contentStyle = effectiveFixed ? `margin-left:${this._offsetLeft}px;width:${this._contentWidth}px;` : `width:100%;`;
     
-    // Change: if not fixed, do not apply calculated offsets
-    const contentStyle = effectiveFixed 
-      ? `margin-left:${this._offsetLeft}px;width:${this._contentWidth}px;`
-      : `width:100%;`;
+    // Title Positioning
+    const titleStyle = `font-family:${this._resolveFontFamily()};font-style:${cfg.font_style};font-size:${cfg.title_size_px}px;font-weight:${this._resolveWeight("title_weight")};color:${cfg.title_color||"var(--hki-header-text-color, #fff)"};`;
+    const subStyle = `font-family:${this._resolveFontFamily()};font-style:${cfg.font_style};font-size:${cfg.subtitle_size_px}px;font-weight:${this._resolveWeight("subtitle_weight")};color:${cfg.subtitle_color||"var(--hki-header-text-color, #fff)"};`;
+    const subTrans = `transform:translate(${(cfg.subtitle_offset_x||0)-(cfg.title_offset_x||0)}px, ${(cfg.subtitle_offset_y||0)-(cfg.title_offset_y||0)}px);`;
+    
+    let titleBlockPos;
+    if (cfg.text_align === "right") titleBlockPos = `right:${cfg.title_offset_x}px;top:${cfg.title_offset_y}px;text-align:right;align-items:flex-end;`;
+    else if (cfg.text_align === "center") titleBlockPos = `left:50%;top:${cfg.title_offset_y}px;transform:translateX(-50%);text-align:center;align-items:center;`;
+    else titleBlockPos = `left:${cfg.title_offset_x}px;top:${cfg.title_offset_y}px;text-align:left;align-items:flex-start;`;
 
-    const fontFamily = this._resolveFontFamily();
-    const fontStyle = cfg.font_style || "normal";
-    const titleColor = cfg.title_color?.trim() || "var(--hki-header-text-color, #fff)";
-    const subtitleColor = cfg.subtitle_color?.trim() || "var(--hki-header-text-color, #fff)";
-    const titleInline = `font-family:${fontFamily};font-style:${fontStyle};font-size:${cfg.title_size_px}px;font-weight:${this._resolveWeight("title_weight")};color:${titleColor};`;
-    const subtitleInline = `font-family:${fontFamily};font-style:${fontStyle};font-size:${cfg.subtitle_size_px}px;font-weight:${this._resolveWeight("subtitle_weight")};color:${subtitleColor};`;
+    // --- SLOT LOGIC ---
+    let extraContent = html``;
 
-    const subtitleOffsetX = (cfg.subtitle_offset_x || 0) - (cfg.title_offset_x || 0);
-    const subtitleOffsetY = (cfg.subtitle_offset_y || 0) - (cfg.title_offset_y || 0);
-    const subtitleTransform = `transform:translate(${subtitleOffsetX}px, ${subtitleOffsetY}px);`;
+    if (cfg.layout_mode === 'top_bar') {
+        const leftType = cfg.left_type || 'none';
+        const centerType = cfg.center_type || 'none';
+        const rightType = cfg.right_type || 'none';
+        
+        const hasLeft = leftType !== 'none';
+        const hasCenter = centerType !== 'none';
+        const hasRight = rightType !== 'none';
+        const activeCount = (hasLeft?1:0) + (hasCenter?1:0) + (hasRight?1:0);
 
-    let titleBlockStyle;
-    if (cfg.text_align === "right") titleBlockStyle = `left:auto;right:${cfg.title_offset_x}px;top:${cfg.title_offset_y}px;text-align:right;align-items:flex-end;`;
-    else if (cfg.text_align === "center") titleBlockStyle = `left:50%;top:${cfg.title_offset_y}px;transform:translateX(-50%);text-align:center;align-items:center;`;
-    else titleBlockStyle = `left:${cfg.title_offset_x}px;top:${cfg.title_offset_y}px;text-align:left;align-items:flex-start;`;
+        extraContent = html`
+            <div class="top-bar-container">
+                ${hasLeft ? html`
+                    <div class="hb-slot slot-left ${activeCount===1?'only-one':''}">
+                        ${this._renderSlotContent(leftType, {
+                            entity: cfg.left_entity || cfg.weather_entity, // Fallback for weather
+                            offset_x: cfg.left_offset_x,
+                            offset_y: cfg.left_offset_y,
+                            tap_action: cfg.left_tap_action
+                        }, this._infoCardLeft)}
+                    </div>
+                ` : (activeCount > 1 ? html`<div class="hb-slot slot-left"></div>` : html``)}
 
-    const topOffset = this._kioskMode ? (cfg.fixed_top || 0) : (cfg.fixed_top || 0) + 48;
-    const wrapperStyle = effectiveFixed ? `top:${topOffset}px;` : "";
+                ${hasCenter ? html`
+                    <div class="hb-slot slot-center ${activeCount===1?'only-one':''}">
+                        ${this._renderSlotContent(centerType, {
+                            entity: cfg.center_entity || cfg.weather_entity,
+                            offset_x: cfg.center_offset_x,
+                            offset_y: cfg.center_offset_y,
+                            tap_action: cfg.center_tap_action
+                        }, this._infoCardCenter)}
+                    </div>
+                ` : (activeCount > 2 ? html`<div class="hb-slot slot-center"></div>` : html``)}
 
-    const badgesOffset = cfg.badges_fixed ? (cfg.badges_offset_pinned || 48) : (cfg.badges_offset_unpinned || 100);
-    let spacerH = effectiveFixed ? Math.max(0, (this._headerHeight || 0) - badgesOffset + topOffset) : 0;
-
-    if (cfg.badges_fixed && effectiveFixed) {
-      const kioskGapAdjustment = this._kioskMode ? 48 : 0;
-      spacerH += (cfg.badges_gap || 0) + kioskGapAdjustment - 48;
+                ${hasRight ? html`
+                    <div class="hb-slot slot-right ${activeCount===1?'only-one':''}">
+                        ${this._renderSlotContent(rightType, {
+                            entity: cfg.right_entity || cfg.weather_entity,
+                            offset_x: cfg.right_offset_x,
+                            offset_y: cfg.right_offset_y,
+                            tap_action: cfg.right_tap_action
+                        }, this._infoCardRight)}
+                    </div>
+                ` : (activeCount > 1 ? html`<div class="hb-slot slot-right"></div>` : html``)}
+            </div>
+        `;
+    } else {
+        // LEGACY MODE
+        if (cfg.info_type !== 'none') {
+            extraContent = this._renderSlotContent(cfg.info_type, {
+                entity: cfg.weather_entity, // Legacy uses shared
+                offset_x: 0, // Legacy styling handles offsets via CSS left/top
+                offset_y: 0,
+                tap_action: cfg.info_tap_action
+            }, this._infoCardLegacy, true);
+        }
     }
 
     const cardMarkup = html`
-      <ha-card class="header" style=${cardStyle} aria-label=${titleText || "Header"}>
+      <ha-card class="header" style=${cardStyle}>
         <div class="overlay" style=${overlayStyle}></div>
         <div class="content" style=${contentStyle}>
-          <div class="title-block" style=${titleBlockStyle}>
-            <div class="title" style=${titleInline} role="heading" aria-level="1">${titleText}</div>
-            ${subtitleVisible ? html`<div class="subtitle" style="${subtitleInline}${subtitleTransform}">${subtitleText}</div>` : html``}
+          ${extraContent}
+          <div class="title-block" style=${titleBlockPos}>
+            <div class="title" style=${titleStyle}>${titleText}</div>
+            ${subtitleText ? html`<div class="subtitle" style="${subStyle}${subTrans}">${subtitleText}</div>` : html``}
           </div>
-          ${this._renderInfoDisplay()}
         </div>
       </ha-card>
     `;
 
     if (!effectiveFixed) return cardMarkup;
-
+    
+    // Calculate spacer
+    const topOffset = (this._kioskMode ? 0 : 48) + (cfg.fixed_top||0);
+    let spacerH = Math.max(0, (this._headerHeight||0) - (cfg.badges_fixed ? (cfg.badges_offset_pinned||48) : (cfg.badges_offset_unpinned||100)) + topOffset);
+    
     return html`
-      <div class="header-fixed" style=${wrapperStyle}>${cardMarkup}</div>
-      <div class="header-spacer" style="height:${spacerH}px;"></div>
+      <div class="header-fixed" style="top:${topOffset}px">${cardMarkup}</div>
+      <div class="header-spacer" style="height:${spacerH}px"></div>
     `;
   }
 
-  static getConfigElement() {
-    return document.createElement("hki-header-card-editor");
-  }
-
+  static getConfigElement() { return document.createElement("hki-header-card-editor"); }
+  
   static getStubConfig() {
     return {
       ...DEFAULTS,
@@ -1369,10 +1398,8 @@ class HkiHeaderCard extends LitElement {
       font_family: "roboto",
     };
   }
-
-  static getCardSize() {
-    return 3;
-  }
+  
+  static getCardSize() { return 3; }
 }
 
 customElements.define(CARD_NAME, HkiHeaderCard);
@@ -1383,546 +1410,154 @@ customElements.define(CARD_NAME, HkiHeaderCard);
 // ─────────────────────────────────────────────────────────────
 
 class HkiHeaderCardEditor extends LitElement {
-  static get properties() {
-    return {
-      hass: {},
-      lovelace: {},
-      _config: { attribute: false },
-    };
-  }
+  static get properties() { return { hass: {}, _config: { attribute: false } }; }
 
-  constructor() {
-    super();
-    this._config = {};
-  }
+  setConfig(config) { this._config = { ...DEFAULTS, ...config }; }
 
-  setConfig(config) {
-    this._config = { ...DEFAULTS, ...config };
-  }
-
-  _renderEntityPicker(label, field, value, helper = "", domain = null) {
-    return html`
-      <ha-selector
-        .hass=${this.hass}
-        .selector=${{ entity: { domain } }}
-        .value=${value || ""}
-        .label=${label}
-        .helper=${helper}
-        @value-changed=${(ev) => this._changed(ev, field)}
-      ></ha-selector>
-    `;
-  }
-
-  _renderNavigationPicker(label, field, value, helper = "") {
-    return html`
-      <ha-selector
-        .hass=${this.hass}
-        .selector=${{ navigation: {} }}
-        .value=${value || ""}
-        .label=${label}
-        .helper=${helper}
-        @value-changed=${(ev) => this._changed(ev, field)}
-      ></ha-selector>
-    `;
-  }
-
-  _renderIconPicker(label, field, value, helper = "") {
-    return html`
-      <ha-selector
-        .hass=${this.hass}
-        .selector=${{ icon: {} }}
-        .value=${value || ""}
-        .label=${label}
-        .helper=${helper}
-        @value-changed=${(ev) => this._changed(ev, field)}
-      ></ha-selector>
-    `;
-  }
-
-  _val(ev) {
-    return ev.detail?.value ?? ev.target?.value;
-  }
-
-  _handleCustomCardChange(ev) {
-    ev.stopPropagation();
-    if (!this._config) return;
-    const newCardConfig = ev.detail.config;
-    this._config = { ...this._config, info_card: newCardConfig };
-    this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config } }));
-  }
-
-  _changed(ev, explicitField = null) {
-    ev.stopPropagation();
-    const field = explicitField || ev.target?.dataset?.field;
-    if (!field || !this._config) return;
-
-    let value = this._val(ev);
-
-    const numeric = new Set([
-      "height_vh", "min_height", "max_height", "blend_stop", "fixed_top",
-      "title_offset_x", "title_offset_y", "subtitle_offset_x", "subtitle_offset_y",
-      "title_size_px", "subtitle_size_px", "badges_offset_pinned", "badges_offset_unpinned",
-      "badges_gap", "info_offset_x", "info_offset_y", "info_size_px",
-      "mobile_breakpoint", "info_pill_padding_x", "info_pill_padding_y",
-      "info_pill_radius", "info_pill_blur",
-    ]);
-
-    const nullableNumeric = new Set(["info_offset_x_mobile", "info_offset_y_mobile"]);
-
-    if (field === "info_card") {
-        try {
-          value = window.jsyaml.load(value);
-        } catch (e) {
-          console.error("Invalid YAML", e);
-          return;
-        }
-    } else if (nullableNumeric.has(field)) {
-      value = value === "" || value == null ? null : toNum(value, null);
-      if (value === null || !Number.isFinite(value)) value = null;
-    } else if (numeric.has(field)) {
-      const n = Number(value);
-      if (!Number.isFinite(n)) return;
-      value = n;
-    }
-
-    const bools = new Set([
-      "fixed", "badges_fixed", "weather_show_icon", "weather_show_condition",
-      "weather_show_temperature", "weather_show_humidity", "weather_show_wind",
-      "weather_show_pressure", "weather_colored_icons", "info_pill",
-      "datetime_show_time", "datetime_show_date", "datetime_show_day",
-    ]);
-    if (bools.has(field)) value = !!(ev.target?.checked ?? value);
-
-    let next;
-
-    if (field.includes(".")) {
-      const [rootField, subField] = field.split(".");
-      const currentValue = this._config[rootField] || {};
-      next = { ...this._config, [rootField]: { ...currentValue, [subField]: value } };
-
-      if (subField === "action" && value === "call-service") {
-        next[rootField] = { ...next[rootField], service: next[rootField].service ?? "", service_data: next[rootField].service_data ?? "entity_id: \n" };
-      }
-    } else {
-      next = { ...this._config, [field]: value };
-    }
-
-    if (field === "badges_fixed") {
-      const currentOffset = this._config.badges_offset;
-      if (currentOffset === 48 || currentOffset === 100 || currentOffset === 0) {
-        next.badges_offset = value ? 48 : 100;
-      }
-    }
-
-    this._config = next;
-    this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: next } }));
-  }
-
-  _renderTemplateEditor(label, field, options = {}) {
-    const value = this._config?.[field] ?? "";
-    const { autocompleteIcons = false } = options;
-    return html`
-      <div class="code-wrap">
-        <div class="code-label">${label}</div>
-        <ha-code-editor 
-          .hass=${this.hass} 
-          .value=${value} 
-          mode="jinja2" 
-          data-field=${field} 
-          ?autocomplete-entities=${true}
-          ?autocomplete-icons=${autocompleteIcons}
-          @value-changed=${this._changed}
-        ></ha-code-editor>
-      </div>
-    `;
-  }
-
-  _renderServiceDataEditor(field, serviceData) {
-    let value = "";
-    if (serviceData) {
-      if (typeof serviceData === 'string') value = serviceData;
-      else value = Object.entries(serviceData).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('\n');
-    }
-    return html`
-      <div class="code-wrap">
-        <div class="code-label">Service data (YAML)</div>
-        <ha-code-editor .hass=${this.hass} .value=${value} mode="yaml" ?autocomplete-entities=${true} ?autocomplete-icons=${true} data-field="${field}.service_data" @value-changed=${this._changed}></ha-code-editor>
-      </div>
-    `;
-  }
-
-  _renderActionEditor(label, field) {
-    const action = this._config?.[field] || { action: "none" };
-    const actionType = action.action || "none";
-    const hasServicePicker = !!customElements.get("ha-service-picker");
-
-    return html`
-      <div class="code-wrap">
-        <div class="code-label">${label}</div>
-        <ha-select label="Action type" .value=${actionType} data-field="${field}.action" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-          <mwc-list-item value="none">None</mwc-list-item>
-          <mwc-list-item value="navigate">Navigate</mwc-list-item>
-          <mwc-list-item value="url">URL</mwc-list-item>
-          <mwc-list-item value="call-service">Call service</mwc-list-item>
-          <mwc-list-item value="more-info">More info</mwc-list-item>
-          <mwc-list-item value="toggle">Toggle</mwc-list-item>
-        </ha-select>
-        
-        ${actionType === "navigate" ? this._renderNavigationPicker("Navigation path", `${field}.navigation_path`, action.navigation_path || "", "Pick a view or enter a custom path") : ""}
-        ${actionType === "url" ? html`<ha-textfield label="URL" .value=${action.url_path || ""} data-field="${field}.url_path" @input=${this._changed}></ha-textfield>` : ""}
-        ${actionType === "call-service" ? html`
-          ${hasServicePicker
-            ? html`<ha-service-picker style="width:100%;display:block;" .hass=${this.hass} .value=${action.service || ""} @value-changed=${(ev) => this._changed(ev, `${field}.service`)}></ha-service-picker>`
-            : html`<ha-textfield label="Service" helper="e.g., light.turn_on" .value=${action.service || ""} data-field="${field}.service" @input=${this._changed}></ha-textfield>`}
-          ${this._renderServiceDataEditor(field, action.service_data)}
-        ` : ""}
-        ${actionType === "more-info" || actionType === "toggle" ? this._renderEntityPicker("Entity", `${field}.entity`, action.entity || "", "Entity to show info for or toggle") : ""}
-      </div>
-    `;
-  }
-
-  _renderInfoTypeOptions() {
-    const cfg = this._config;
-    const infoType = cfg.info_type || "none";
-
-    if (infoType === "none") return html``;
-
-    // Shared positioning options - visible for ALL types, including custom
-    const sharedOptions = html`
-      <div class="section">Position & Style</div>
-      <ha-select label="Alignment" .value=${cfg.info_align || "right"} data-field="info_align" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-        <mwc-list-item value="left">Left</mwc-list-item>
-        <mwc-list-item value="right">Right</mwc-list-item>
-      </ha-select>
-
-      <div class="inline-fields-2">
-        <ha-textfield label="Horizontal offset (px)" type="number" .value=${String(cfg.info_offset_x ?? 5)} data-field="info_offset_x" @input=${this._changed}></ha-textfield>
-        <ha-textfield label="Vertical offset (px)" type="number" .value=${String(cfg.info_offset_y ?? 40)} data-field="info_offset_y" @input=${this._changed}></ha-textfield>
-      </div>
-
-      <div class="section">Position (mobile phone)</div>
-      <div class="inline-fields-2">
-        <ha-textfield label="Mobile horizontal (px)" type="number" .value=${cfg.info_offset_x_mobile == null ? "" : String(cfg.info_offset_x_mobile)} data-field="info_offset_x_mobile" @input=${this._changed}></ha-textfield>
-        <ha-textfield label="Mobile vertical (px)" type="number" .value=${cfg.info_offset_y_mobile == null ? "" : String(cfg.info_offset_y_mobile)} data-field="info_offset_y_mobile" @input=${this._changed}></ha-textfield>
-      </div>
-      <ha-textfield label="Mobile breakpoint (px)" type="number" .value=${String(cfg.mobile_breakpoint || 768)} data-field="mobile_breakpoint" @input=${this._changed}></ha-textfield>
-
-      <div class="section">Font Style</div>
-      <div class="inline-fields-2">
-        <ha-textfield label="Font size (px)" type="number" .value=${String(cfg.info_size_px || 12)} data-field="info_size_px" @input=${this._changed}></ha-textfield>
-        <ha-select label="Font weight" .value=${cfg.info_weight || "medium"} data-field="info_weight" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-          <mwc-list-item value="light">Light</mwc-list-item>
-          <mwc-list-item value="regular">Regular</mwc-list-item>
-          <mwc-list-item value="medium">Medium</mwc-list-item>
-          <mwc-list-item value="semibold">Semi-bold</mwc-list-item>
-          <mwc-list-item value="bold">Bold</mwc-list-item>
-          <mwc-list-item value="black">Black</mwc-list-item>
-        </ha-select>
-      </div>
-
-      <ha-textfield label="Text color (CSS)" placeholder="inherit" .value=${cfg.info_color || ""} data-field="info_color" @input=${this._changed}></ha-textfield>
-
-      <div class="section">Pill background</div>
-      <div class="switch-row">
-        <ha-switch .checked=${!!cfg.info_pill} data-field="info_pill" @change=${this._changed}></ha-switch>
-        <span>Enable pill</span>
-      </div>
-      ${cfg.info_pill ? html`
-        <ha-textfield label="Pill background (CSS)" .value=${cfg.info_pill_background || "rgba(0,0,0,0.25)"} data-field="info_pill_background" @input=${this._changed}></ha-textfield>
-        <div class="inline-fields-2">
-          <ha-textfield label="Padding X (px)" type="number" .value=${String(cfg.info_pill_padding_x ?? 10)} data-field="info_pill_padding_x" @input=${this._changed}></ha-textfield>
-          <ha-textfield label="Padding Y (px)" type="number" .value=${String(cfg.info_pill_padding_y ?? 6)} data-field="info_pill_padding_y" @input=${this._changed}></ha-textfield>
-        </div>
-        <div class="inline-fields-2">
-          <ha-textfield label="Radius (px)" type="number" .value=${String(cfg.info_pill_radius ?? 999)} data-field="info_pill_radius" @input=${this._changed}></ha-textfield>
-          <ha-textfield label="Blur (px)" type="number" .value=${String(cfg.info_pill_blur ?? 0)} data-field="info_pill_blur" @input=${this._changed}></ha-textfield>
-        </div>
-      ` : ""}
-
-      ${this._renderActionEditor("Tap action", "info_tap_action")}
-    `;
-
-    // Type-specific options
-    if (infoType === "weather") {
-      return html`
-        <div class="section">Weather Settings</div>
-        ${this._renderEntityPicker("Weather entity", "weather_entity", cfg.weather_entity, "Select a weather entity", "weather")}
-
-        ${cfg.weather_entity ? html`
-          <div class="section">Weather elements</div>
-          <div class="inline-fields-3">
-            <div class="switch-row"><ha-switch .checked=${cfg.weather_show_icon !== false} data-field="weather_show_icon" @change=${this._changed}></ha-switch><span>Icon</span></div>
-            <div class="switch-row"><ha-switch .checked=${cfg.weather_show_condition !== false} data-field="weather_show_condition" @change=${this._changed}></ha-switch><span>Condition</span></div>
-            <div class="switch-row"><ha-switch .checked=${cfg.weather_show_temperature !== false} data-field="weather_show_temperature" @change=${this._changed}></ha-switch><span>Temp</span></div>
-            <div class="switch-row"><ha-switch .checked=${!!cfg.weather_show_humidity} data-field="weather_show_humidity" @change=${this._changed}></ha-switch><span>Humidity</span></div>
-            <div class="switch-row"><ha-switch .checked=${!!cfg.weather_show_wind} data-field="weather_show_wind" @change=${this._changed}></ha-switch><span>Wind</span></div>
-            <div class="switch-row"><ha-switch .checked=${!!cfg.weather_show_pressure} data-field="weather_show_pressure" @change=${this._changed}></ha-switch><span>Pressure</span></div>
-          </div>
-
-          <div class="section">Weather icon styling</div>
-          <ha-textfield label="Icon pack path (SVG)" helper="Path to folder (e.g., /local/icons/weather)" .value=${cfg.weather_icon_pack_path || ""} data-field="weather_icon_pack_path" @input=${this._changed}></ha-textfield>
-          
-          <div class="switch-row">
-            <ha-switch .checked=${cfg.weather_colored_icons !== false} data-field="weather_colored_icons" @change=${this._changed}></ha-switch>
-            <span>Colored icons</span>
-          </div>
-          <div class="inline-fields-2">
-            <ha-select label="Icon color mode" .value=${cfg.weather_icon_color_mode || "state"} data-field="weather_icon_color_mode" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-              <mwc-list-item value="state">By condition</mwc-list-item>
-              <mwc-list-item value="custom">Custom</mwc-list-item>
-              <mwc-list-item value="inherit">Inherit</mwc-list-item>
-            </ha-select>
-            <ha-select label="Icon animation" .value=${cfg.weather_animate_icon || "none"} data-field="weather_animate_icon" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-              <mwc-list-item value="none">None</mwc-list-item>
-              <mwc-list-item value="float">Float</mwc-list-item>
-              <mwc-list-item value="pulse">Pulse</mwc-list-item>
-              <mwc-list-item value="spin">Spin</mwc-list-item>
-            </ha-select>
-          </div>
-          ${cfg.weather_icon_color_mode === "custom" ? html`
-            <ha-textfield label="Custom icon color (CSS)" .value=${cfg.weather_icon_color || ""} data-field="weather_icon_color" @input=${this._changed}></ha-textfield>
-          ` : ""}
-
-          ${sharedOptions}
-        ` : html`
-          <ha-alert alert-type="warning">Please select a weather entity to configure weather display.</ha-alert>
-        `}
-      `;
-    }
-
-    if (infoType === "datetime") {
-      return html`
-        <div class="section">Date & Time Settings</div>
-        <div class="inline-fields-3">
-          <div class="switch-row"><ha-switch .checked=${cfg.datetime_show_day !== false} data-field="datetime_show_day" @change=${this._changed}></ha-switch><span>Day</span></div>
-          <div class="switch-row"><ha-switch .checked=${cfg.datetime_show_date !== false} data-field="datetime_show_date" @change=${this._changed}></ha-switch><span>Date</span></div>
-          <div class="switch-row"><ha-switch .checked=${cfg.datetime_show_time !== false} data-field="datetime_show_time" @change=${this._changed}></ha-switch><span>Time</span></div>
-        </div>
-
-        <ha-textfield label="Time format" helper="HH:mm (24h) or h:mm A (12h)" .value=${cfg.datetime_time_format || "HH:mm"} data-field="datetime_time_format" @input=${this._changed}></ha-textfield>
-        <ha-textfield label="Date format" helper="D MMM, DD/MM/YYYY, MMMM D, etc." .value=${cfg.datetime_date_format || "D MMM"} data-field="datetime_date_format" @input=${this._changed}></ha-textfield>
-        <ha-textfield label="Separator" .value=${cfg.datetime_separator || " • "} data-field="datetime_separator" @input=${this._changed}></ha-textfield>
-
-        <div class="section">Icon (optional)</div>
-        ${this._renderIconPicker("Icon", "datetime_icon", cfg.datetime_icon, "Optional icon to display")}
-        <div class="inline-fields-2">
-          <ha-textfield label="Icon color (CSS)" placeholder="inherit" .value=${cfg.datetime_icon_color || ""} data-field="datetime_icon_color" @input=${this._changed}></ha-textfield>
-          <ha-select label="Icon animation" .value=${cfg.datetime_animate_icon || "none"} data-field="datetime_animate_icon" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-            <mwc-list-item value="none">None</mwc-list-item>
-            <mwc-list-item value="float">Float</mwc-list-item>
-            <mwc-list-item value="pulse">Pulse</mwc-list-item>
-            <mwc-list-item value="spin">Spin</mwc-list-item>
-          </ha-select>
-        </div>
-
-        ${sharedOptions}
-      `;
-    }
-
-    if (infoType === "custom") {
-        return html`
-          <div class="section">Notification Card Configuration</div>
-          <ha-alert alert-type="warning" style="margin-bottom: 8px;">
-            This requires the <b>hki-notify</b> integration and the <b>custom:hki-notification-card</b> resource.
-          </ha-alert>
-          <div class="card-config">
-            <hui-card-element-editor
-              .hass=${this.hass}
-              .lovelace=${this.lovelace}
-              .value=${this._config.info_card}
-              @config-changed=${this._handleCustomCardChange}
-            ></hui-card-element-editor>
-          </div>
+  _changed(ev) {
+      if (!this._config || !ev.target) return;
+      const target = ev.target;
+      const field = target.dataset.field; 
+      let value = ev.detail?.value ?? target.value;
       
-          ${sharedOptions}
-        `;
-    }
+      if (target.type === 'number') value = Number(value);
+      if (target.type === 'checkbox' || target.tagName === 'HA-SWITCH') value = target.checked;
+      
+      // Handle nested
+      if (field.includes('.')) {
+          const [p, c] = field.split('.');
+          const prev = this._config[p] || {};
+          // Specific logic for notification card yaml
+          if (field.includes('_content')) {
+             // Handled by custom event usually, but if manually edited:
+             // We generally skip text editing for object props to avoid complexity in this snippet
+          }
+          this._config = { ...this._config, [p]: { ...prev, [c]: value } };
+      } else {
+          this._config = { ...this._config, [field]: value };
+      }
+      
+      this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config } }));
+  }
 
-    return html``;
+  _handleCustomCardChange(ev, field) {
+      ev.stopPropagation();
+      const newCardConfig = ev.detail.config;
+      this._config = { ...this._config, [field]: newCardConfig };
+      this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config } }));
+  }
+
+  _renderSlotSettings(label, prefix) {
+      const cfg = this._config;
+      const type = cfg[`${prefix}_type`] || 'none';
+      
+      return html`
+        <div class="slot-config" style="border:1px solid var(--divider-color); padding:10px; margin-bottom:10px; border-radius:4px;">
+            <div style="font-weight:bold;margin-bottom:8px;">${label}</div>
+            <ha-select label="Type" .value=${type} data-field="${prefix}_type" @selected=${(e)=>this._changed(e)} @closed=${(e)=>e.stopPropagation()}>
+                <mwc-list-item value="none">None</mwc-list-item>
+                <mwc-list-item value="weather">Weather</mwc-list-item>
+                <mwc-list-item value="datetime">Date & Time</mwc-list-item>
+                <mwc-list-item value="custom">Notifications</mwc-list-item>
+            </ha-select>
+            
+            ${type !== 'none' ? html`
+                <div class="inline-fields-2" style="margin-top:8px;">
+                    <ha-textfield label="Offset X (px)" type="number" .value=${cfg[`${prefix}_offset_x`]||0} data-field="${prefix}_offset_x" @change=${(e)=>this._changed(e)}></ha-textfield>
+                    <ha-textfield label="Offset Y (px)" type="number" .value=${cfg[`${prefix}_offset_y`]||0} data-field="${prefix}_offset_y" @change=${(e)=>this._changed(e)}></ha-textfield>
+                </div>
+            ` : ''}
+
+            ${type === 'weather' ? html`
+                <ha-entity-picker 
+                    label="Weather Entity (Override)" 
+                    .hass=${this.hass}
+                    .value=${cfg[`${prefix}_entity`] || cfg.weather_entity}
+                    .includeDomains=${['weather']}
+                    data-field="${prefix}_entity"
+                    @value-changed=${(e)=>this._changed(e)}
+                ></ha-entity-picker>
+            ` : ''}
+
+            ${type === 'custom' ? html`
+                 <ha-alert alert-type="warning" style="margin: 8px 0;">Requires <b>hki-notify</b> integration & <b>custom:hki-notification-card</b>.</ha-alert>
+                 <hui-card-element-editor 
+                    .hass=${this.hass} 
+                    .value=${cfg[`${prefix}_content`]} 
+                    @config-changed=${(e) => this._handleCustomCardChange(e, `${prefix}_content`)}
+                 ></hui-card-element-editor>
+            ` : ''}
+        </div>
+      `;
   }
 
   render() {
     if (!this._config) return html``;
-
-    const showCustomFont = this._config.font_family === "custom";
+    const cfg = this._config;
 
     return html`
       <div class="card-config">
-        <div class="disclaimer">
-          <ha-alert alert-type="info" title="Documentation">
-            This card should be placed in the header section! Please read the documentation at 
-            <a href="https://github.com/jimz011/hki-header-card" target="_blank" rel="noopener noreferrer">github.com/jimz011/hki-header-card</a>
-            to set up this card. <br><br>
-            This card may contain bugs. Use at your own risk!
-          </ha-alert>
-        </div>
-
-        ${this._renderTemplateEditor("Title (Accepts jinja2 templates)", "title")}
-        ${this._renderTemplateEditor("Subtitle (Accepts jinja2 templates)", "subtitle")}
-
-        <ha-select label="Text alignment" .value=${this._config.text_align} data-field="text_align" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-          <mwc-list-item value="left">Left</mwc-list-item>
-          <mwc-list-item value="center">Center</mwc-list-item>
-          <mwc-list-item value="right">Right</mwc-list-item>
+        <ha-select label="Layout Mode" .value=${cfg.layout_mode} data-field="layout_mode" @selected=${(e)=>this._changed(e)} @closed=${(e)=>e.stopPropagation()}>
+            <mwc-list-item value="default">Legacy (Floating)</mwc-list-item>
+            <mwc-list-item value="top_bar">Top Bar (Slots)</mwc-list-item>
         </ha-select>
 
-        <div class="section">Colors</div>
+        ${cfg.layout_mode === 'top_bar' ? html`
+            <div class="section">Top Bar Configuration</div>
+            <p class="description">Slots sit above the title. If only one slot is used, it takes full width.</p>
+            ${this._renderSlotSettings("Left Slot", "left")}
+            ${this._renderSlotSettings("Center Slot", "center")}
+            ${this._renderSlotSettings("Right Slot", "right")}
+        ` : html`
+            <div class="section">Legacy Info Display</div>
+            <ha-select label="Type" .value=${cfg.info_type} data-field="info_type" @selected=${(e)=>this._changed(e)} @closed=${(e)=>e.stopPropagation()}>
+                <mwc-list-item value="none">None</mwc-list-item>
+                <mwc-list-item value="weather">Weather</mwc-list-item>
+                <mwc-list-item value="datetime">Date & Time</mwc-list-item>
+                <mwc-list-item value="custom">Notifications</mwc-list-item>
+            </ha-select>
+            ${cfg.info_type === 'custom' ? html`
+                 <ha-alert alert-type="warning">Requires <b>hki-notify</b> integration & <b>custom:hki-notification-card</b>.</ha-alert>
+                 <hui-card-element-editor .hass=${this.hass} .value=${cfg.info_card} @config-changed=${(e)=>this._handleCustomCardChange(e, 'info_card')}></hui-card-element-editor>
+            ` : ''}
+            <div class="inline-fields-2">
+                <ha-textfield label="Offset X" type="number" .value=${cfg.info_offset_x} data-field="info_offset_x" @change=${(e)=>this._changed(e)}></ha-textfield>
+                <ha-textfield label="Offset Y" type="number" .value=${cfg.info_offset_y} data-field="info_offset_y" @change=${(e)=>this._changed(e)}></ha-textfield>
+            </div>
+            <ha-select label="Alignment" .value=${cfg.info_align} data-field="info_align" @selected=${(e)=>this._changed(e)} @closed=${(e)=>e.stopPropagation()}>
+                <mwc-list-item value="left">Left</mwc-list-item>
+                <mwc-list-item value="right">Right</mwc-list-item>
+            </ha-select>
+        `}
+
+        <div class="section">Global Settings (Weather/Date)</div>
         <div class="inline-fields-2">
-          <ha-textfield label="Title color (CSS)" placeholder="inherit" .value=${this._config.title_color || ""} data-field="title_color" @input=${this._changed}></ha-textfield>
-          <ha-textfield label="Subtitle color (CSS)" placeholder="inherit" .value=${this._config.subtitle_color || ""} data-field="subtitle_color" @input=${this._changed}></ha-textfield>
+             <ha-textfield label="Font Size (px)" type="number" .value=${cfg.info_size_px} data-field="info_size_px" @change=${(e)=>this._changed(e)}></ha-textfield>
+             <ha-textfield label="Color" .value=${cfg.info_color} data-field="info_color" @change=${(e)=>this._changed(e)}></ha-textfield>
         </div>
+        ${cfg.layout_mode === 'default' || cfg.left_type === 'weather' || cfg.center_type === 'weather' || cfg.right_type === 'weather' || cfg.info_type === 'weather' ? html`
+             <ha-entity-picker label="Global Weather Entity" .hass=${this.hass} .value=${cfg.weather_entity} .includeDomains=${['weather']} data-field="weather_entity" @value-changed=${(e)=>this._changed(e)}></ha-entity-picker>
+             <div class="switch-row"><ha-switch .checked=${cfg.weather_show_icon} data-field="weather_show_icon" @change=${(e)=>this._changed(e)}></ha-switch><span>Show Icon</span></div>
+             <div class="switch-row"><ha-switch .checked=${cfg.weather_show_temperature} data-field="weather_show_temperature" @change=${(e)=>this._changed(e)}></ha-switch><span>Show Temp</span></div>
+             <div class="switch-row"><ha-switch .checked=${cfg.weather_show_condition} data-field="weather_show_condition" @change=${(e)=>this._changed(e)}></ha-switch><span>Show Condition</span></div>
+        ` : ''}
 
-        <div class="section">Title position</div>
-        <div class="inline-fields-2">
-          <ha-textfield label="Title horizontal offset (px)" type="number" .value=${String(this._config.title_offset_x)} data-field="title_offset_x" @input=${this._changed}></ha-textfield>
-          <ha-textfield label="Title vertical offset (px)" type="number" .value=${String(this._config.title_offset_y)} data-field="title_offset_y" @input=${this._changed}></ha-textfield>
-        </div>
-
-        <div class="section">Subtitle position</div>
-        <div class="inline-fields-2">
-          <ha-textfield label="Subtitle horizontal offset (px)" type="number" .value=${String(this._config.subtitle_offset_x)} data-field="subtitle_offset_x" @input=${this._changed}></ha-textfield>
-          <ha-textfield label="Subtitle vertical offset (px)" type="number" .value=${String(this._config.subtitle_offset_y)} data-field="subtitle_offset_y" @input=${this._changed}></ha-textfield>
-        </div>
-
-        <div class="section">Info Display</div>
-        <ha-select label="Display type" .value=${this._config.info_type || "none"} data-field="info_type" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-          <mwc-list-item value="none">None</mwc-list-item>
-          <mwc-list-item value="weather">Weather</mwc-list-item>
-          <mwc-list-item value="datetime">Date & Time</mwc-list-item>
-          <mwc-list-item value="custom">Notifications</mwc-list-item>
-        </ha-select>
-
-        ${this._renderInfoTypeOptions()}
-
-        <div class="section">Background</div>
-        <ha-textfield label="Background (color/gradient/url)" helper="Auto-wraps image paths in url() - just enter /local/image.jpg or color value" .value=${this._config.background} data-field="background" @input=${this._changed}></ha-textfield>
-
-        <ha-select label="Background position" .value=${this._config.background_position} data-field="background_position" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-          <mwc-list-item value="top">Top</mwc-list-item>
-          <mwc-list-item value="center">Center</mwc-list-item>
-          <mwc-list-item value="bottom">Bottom</mwc-list-item>
-          <mwc-list-item value="left">Left</mwc-list-item>
-          <mwc-list-item value="right">Right</mwc-list-item>
-        </ha-select>
-
-        <ha-select label="Background repeat" .value=${this._config.background_repeat} data-field="background_repeat" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-          <mwc-list-item value="no-repeat">No repeat</mwc-list-item>
-          <mwc-list-item value="repeat">Repeat</mwc-list-item>
-          <mwc-list-item value="repeat-x">Repeat horizontally</mwc-list-item>
-          <mwc-list-item value="repeat-y">Repeat vertically</mwc-list-item>
-        </ha-select>
-
-        <ha-select label="Background size" .value=${this._config.background_size} data-field="background_size" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-          <mwc-list-item value="cover">Cover</mwc-list-item>
-          <mwc-list-item value="contain">Contain</mwc-list-item>
-          <mwc-list-item value="auto">Auto</mwc-list-item>
-        </ha-select>
-
-        <div class="inline-fields-2">
-          <ha-textfield label="Min height (px)" type="number" .value=${String(this._config.min_height)} data-field="min_height" @input=${this._changed}></ha-textfield>
-          <ha-textfield label="Max height (px)" type="number" .value=${String(this._config.max_height)} data-field="max_height" @input=${this._changed}></ha-textfield>
-        </div>
-
-        <div class="section">Blend</div>
-        <ha-textfield label="Blend color (CSS)" .value=${this._config.blend_color} data-field="blend_color" @input=${this._changed}></ha-textfield>
-        <ha-textfield label="Blend stop (%)" type="number" .value=${String(this._config.blend_stop)} data-field="blend_stop" @input=${this._changed}></ha-textfield>
-
-        <div class="section">Typography</div>
-        <ha-select label="Font family" .value=${this._config.font_family} data-field="font_family" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-          <mwc-list-item value="inherit">Inherit</mwc-list-item>
-          <mwc-list-item value="system">System</mwc-list-item>
-          <mwc-list-item value="roboto">Roboto</mwc-list-item>
-          <mwc-list-item value="inter">Inter</mwc-list-item>
-          <mwc-list-item value="arial">Arial</mwc-list-item>
-          <mwc-list-item value="georgia">Georgia</mwc-list-item>
-          <mwc-list-item value="mono">Monospace</mwc-list-item>
-          <mwc-list-item value="custom">Custom…</mwc-list-item>
-        </ha-select>
-
-        ${showCustomFont ? html`<ha-textfield label="Custom font-family (CSS)" .value=${this._config.font_family_custom} data-field="font_family_custom" @input=${this._changed}></ha-textfield>` : ""}
-
-        <ha-select label="Font style" .value=${this._config.font_style} data-field="font_style" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-          <mwc-list-item value="normal">Normal</mwc-list-item>
-          <mwc-list-item value="italic">Italic</mwc-list-item>
-        </ha-select>
-
-        <div class="inline-fields-2">
-          <ha-textfield label="Title size (px)" type="number" .value=${String(this._config.title_size_px)} data-field="title_size_px" @input=${this._changed}></ha-textfield>
-          <ha-textfield label="Subtitle size (px)" type="number" .value=${String(this._config.subtitle_size_px)} data-field="subtitle_size_px" @input=${this._changed}></ha-textfield>
-        </div>
-
-        <div class="inline-fields-2">
-          <ha-select label="Title weight" .value=${this._config.title_weight} data-field="title_weight" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-            <mwc-list-item value="light">Light</mwc-list-item>
-            <mwc-list-item value="regular">Regular</mwc-list-item>
-            <mwc-list-item value="medium">Medium</mwc-list-item>
-            <mwc-list-item value="semibold">Semi-bold</mwc-list-item>
-            <mwc-list-item value="bold">Bold</mwc-list-item>
-            <mwc-list-item value="black">Black</mwc-list-item>
-          </ha-select>
-
-          <ha-select label="Subtitle weight" .value=${this._config.subtitle_weight} data-field="subtitle_weight" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-            <mwc-list-item value="light">Light</mwc-list-item>
-            <mwc-list-item value="regular">Regular</mwc-list-item>
-            <mwc-list-item value="medium">Medium</mwc-list-item>
-            <mwc-list-item value="semibold">Semi-bold</mwc-list-item>
-            <mwc-list-item value="bold">Bold</mwc-list-item>
-            <mwc-list-item value="black">Black</mwc-list-item>
-          </ha-select>
-        </div>
-
-        <div class="section">Fixed header</div>
-        <div class="switch-row">
-          <ha-formfield label="Keep header fixed to top">
-            <ha-switch .checked=${!!this._config.fixed} data-field="fixed" @change=${this._changed}></ha-switch>
-          </ha-formfield>
-        </div>
-
-        ${this._config.fixed ? html`<ha-textfield label="Fixed top offset (px)" type="number" .value=${String(this._config.fixed_top)} data-field="fixed_top" @input=${this._changed}></ha-textfield>` : ""}
-
-        <div class="section">Badge positioning</div>
-        
-        <ha-alert alert-type="warning" class="badge-warning">
-          For badge positioning to work, this card must be placed in the <strong>header slot</strong> of your view/section. Otherwise, these badge settings will have no effect. <br><br>
-          NOTE: This card does not manage or display any badges itself. Badges must be added separately using Home Assistant's native badge support (e.g. via the "badges" option in your Lovelace view/section configuration).
-        </ha-alert>
-        
-        <div class="switch-row">
-          <ha-formfield label="Pin badges in place (content scrolls beneath)">
-            <ha-switch .checked=${!!this._config.badges_fixed} data-field="badges_fixed" @change=${this._changed}></ha-switch>
-          </ha-formfield>
-        </div>
-        
-        ${this._config.badges_fixed
-          ? html`<ha-textfield label="Badges vertical offset when pinned (px)" helper="Negative values pull badges up (into header), positive values push down" type="number" .value=${String(this._config.badges_offset_pinned)} data-field="badges_offset_pinned" @input=${this._changed}></ha-textfield>`
-          : html`<ha-textfield label="Badges vertical offset when unpinned (px)" helper="Negative values pull badges up (into header), positive values push down" type="number" .value=${String(this._config.badges_offset_unpinned)} data-field="badges_offset_unpinned" @input=${this._changed}></ha-textfield>`}
-        
-        <ha-textfield label="Gap under badges (px)" helper="Space between badges and next content (auto-adjusts -48px when pinned, +48px in kiosk mode)" type="number" .value=${String(this._config.badges_gap)} data-field="badges_gap" @input=${this._changed}></ha-textfield>
+        <div class="section">Main Header Config</div>
+        <ha-textfield label="Title" .value=${cfg.title} data-field="title" @change=${(e)=>this._changed(e)}></ha-textfield>
+        <ha-textfield label="Subtitle" .value=${cfg.subtitle} data-field="subtitle" @change=${(e)=>this._changed(e)}></ha-textfield>
+        <ha-textfield label="Background" .value=${cfg.background} data-field="background" @change=${(e)=>this._changed(e)}></ha-textfield>
       </div>
     `;
   }
 
   static get styles() {
     return css`
-      .card-config {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-        padding: 8px;
-      }
-      .disclaimer { margin-bottom: 8px; }
-      .disclaimer ha-alert { margin-bottom: 0; }
-      .disclaimer a { color: var(--primary-color); text-decoration: none; }
-      .disclaimer a:hover { text-decoration: underline; }
-      .badge-warning { margin-bottom: 12px; }
-      .section { margin-top: 8px; font-weight: 600; }
-      .switch-row { display: flex; align-items: center; gap: 12px; }
-      .inline-fields-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-      .inline-fields-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-      ha-textfield, ha-select, ha-combo-box, ha-navigation-picker, ha-entity-picker, ha-selector, ha-service-picker { width: 100%; }
-      .code-wrap { display: flex; flex-direction: column; gap: 6px; }
-      .code-label { font-size: 0.9rem; opacity: 0.9; }
-      ha-code-editor { height: 180px; border-radius: 8px; overflow: hidden; }
+      .card-config { display: flex; flex-direction: column; gap: 12px; padding: 8px; }
+      .section { margin-top: 12px; font-weight: 600; text-transform: uppercase; font-size: 0.9em; opacity: 0.8; }
+      .description { font-size: 0.85em; opacity: 0.7; margin: -8px 0 8px 0; }
+      .inline-fields-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+      .switch-row { display: flex; align-items: center; gap: 12px; margin: 4px 0; }
+      ha-select, ha-textfield { width: 100%; }
     `;
   }
 }
