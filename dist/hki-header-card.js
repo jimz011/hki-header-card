@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.5.3 ',
+  '%c HKI-HEADER-CARD %c v1.5.4 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -96,13 +96,14 @@ const DEFAULTS = Object.freeze({
   subtitle_size_px: 15,
   title_weight: "bold",
   subtitle_weight: "medium",
+  mobile_breakpoint: 768,
 
   // Top Bar Layout
   top_bar_enabled: true,
   top_bar_offset_y: 10,
   top_bar_padding_x: 5,
   
-  // Slot types: "none", "spacer", "weather", "datetime", "custom", "chevron", "menu"
+  // Slot types: "none", "spacer", "weather", "datetime", "custom", "button"
   top_bar_left: "none",
   top_bar_center: "none",
   top_bar_right: "none",
@@ -126,7 +127,7 @@ const DEFAULTS = Object.freeze({
   info_pill_border_width: 0,
   info_pill_border_color: "rgba(255,255,255,0.1)",
 
-  // Defaults fallback if per-slot is missing (Legacy)
+  // Defaults fallback if per-slot is missing
   weather_entity: "",
   weather_show_icon: true,
   weather_show_condition: true,
@@ -508,6 +509,7 @@ class HkiHeaderCard extends LitElement {
     this._resizeHandler = () => {
       this._debouncedMeasure(true);
       this._debouncedBadgesZIndex();
+      this.requestUpdate(); // Force update for responsive mobile offsets
     };
     window.addEventListener("resize", this._resizeHandler, { passive: true });
 
@@ -782,13 +784,14 @@ class HkiHeaderCard extends LitElement {
     m.badges_offset_pinned = toNum(m.badges_offset_pinned, 48);
     m.badges_offset_unpinned = toNum(m.badges_offset_unpinned, 100);
     m.badges_gap = toNum(m.badges_gap, 0);
+    m.mobile_breakpoint = toNum(m.mobile_breakpoint, 768);
 
     // Top Bar Settings
     m.top_bar_enabled = m.top_bar_enabled !== false;
     m.top_bar_offset_y = toNum(m.top_bar_offset_y, 10);
     m.top_bar_padding_x = toNum(m.top_bar_padding_x, 5);
     
-    const validSlotTypes = ["none", "spacer", "weather", "datetime", "custom", "chevron", "menu"];
+    const validSlotTypes = ["none", "spacer", "weather", "datetime", "custom", "button"];
     m.top_bar_left = validSlotTypes.includes(m.top_bar_left) ? m.top_bar_left : "none";
     m.top_bar_center = validSlotTypes.includes(m.top_bar_center) ? m.top_bar_center : "none";
     m.top_bar_right = validSlotTypes.includes(m.top_bar_right) ? m.top_bar_right : "none";
@@ -814,6 +817,9 @@ class HkiHeaderCard extends LitElement {
       m[prefix + "pill_border_color"] = m[prefix + "pill_border_color"] || null;
       m[prefix + "offset_x"] = toNum(m[prefix + "offset_x"], 0);
       m[prefix + "offset_y"] = toNum(m[prefix + "offset_y"], 0);
+      // Offset mobile can be null to inherit desktop, so we check carefully
+      m[prefix + "offset_x_mobile"] = m[prefix + "offset_x_mobile"] != null ? toNum(m[prefix + "offset_x_mobile"], 0) : null;
+      m[prefix + "offset_y_mobile"] = m[prefix + "offset_y_mobile"] != null ? toNum(m[prefix + "offset_y_mobile"], 0) : null;
     });
 
     // Global info styling
@@ -1126,13 +1132,19 @@ class HkiHeaderCard extends LitElement {
     switch (action.action) {
       case "navigate":
         if (action.navigation_path) {
-          if (action.navigation_path === "back") {
+           if (action.navigation_path === "back") {
              history.back();
-          } else {
+           } else {
              history.pushState(null, "", action.navigation_path);
              window.dispatchEvent(new CustomEvent("location-changed", { bubbles: true, composed: true, detail: { replace: false } }));
-          }
+           }
         }
+        break;
+      case "back":
+        history.back();
+        break;
+      case "menu":
+        this.dispatchEvent(new CustomEvent("hass-toggle-menu", { bubbles: true, composed: true }));
         break;
       case "url":
         if (action.url_path) window.open(action.url_path, "_blank");
@@ -1156,23 +1168,6 @@ class HkiHeaderCard extends LitElement {
     }
   }
 
-  _getInfoContainerStyle(cfg, isTopBar = false) {
-    const fontFamily = this._resolveFontFamily();
-    const iconSize = Math.round((cfg.info_size_px || 12) * 2);
-    const infoColor = cfg.info_color?.trim() || "var(--hki-header-text-color, #fff)";
-    const infoInline = `font-family:${fontFamily};font-style:${cfg.font_style || "normal"};font-size:${cfg.info_size_px || 12}px;font-weight:${this._resolveWeight("info_weight")};color:${infoColor};`;
-
-    const pillStyle = cfg.info_pill
-      ? `--hki-info-pill-background:${cfg.info_pill_background};--hki-info-pill-padding-x:${cfg.info_pill_padding_x}px;--hki-info-pill-padding-y:${cfg.info_pill_padding_y}px;--hki-info-pill-radius:${cfg.info_pill_radius}px;--hki-info-pill-blur:${cfg.info_pill_blur}px;`
-      : "";
-      
-    if (isTopBar) {
-        return { posStyle: "", infoInline, pillStyle, iconSize };
-    }
-    
-    return { posStyle: "", infoInline, pillStyle, iconSize };
-  }
-
   async _updateCustomCards() {
     if (!window.loadCardHelpers) return;
     
@@ -1182,10 +1177,15 @@ class HkiHeaderCard extends LitElement {
     for (const slot of slots) {
         const type = this._config[`top_bar_${slot}`];
         if (type === 'custom') {
-            const cardConfig = this._config[`top_bar_${slot}_card`] || { type: "custom:hki-notification-card" };
+            let cardConfig = this._config[`top_bar_${slot}_card`] || { type: "custom:hki-notification-card" };
             
-            // If already created and config matches hash, skip (optimization possible later)
-            // For now, recreate if type is custom
+            // AUTOMATICALLY INJECT PRESETS AS REQUESTED
+            cardConfig = { 
+                ...cardConfig, 
+                use_header_styling: true, 
+                show_background: false 
+            };
+
             try {
                 const element = await helpers.createCardElement(cardConfig);
                 if (this.hass) element.hass = this.hass;
@@ -1279,54 +1279,23 @@ class HkiHeaderCard extends LitElement {
           case "datetime": return this._renderDatetimeSlot(slotName, slotStyle);
           case "custom": return this._renderCustomCardSlot(slotName, slotStyle);
           case "spacer": return html`<div class="slot-spacer"></div>`;
-          case "chevron": return this._renderChevronSlot(slotName, slotStyle);
-          case "menu": return this._renderMenuSlot(slotName, slotStyle);
+          case "button": return this._renderButtonSlot(slotName, slotStyle);
           default: return html``;
       }
   }
 
-  _renderChevronSlot(slotName, slotStyle) {
+  _renderButtonSlot(slotName, slotStyle) {
     const cfg = this._config;
     const prefix = `top_bar_${slotName}_`;
-    const icon = cfg[prefix + "icon"] || "mdi:chevron-left";
+    const icon = cfg[prefix + "icon"] || "mdi:gesture-tap";
     const label = cfg[prefix + "label"] || "";
-    // Back button defaults to navigate back
-    const tapAction = cfg[prefix + "tap_action"] || { action: "navigate", navigation_path: "back" };
+    const tapAction = cfg[prefix + "tap_action"] || { action: "none" };
     
     const pillClass = slotStyle.pill ? "info-pill" : "";
     const combinedStyle = `${slotStyle.inlineStyle} ${slotStyle.pillStyle}`;
     
     return html`
       <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${() => this._handleSlotTapAction(tapAction, slotName)}>
-        <ha-icon .icon=${icon} style="--mdc-icon-size:${slotStyle.iconSize}px;"></ha-icon>
-        ${label ? html`<span>${label}</span>` : ''}
-      </div>
-    `;
-  }
-
-  _renderMenuSlot(slotName, slotStyle) {
-    const cfg = this._config;
-    const prefix = `top_bar_${slotName}_`;
-    const icon = cfg[prefix + "icon"] || "mdi:menu";
-    const label = cfg[prefix + "label"] || "";
-    // Menu button default action is empty because we handle the click specifically below,
-    // unless the user overrides it.
-    const tapAction = cfg[prefix + "tap_action"] || { action: "none" };
-    
-    const pillClass = slotStyle.pill ? "info-pill" : "";
-    const combinedStyle = `${slotStyle.inlineStyle} ${slotStyle.pillStyle}`;
-    
-    const handleClick = () => {
-        // If action is none (default), we fire the standard sidebar toggle event
-        if (!tapAction || tapAction.action === "none") {
-            this.dispatchEvent(new CustomEvent("hass-toggle-menu", { bubbles: true, composed: true }));
-        } else {
-            this._handleSlotTapAction(tapAction, slotName);
-        }
-    };
-    
-    return html`
-      <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${handleClick}>
         <ha-icon .icon=${icon} style="--mdc-icon-size:${slotStyle.iconSize}px;"></ha-icon>
         ${label ? html`<span>${label}</span>` : ''}
       </div>
@@ -1471,17 +1440,26 @@ class HkiHeaderCard extends LitElement {
       const paddingX = cfg.top_bar_padding_x !== undefined ? cfg.top_bar_padding_x : 5;
       const topStyle = `top: ${offsetY}px; padding: 0 ${paddingX}px;`;
       
-      // Per-slot offset styles
-      const leftOffsetX = cfg.top_bar_left_offset_x || 0;
-      const leftOffsetY = cfg.top_bar_left_offset_y || 0;
-      const centerOffsetX = cfg.top_bar_center_offset_x || 0;
-      const centerOffsetY = cfg.top_bar_center_offset_y || 0;
-      const rightOffsetX = cfg.top_bar_right_offset_x || 0;
-      const rightOffsetY = cfg.top_bar_right_offset_y || 0;
+      const isMobile = this._viewportWidth > 0 && this._viewportWidth <= (cfg.mobile_breakpoint || 768);
       
-      const leftStyle = (leftOffsetX || leftOffsetY) ? `transform: translate(${leftOffsetX}px, ${leftOffsetY}px);` : "";
-      const centerStyle = (centerOffsetX || centerOffsetY) ? `transform: translate(${centerOffsetX}px, ${centerOffsetY}px);` : "";
-      const rightStyle = (rightOffsetX || rightOffsetY) ? `transform: translate(${rightOffsetX}px, ${rightOffsetY}px);` : "";
+      // Helper to calculate offset, preferring mobile override if valid number
+      const getOffset = (base, mobile) => {
+         if (isMobile && typeof mobile === 'number' && Number.isFinite(mobile)) return mobile;
+         return base || 0;
+      };
+
+      const leftX = getOffset(cfg.top_bar_left_offset_x, cfg.top_bar_left_offset_x_mobile);
+      const leftY = getOffset(cfg.top_bar_left_offset_y, cfg.top_bar_left_offset_y_mobile);
+      
+      const centerX = getOffset(cfg.top_bar_center_offset_x, cfg.top_bar_center_offset_x_mobile);
+      const centerY = getOffset(cfg.top_bar_center_offset_y, cfg.top_bar_center_offset_y_mobile);
+      
+      const rightX = getOffset(cfg.top_bar_right_offset_x, cfg.top_bar_right_offset_x_mobile);
+      const rightY = getOffset(cfg.top_bar_right_offset_y, cfg.top_bar_right_offset_y_mobile);
+      
+      const leftStyle = (leftX || leftY) ? `transform: translate(${leftX}px, ${leftY}px);` : "";
+      const centerStyle = (centerX || centerY) ? `transform: translate(${centerX}px, ${centerY}px);` : "";
+      const rightStyle = (rightX || rightY) ? `transform: translate(${rightX}px, ${rightY}px);` : "";
       
       // Determine which slots are occupied
       const leftEmpty = cfg.top_bar_left === "none";
@@ -1693,10 +1671,18 @@ class HkiHeaderCardEditor extends LitElement {
       "title_size_px", "subtitle_size_px", "badges_offset_pinned", "badges_offset_unpinned",
       "badges_gap", "info_offset_x", "info_offset_y", "info_size_px",
       "mobile_breakpoint", "info_pill_padding_x", "info_pill_padding_y",
-      "info_pill_radius", "info_pill_blur", "top_bar_offset_y", "top_bar_padding_x"
+      "info_pill_radius", "info_pill_blur", "top_bar_offset_y", "top_bar_padding_x",
+      "top_bar_left_offset_x", "top_bar_left_offset_y",
+      "top_bar_center_offset_x", "top_bar_center_offset_y",
+      "top_bar_right_offset_x", "top_bar_right_offset_y"
     ]);
 
-    const nullableNumeric = new Set(["info_offset_x_mobile", "info_offset_y_mobile"]);
+    const nullableNumeric = new Set([
+        "info_offset_x_mobile", "info_offset_y_mobile",
+        "top_bar_left_offset_x_mobile", "top_bar_left_offset_y_mobile",
+        "top_bar_center_offset_x_mobile", "top_bar_center_offset_y_mobile",
+        "top_bar_right_offset_x_mobile", "top_bar_right_offset_y_mobile"
+    ]);
 
     if (nullableNumeric.has(field)) {
       value = value === "" || value == null ? null : toNum(value, null);
@@ -1785,8 +1771,7 @@ class HkiHeaderCardEditor extends LitElement {
       weather: "Weather",
       datetime: "Date/Time",
       custom: "Notifications",
-      chevron: "Back Button",
-      menu: "Menu Button"
+      button: "Button"
     };
     return labels[type] || "Empty";
   }
@@ -1803,8 +1788,7 @@ class HkiHeaderCardEditor extends LitElement {
         <mwc-list-item value="weather">Weather</mwc-list-item>
         <mwc-list-item value="datetime">Date/Time</mwc-list-item>
         <mwc-list-item value="custom">Notifications</mwc-list-item>
-        <mwc-list-item value="chevron">Back Button</mwc-list-item>
-        <mwc-list-item value="menu">Menu Button</mwc-list-item>
+        <mwc-list-item value="button">Button</mwc-list-item>
       </ha-select>
       
       ${type !== "none" && type !== "spacer" ? html`
@@ -1812,6 +1796,10 @@ class HkiHeaderCardEditor extends LitElement {
         <div class="inline-fields-2">
           <ha-textfield label="X offset (px)" type="number" .value=${String(this._config[prefix + "offset_x"] || 0)} data-field="${prefix}offset_x" @input=${this._changed}></ha-textfield>
           <ha-textfield label="Y offset (px)" type="number" .value=${String(this._config[prefix + "offset_y"] || 0)} data-field="${prefix}offset_y" @input=${this._changed}></ha-textfield>
+        </div>
+        <div class="inline-fields-2">
+          <ha-textfield label="Mobile X offset (px)" type="number" .value=${this._config[prefix + "offset_x_mobile"] == null ? "" : String(this._config[prefix + "offset_x_mobile"])} data-field="${prefix}offset_x_mobile" @input=${this._changed}></ha-textfield>
+          <ha-textfield label="Mobile Y offset (px)" type="number" .value=${this._config[prefix + "offset_y_mobile"] == null ? "" : String(this._config[prefix + "offset_y_mobile"])} data-field="${prefix}offset_y_mobile" @input=${this._changed}></ha-textfield>
         </div>
       ` : ''}
 
@@ -1874,16 +1862,10 @@ class HkiHeaderCardEditor extends LitElement {
         </ha-select>
       ` : ''}
       
-      ${type === "chevron" || type === "menu" ? html`
+      ${type === "button" ? html`
         <div class="section" style="margin-top: 12px;">Button Settings</div>
-        <ha-icon-picker label="Icon" .value=${this._config[prefix + "icon"] || (type === "chevron" ? "mdi:chevron-left" : "mdi:menu")} data-field="${prefix}icon" @value-changed=${(e) => this._changed({target: {value: e.detail.value, dataset: {field: prefix + "icon"}}})}></ha-icon-picker>
+        <ha-icon-picker label="Icon" .value=${this._config[prefix + "icon"] || "mdi:gesture-tap"} data-field="${prefix}icon" @value-changed=${(e) => this._changed({target: {value: e.detail.value, dataset: {field: prefix + "icon"}}})}></ha-icon-picker>
         <ha-textfield label="Label (optional)" .value=${this._config[prefix + "label"] || ""} data-field="${prefix}label" @input=${this._changed}></ha-textfield>
-        
-        ${type === "chevron" ? html`
-          <p style="opacity: 0.7; font-size: 0.9em; margin-top: 8px;">Back button navigates to the previous page by default.</p>
-        ` : html`
-          <p style="opacity: 0.7; font-size: 0.9em; margin-top: 8px;">Menu button opens the sidebar by default.</p>
-        `}
       ` : ''}
       
       ${type === "custom" ? html`
@@ -1906,7 +1888,7 @@ class HkiHeaderCardEditor extends LitElement {
         ${this._renderSlotActionEditor(prefix + "tap_action")}
       ` : ''}
       
-      ${(type === "weather" || type === "datetime" || type === "chevron" || type === "menu") ? html`
+      ${(type === "weather" || type === "datetime" || type === "button") ? html`
         <div class="section" style="margin-top: 12px;">Tap Action</div>
         ${this._renderSlotActionEditor(prefix + "tap_action")}
       ` : ''}
@@ -1956,6 +1938,8 @@ class HkiHeaderCardEditor extends LitElement {
       <ha-select label="Action" .value=${actionType} .fixedMenuPosition=${true} data-field="${field}.action" @selected=${this._changed} @closed=${this._changed}>
         <mwc-list-item value="none">None</mwc-list-item>
         <mwc-list-item value="navigate">Navigate</mwc-list-item>
+        <mwc-list-item value="back">Back</mwc-list-item>
+        <mwc-list-item value="menu">Toggle Menu</mwc-list-item>
         <mwc-list-item value="url">Open URL</mwc-list-item>
         <mwc-list-item value="more-info">More Info</mwc-list-item>
         <mwc-list-item value="toggle">Toggle Entity</mwc-list-item>
@@ -2121,6 +2105,8 @@ class HkiHeaderCardEditor extends LitElement {
           <ha-textfield label="Min height (px)" type="number" .value=${String(this._config.min_height)} data-field="min_height" @input=${this._changed}></ha-textfield>
           <ha-textfield label="Max height (px)" type="number" .value=${String(this._config.max_height)} data-field="max_height" @input=${this._changed}></ha-textfield>
         </div>
+        
+        <ha-textfield label="Mobile Breakpoint (px)" type="number" .value=${String(this._config.mobile_breakpoint || 768)} data-field="mobile_breakpoint" @input=${this._changed}></ha-textfield>
 
         <div class="section">Blend</div>
         <ha-textfield label="Blend color (CSS)" .value=${this._config.blend_color} data-field="blend_color" @input=${this._changed}></ha-textfield>
