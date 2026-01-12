@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.5.4 ',
+  '%c HKI-HEADER-CARD %c v1.2.0 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -1877,7 +1877,11 @@ class HkiHeaderCardEditor extends LitElement {
             <hui-card-element-editor
               .hass=${this.hass}
               .lovelace=${this.lovelace}
-              .value=${this._config[`top_bar_${slotName}_card`] || { type: "custom:hki-notification-card" }}
+              .value=${this._config[`top_bar_${slotName}_card`] || { 
+                type: "custom:hki-notification-card", 
+                use_header_styling: true, 
+                show_background: false 
+              }}
               @config-changed=${(ev) => this._handleCustomCardChange(ev, slotName)}
             ></hui-card-element-editor>
           </div>
