@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.5.1 ',
+  '%c HKI-HEADER-CARD %c v1.5.2 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -121,70 +121,10 @@ const DEFAULTS = Object.freeze({
   info_pill_border_width: 0,
   info_pill_border_color: "rgba(255,255,255,0.1)",
 
-  // Per-slot config - Left
-  top_bar_left_use_global: true,
-  top_bar_left_icon: "",
-  top_bar_left_label: "",
-  top_bar_left_tap_action: { action: "none" },
-  top_bar_left_size_px: null,
-  top_bar_left_weight: null,
-  top_bar_left_color: null,
-  top_bar_left_pill: null,
-  top_bar_left_pill_background: null,
-  top_bar_left_pill_padding_x: null,
-  top_bar_left_pill_padding_y: null,
-  top_bar_left_pill_radius: null,
-  top_bar_left_pill_blur: null,
-  top_bar_left_pill_border_style: null,
-  top_bar_left_pill_border_width: null,
-  top_bar_left_pill_border_color: null,
-  top_bar_left_offset_x: 0,
-  top_bar_left_offset_y: 0,
-
-  // Per-slot config - Center
-  top_bar_center_use_global: true,
-  top_bar_center_icon: "",
-  top_bar_center_label: "",
-  top_bar_center_tap_action: { action: "none" },
-  top_bar_center_size_px: null,
-  top_bar_center_weight: null,
-  top_bar_center_color: null,
-  top_bar_center_pill: null,
-  top_bar_center_pill_background: null,
-  top_bar_center_pill_padding_x: null,
-  top_bar_center_pill_padding_y: null,
-  top_bar_center_pill_radius: null,
-  top_bar_center_pill_blur: null,
-  top_bar_center_pill_border_style: null,
-  top_bar_center_pill_border_width: null,
-  top_bar_center_pill_border_color: null,
-  top_bar_center_offset_x: 0,
-  top_bar_center_offset_y: 0,
-
-  // Per-slot config - Right
-  top_bar_right_use_global: true,
-  top_bar_right_icon: "",
-  top_bar_right_label: "",
-  top_bar_right_tap_action: { action: "none" },
-  top_bar_right_size_px: null,
-  top_bar_right_weight: null,
-  top_bar_right_color: null,
-  top_bar_right_pill: null,
-  top_bar_right_pill_background: null,
-  top_bar_right_pill_padding_x: null,
-  top_bar_right_pill_padding_y: null,
-  top_bar_right_pill_radius: null,
-  top_bar_right_pill_blur: null,
-  top_bar_right_pill_border_style: null,
-  top_bar_right_pill_border_width: null,
-  top_bar_right_pill_border_color: null,
-  top_bar_right_offset_x: 0,
-  top_bar_right_offset_y: 0,
-
   // Notification card config (for custom slot)
   info_card: { type: "custom:hki-notification-card" },
 
-  // Weather-specific
+  // Defaults fallback if per-slot is missing (Legacy)
   weather_entity: "",
   weather_show_icon: true,
   weather_show_condition: true,
@@ -194,20 +134,13 @@ const DEFAULTS = Object.freeze({
   weather_show_pressure: false,
   weather_colored_icons: true,
   weather_icon_color_mode: "state",
-  weather_icon_color: "",
   weather_animate_icon: "none",
-  weather_icon_pack_path: "",
-
-  // Datetime-specific
   datetime_show_time: true,
   datetime_show_date: true,
   datetime_show_day: true,
   datetime_time_format: "HH:mm",
   datetime_date_format: "D MMM",
   datetime_separator: " • ",
-  datetime_icon: "",
-  datetime_icon_color: "",
-  datetime_animate_icon: "none",
 });
 
 function normalizeWeightKey(input, fallbackKey) {
@@ -625,6 +558,7 @@ class HkiHeaderCard extends LitElement {
     this._timeInterval = setInterval(() => {
       if (this._config?.info_type === "datetime" || this._config?.top_bar_enabled) {
         this._currentTime = Date.now();
+        this.requestUpdate();
       }
     }, 1000);
 
@@ -928,7 +862,7 @@ class HkiHeaderCard extends LitElement {
     m.info_pill_border_width = clamp(+m.info_pill_border_width || 0, 0, 10);
     m.info_pill_border_color = m.info_pill_border_color || "rgba(255,255,255,0.1)";
 
-    // Weather options
+    // Weather options (Global fallback)
     m.weather_show_icon = m.weather_show_icon !== false;
     m.weather_show_condition = m.weather_show_condition !== false;
     m.weather_show_temperature = m.weather_show_temperature !== false;
@@ -939,7 +873,7 @@ class HkiHeaderCard extends LitElement {
     m.weather_icon_color_mode = ["state", "custom", "inherit"].includes(m.weather_icon_color_mode) ? m.weather_icon_color_mode : "state";
     m.weather_animate_icon = ["none", "float", "pulse", "spin"].includes(m.weather_animate_icon) ? m.weather_animate_icon : "none";
 
-    // Datetime options
+    // Datetime options (Global fallback)
     m.datetime_show_time = m.datetime_show_time !== false;
     m.datetime_show_date = m.datetime_show_date !== false;
     m.datetime_show_day = m.datetime_show_day !== false;
@@ -1115,6 +1049,17 @@ class HkiHeaderCard extends LitElement {
                    t.startsWith("http://") || t.startsWith("https://") ||
                    /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(t);
     return isPath ? `url('${t}')` : t;
+  }
+
+  _resolveWeatherIconColor(cfg, state, prefix = "") {
+    // Check specific slot config first, then fallback to global
+    const mode = cfg[prefix + "weather_icon_color_mode"] || cfg.weather_icon_color_mode;
+    const customColor = cfg[prefix + "weather_icon_color"] || cfg.weather_icon_color;
+    const coloredIcons = cfg[prefix + "weather_colored_icons"] !== undefined ? cfg[prefix + "weather_colored_icons"] : cfg.weather_colored_icons;
+
+    if (mode === "custom" && customColor) return customColor.trim();
+    if (mode === "inherit" || !coloredIcons) return "inherit";
+    return WEATHER_COLOR_MAP[state] || "inherit";
   }
 
   _debouncedBadgesZIndex() {
@@ -1510,7 +1455,6 @@ class HkiHeaderCard extends LitElement {
 
   _renderSlotContent(type, slotName) {
       const cfg = this._config;
-      const prefix = `top_bar_${slotName}_`;
       const slotStyle = this._getSlotStyle(slotName);
       
       switch (type) {
@@ -1606,13 +1550,17 @@ class HkiHeaderCard extends LitElement {
   }
 
   _renderWeatherSlot(slotName, slotStyle) {
-    if (!this._config.weather_entity || !this.hass) return html``;
-
-    const weatherEntity = this.hass.states[this._config.weather_entity];
-    if (!weatherEntity) return html``;
-
     const cfg = this._config;
     const prefix = `top_bar_${slotName}_`;
+    
+    // Fallback to global if local is not set
+    const entityId = cfg[prefix + "weather_entity"] || cfg.weather_entity;
+    
+    if (!entityId || !this.hass) return html``;
+
+    const weatherEntity = this.hass.states[entityId];
+    if (!weatherEntity) return html``;
+
     const state = weatherEntity.state;
     const attrs = weatherEntity.attributes || {};
 
@@ -1624,8 +1572,18 @@ class HkiHeaderCard extends LitElement {
     const pressure = attrs.pressure;
     const unit = this.hass.config?.unit_system?.temperature || "°C";
 
-    const iconColor = this._resolveWeatherIconColor(cfg, state);
-    const animClass = cfg.weather_animate_icon !== "none" ? `animate-${cfg.weather_animate_icon}` : "";
+    // Check for slot specific overrides, fallback to global
+    const showIcon = cfg[prefix + "show_icon"] !== undefined ? cfg[prefix + "show_icon"] : (cfg.weather_show_icon !== false);
+    const showCondition = cfg[prefix + "show_condition"] !== undefined ? cfg[prefix + "show_condition"] : (cfg.weather_show_condition !== false);
+    const showTemp = cfg[prefix + "show_temperature"] !== undefined ? cfg[prefix + "show_temperature"] : (cfg.weather_show_temperature !== false);
+    const showHum = cfg[prefix + "show_humidity"] !== undefined ? cfg[prefix + "show_humidity"] : !!cfg.weather_show_humidity;
+    const showWind = cfg[prefix + "show_wind"] !== undefined ? cfg[prefix + "show_wind"] : !!cfg.weather_show_wind;
+    const showPressure = cfg[prefix + "show_pressure"] !== undefined ? cfg[prefix + "show_pressure"] : !!cfg.weather_show_pressure;
+
+    const iconColor = this._resolveWeatherIconColor(cfg, state, prefix);
+    
+    const animateIcon = cfg[prefix + "animate_icon"] || cfg.weather_animate_icon;
+    const animClass = animateIcon && animateIcon !== "none" ? `animate-${animateIcon}` : "";
 
     const pillClass = slotStyle.pill ? "info-pill" : "";
     const combinedStyle = `${slotStyle.inlineStyle} ${slotStyle.pillStyle}`;
@@ -1634,15 +1592,15 @@ class HkiHeaderCard extends LitElement {
 
     return html`
       <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${() => this._handleSlotTapAction(tapAction, slotName)}>
-        ${cfg.weather_show_icon ? html`
+        ${showIcon ? html`
           <ha-icon class="info-weather-icon ${animClass}" .icon=${weatherIcon}
                    style="--mdc-icon-size:${slotStyle.iconSize}px;color:${iconColor};"></ha-icon>
         ` : ""}
-        ${cfg.weather_show_condition ? html`<span class="info-condition">${conditionText}</span>` : ""}
-        ${cfg.weather_show_temperature && temperature != null ? html`<span class="info-temperature">${Math.round(temperature)}${unit}</span>` : ""}
-        ${cfg.weather_show_humidity && humidity != null ? html`<span class="info-humidity">${humidity}%</span>` : ""}
-        ${cfg.weather_show_wind && wind != null ? html`<span class="info-wind">${wind} ${attrs.wind_speed_unit || "km/h"}</span>` : ""}
-        ${cfg.weather_show_pressure && pressure != null ? html`<span class="info-pressure">${pressure} ${attrs.pressure_unit || "hPa"}</span>` : ""}
+        ${showCondition ? html`<span class="info-condition">${conditionText}</span>` : ""}
+        ${showTemp && temperature != null ? html`<span class="info-temperature">${Math.round(temperature)}${unit}</span>` : ""}
+        ${showHum && humidity != null ? html`<span class="info-humidity">${humidity}%</span>` : ""}
+        ${showWind && wind != null ? html`<span class="info-wind">${wind} ${attrs.wind_speed_unit || "km/h"}</span>` : ""}
+        ${showPressure && pressure != null ? html`<span class="info-pressure">${pressure} ${attrs.pressure_unit || "hPa"}</span>` : ""}
       </div>
     `;
   }
@@ -1650,28 +1608,40 @@ class HkiHeaderCard extends LitElement {
   _renderDatetimeSlot(slotName, slotStyle) {
     const cfg = this._config;
     const prefix = `top_bar_${slotName}_`;
+    const locale = this.hass?.language || 'en';
     
-    const now = new Date();
+    const now = new Date(this._currentTime);
     const parts = [];
 
-    if (cfg.datetime_show_day) parts.push(this._formatDay(now));
-    if (cfg.datetime_show_date) parts.push(this._formatDate(now, cfg.datetime_date_format));
-    if (cfg.datetime_show_time) parts.push(this._formatTime(now, cfg.datetime_time_format));
+    // Fallback to global defaults if local not set
+    const showDay = cfg[prefix + "show_day"] !== undefined ? cfg[prefix + "show_day"] : (cfg.datetime_show_day !== false);
+    const showDate = cfg[prefix + "show_date"] !== undefined ? cfg[prefix + "show_date"] : (cfg.datetime_show_date !== false);
+    const showTime = cfg[prefix + "show_time"] !== undefined ? cfg[prefix + "show_time"] : (cfg.datetime_show_time !== false);
+    
+    const dateFormat = cfg[prefix + "date_format"] || cfg.datetime_date_format || "D MMM";
+    const timeFormat = cfg[prefix + "time_format"] || cfg.datetime_time_format || "HH:mm";
+    const sep = cfg[prefix + "separator"] || cfg.datetime_separator || " • ";
+    const icon = cfg[prefix + "icon"] || cfg.datetime_icon;
 
-    const sep = cfg.datetime_separator || " • ";
+    if (showDay) parts.push(formatDateTime(now, "DDDD", locale));
+    if (showDate) parts.push(formatDateTime(now, dateFormat, locale));
+    if (showTime) parts.push(formatDateTime(now, timeFormat, locale));
+
     const displayText = parts.join(sep);
 
     const pillClass = slotStyle.pill ? "info-pill" : "";
     const combinedStyle = `${slotStyle.inlineStyle} ${slotStyle.pillStyle}`;
     
-    const animClass = cfg.datetime_animate_icon !== "none" ? `animate-${cfg.datetime_animate_icon}` : "";
+    const animateIcon = cfg[prefix + "animate_icon"] || cfg.datetime_animate_icon;
+    const animClass = animateIcon && animateIcon !== "none" ? `animate-${animateIcon}` : "";
+    
     const tapAction = cfg[prefix + "tap_action"] || cfg.info_tap_action || { action: "none" };
 
     return html`
       <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${() => this._handleSlotTapAction(tapAction, slotName)}>
-        ${cfg.datetime_icon ? html`
-          <ha-icon class="${animClass}" .icon=${cfg.datetime_icon}
-                   style="--mdc-icon-size:${slotStyle.iconSize}px;${cfg.datetime_icon_color ? `color:${cfg.datetime_icon_color};` : ""}"></ha-icon>
+        ${icon ? html`
+          <ha-icon class="${animClass}" .icon=${icon}
+                   style="--mdc-icon-size:${slotStyle.iconSize}px;"></ha-icon>
         ` : ""}
         <span>${displayText}</span>
       </div>
@@ -1936,15 +1906,16 @@ class HkiHeaderCardEditor extends LitElement {
       value = n;
     }
 
+    // List of boolean fields
     const bools = new Set([
       "fixed", "badges_fixed", "weather_show_icon", "weather_show_condition",
       "weather_show_temperature", "weather_show_humidity", "weather_show_wind",
       "weather_show_pressure", "weather_colored_icons", "info_pill",
       "datetime_show_time", "datetime_show_date", "datetime_show_day", "top_bar_enabled",
       // Per-slot booleans
-      "top_bar_left_use_global", "top_bar_left_pill",
-      "top_bar_center_use_global", "top_bar_center_pill",
-      "top_bar_right_use_global", "top_bar_right_pill"
+      "top_bar_left_use_global", "top_bar_left_pill", "top_bar_left_show_icon", "top_bar_left_show_condition", "top_bar_left_show_temperature", "top_bar_left_show_humidity", "top_bar_left_show_wind", "top_bar_left_show_pressure", "top_bar_left_weather_colored_icons", "top_bar_left_show_day", "top_bar_left_show_date", "top_bar_left_show_time",
+      "top_bar_center_use_global", "top_bar_center_pill", "top_bar_center_show_icon", "top_bar_center_show_condition", "top_bar_center_show_temperature", "top_bar_center_show_humidity", "top_bar_center_show_wind", "top_bar_center_show_pressure", "top_bar_center_weather_colored_icons", "top_bar_center_show_day", "top_bar_center_show_date", "top_bar_center_show_time",
+      "top_bar_right_use_global", "top_bar_right_pill", "top_bar_right_show_icon", "top_bar_right_show_condition", "top_bar_right_show_temperature", "top_bar_right_show_humidity", "top_bar_right_show_wind", "top_bar_right_show_pressure", "top_bar_right_weather_colored_icons", "top_bar_right_show_day", "top_bar_right_show_date", "top_bar_right_show_time"
     ]);
     if (bools.has(field)) value = !!(ev.target?.checked ?? value);
 
@@ -2036,16 +2007,71 @@ class HkiHeaderCardEditor extends LitElement {
       </ha-select>
       
       ${type !== "none" && type !== "spacer" ? html`
-        <!-- Offset settings for all visible content -->
         <div class="section" style="margin-top: 12px;">Position Offset</div>
         <div class="inline-fields-2">
           <ha-textfield label="X offset (px)" type="number" .value=${String(this._config[prefix + "offset_x"] || 0)} data-field="${prefix}offset_x" @input=${this._changed}></ha-textfield>
           <ha-textfield label="Y offset (px)" type="number" .value=${String(this._config[prefix + "offset_y"] || 0)} data-field="${prefix}offset_y" @input=${this._changed}></ha-textfield>
         </div>
       ` : ''}
+
+      ${type === "weather" ? html`
+        <div class="section" style="margin-top: 12px;">Weather Settings</div>
+        ${this._renderEntityPicker("Weather entity", prefix + "weather_entity", this._config[prefix + "weather_entity"] || this._config.weather_entity || "", "Select a weather entity", "weather")}
+        
+        <div class="inline-fields-3" style="margin-top: 8px;">
+            <div class="switch-row"><ha-switch .checked=${this._config[prefix + "show_icon"] !== false} data-field="${prefix}show_icon" @change=${this._changed}></ha-switch><span>Icon</span></div>
+            <div class="switch-row"><ha-switch .checked=${this._config[prefix + "show_condition"] !== false} data-field="${prefix}show_condition" @change=${this._changed}></ha-switch><span>Condition</span></div>
+            <div class="switch-row"><ha-switch .checked=${this._config[prefix + "show_temperature"] !== false} data-field="${prefix}show_temperature" @change=${this._changed}></ha-switch><span>Temp</span></div>
+            <div class="switch-row"><ha-switch .checked=${!!this._config[prefix + "show_humidity"]} data-field="${prefix}show_humidity" @change=${this._changed}></ha-switch><span>Humidity</span></div>
+            <div class="switch-row"><ha-switch .checked=${!!this._config[prefix + "show_wind"]} data-field="${prefix}show_wind" @change=${this._changed}></ha-switch><span>Wind</span></div>
+            <div class="switch-row"><ha-switch .checked=${!!this._config[prefix + "show_pressure"]} data-field="${prefix}show_pressure" @change=${this._changed}></ha-switch><span>Pressure</span></div>
+        </div>
+
+        <div class="switch-row" style="margin-top: 8px;">
+            <ha-switch .checked=${this._config[prefix + "weather_colored_icons"] !== false} data-field="${prefix}weather_colored_icons" @change=${this._changed}></ha-switch>
+            <span>Colored icons</span>
+        </div>
+        
+        <div class="inline-fields-2">
+          <ha-select label="Icon color mode" .value=${this._config[prefix + "weather_icon_color_mode"] || "state"} data-field="${prefix}weather_icon_color_mode" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+            <mwc-list-item value="state">By condition</mwc-list-item>
+            <mwc-list-item value="custom">Custom</mwc-list-item>
+            <mwc-list-item value="inherit">Inherit</mwc-list-item>
+          </ha-select>
+          <ha-select label="Icon animation" .value=${this._config[prefix + "animate_icon"] || "none"} data-field="${prefix}animate_icon" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+            <mwc-list-item value="none">None</mwc-list-item>
+            <mwc-list-item value="float">Float</mwc-list-item>
+            <mwc-list-item value="pulse">Pulse</mwc-list-item>
+            <mwc-list-item value="spin">Spin</mwc-list-item>
+          </ha-select>
+        </div>
+        ${this._config[prefix + "weather_icon_color_mode"] === "custom" ? html`
+            <ha-textfield label="Custom icon color (CSS)" .value=${this._config[prefix + "weather_icon_color"] || ""} data-field="${prefix}weather_icon_color" @input=${this._changed}></ha-textfield>
+        ` : ""}
+      ` : ''}
+
+      ${type === "datetime" ? html`
+        <div class="section" style="margin-top: 12px;">Date/Time Settings</div>
+        <div class="inline-fields-3">
+          <div class="switch-row"><ha-switch .checked=${this._config[prefix + "show_day"] !== false} data-field="${prefix}show_day" @change=${this._changed}></ha-switch><span>Day</span></div>
+          <div class="switch-row"><ha-switch .checked=${this._config[prefix + "show_date"] !== false} data-field="${prefix}show_date" @change=${this._changed}></ha-switch><span>Date</span></div>
+          <div class="switch-row"><ha-switch .checked=${this._config[prefix + "show_time"] !== false} data-field="${prefix}show_time" @change=${this._changed}></ha-switch><span>Time</span></div>
+        </div>
+        
+        <ha-textfield label="Time format" helper="HH:mm (24h) or h:mm A (12h)" .value=${this._config[prefix + "time_format"] || "HH:mm"} data-field="${prefix}time_format" @input=${this._changed}></ha-textfield>
+        <ha-textfield label="Date format" helper="D MMM, DD/MM/YYYY, MMMM D, etc." .value=${this._config[prefix + "date_format"] || "D MMM"} data-field="${prefix}date_format" @input=${this._changed}></ha-textfield>
+        <ha-textfield label="Separator" .value=${this._config[prefix + "separator"] || " • "} data-field="${prefix}separator" @input=${this._changed}></ha-textfield>
+        
+        ${this._renderIconPicker("Icon", prefix + "icon", this._config[prefix + "icon"] || "", "Optional icon")}
+        <ha-select label="Icon animation" .value=${this._config[prefix + "animate_icon"] || "none"} data-field="${prefix}animate_icon" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+            <mwc-list-item value="none">None</mwc-list-item>
+            <mwc-list-item value="float">Float</mwc-list-item>
+            <mwc-list-item value="pulse">Pulse</mwc-list-item>
+            <mwc-list-item value="spin">Spin</mwc-list-item>
+        </ha-select>
+      ` : ''}
       
       ${type === "chevron" || type === "menu" ? html`
-        <!-- Icon and label settings for buttons -->
         <div class="section" style="margin-top: 12px;">Button Settings</div>
         <ha-icon-picker label="Icon" .value=${this._config[prefix + "icon"] || (type === "chevron" ? "mdi:chevron-left" : "mdi:menu")} data-field="${prefix}icon" @value-changed=${(e) => this._changed({target: {value: e.detail.value, dataset: {field: prefix + "icon"}}})}></ha-icon-picker>
         <ha-textfield label="Label (optional)" .value=${this._config[prefix + "label"] || ""} data-field="${prefix}label" @input=${this._changed}></ha-textfield>
@@ -2058,19 +2084,16 @@ class HkiHeaderCardEditor extends LitElement {
       ` : ''}
       
       ${type === "spacer" ? html`
-        <!-- Spacer can have tap action -->
         <div class="section" style="margin-top: 12px;">Spacer Tap Action</div>
         ${this._renderSlotActionEditor(prefix + "tap_action")}
       ` : ''}
       
       ${(type === "weather" || type === "datetime") ? html`
-        <!-- Tap action for weather/datetime -->
         <div class="section" style="margin-top: 12px;">Tap Action</div>
         ${this._renderSlotActionEditor(prefix + "tap_action")}
       ` : ''}
       
       ${type !== "none" && type !== "custom" ? html`
-        <!-- Style override section -->
         <div class="section" style="margin-top: 12px;">Styling</div>
         <div class="switch-row">
           <ha-switch .checked=${useGlobal} data-field="${prefix}use_global" @change=${this._changed}></ha-switch>
@@ -2106,7 +2129,7 @@ class HkiHeaderCardEditor extends LitElement {
       ` : ''}
       
       ${type === "custom" ? html`
-        <p style="opacity: 0.7; font-size: 0.9em; margin-top: 8px;">Notifications styling is controlled in the notification card. Enable "Use Header Styling" in the notification card to inherit styling from the global settings above.</p>
+        <p style="opacity: 0.7; font-size: 0.9em; margin-top: 8px;">Notifications styling is controlled in the notification card. Enable "Use Header Styling" in the notification card to inherit styling from the Global Styling (Defaults) settings.</p>
       ` : ''}
     `;
   }
@@ -2182,16 +2205,33 @@ class HkiHeaderCardEditor extends LitElement {
     const cfg = this._config;
     // We check both the legacy info_type OR if any of the top bar slots use a type
     const infoType = cfg.info_type || "none";
-    const usesWeather = infoType === "weather" || (cfg.top_bar_enabled && [cfg.top_bar_left, cfg.top_bar_center, cfg.top_bar_right].includes("weather"));
-    const usesDate = infoType === "datetime" || (cfg.top_bar_enabled && [cfg.top_bar_left, cfg.top_bar_center, cfg.top_bar_right].includes("datetime"));
-    const usesCustom = infoType === "custom" || (cfg.top_bar_enabled && [cfg.top_bar_left, cfg.top_bar_center, cfg.top_bar_right].includes("custom"));
-    const somethingEnabled = usesWeather || usesDate || usesCustom;
+    
+    // Only show these legacy options if Top Bar is NOT enabled
+    // If top bar is enabled, these settings are handled within the slot editors or the global defaults
+    if (cfg.top_bar_enabled) {
+        // Just show custom card editor if required
+        const usesCustom = infoType === "custom" || [cfg.top_bar_left, cfg.top_bar_center, cfg.top_bar_right].includes("custom");
+        if (usesCustom) {
+            const customContent = html`
+              <ha-alert alert-type="warning" style="margin-bottom: 8px;">
+                This requires the <b>hki-notify</b> integration and the <b>custom:hki-notification-card</b> resource.
+              </ha-alert>
+              <div class="card-config">
+                <hui-card-element-editor
+                  .hass=${this.hass}
+                  .lovelace=${this.lovelace}
+                  .value=${this._config.info_card}
+                  @config-changed=${this._handleCustomCardChange}
+                ></hui-card-element-editor>
+              </div>
+            `;
+            return this._renderSection("Notification Settings", customContent);
+        }
+        return html``;
+    }
 
-    if (!somethingEnabled) return html``;
-
-    // Shared styling options
-    const sharedOptions = html`
-      ${!cfg.top_bar_enabled ? html`
+    // Legacy (Non-Top Bar) Settings
+    const legacyOptions = html`
       <div class="section">Legacy Positioning</div>
       <ha-select label="Alignment" .value=${cfg.info_align || "right"} data-field="info_align" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
         <mwc-list-item value="left">Left</mwc-list-item>
@@ -2209,136 +2249,11 @@ class HkiHeaderCardEditor extends LitElement {
         <ha-textfield label="Mobile vertical (px)" type="number" .value=${cfg.info_offset_y_mobile == null ? "" : String(cfg.info_offset_y_mobile)} data-field="info_offset_y_mobile" @input=${this._changed}></ha-textfield>
       </div>
       <ha-textfield label="Mobile breakpoint (px)" type="number" .value=${String(cfg.mobile_breakpoint || 768)} data-field="mobile_breakpoint" @input=${this._changed}></ha-textfield>
-      ` : ""}
-
-      <div class="section">Info Font Style</div>
-      <div class="inline-fields-2">
-        <ha-textfield label="Font size (px)" type="number" .value=${String(cfg.info_size_px || 12)} data-field="info_size_px" @input=${this._changed}></ha-textfield>
-        <ha-select label="Font weight" .value=${cfg.info_weight || "medium"} data-field="info_weight" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-          <mwc-list-item value="light">Light</mwc-list-item>
-          <mwc-list-item value="regular">Regular</mwc-list-item>
-          <mwc-list-item value="medium">Medium</mwc-list-item>
-          <mwc-list-item value="semibold">Semi-bold</mwc-list-item>
-          <mwc-list-item value="bold">Bold</mwc-list-item>
-          <mwc-list-item value="black">Black</mwc-list-item>
-        </ha-select>
-      </div>
-
-      <ha-textfield label="Text color (CSS)" placeholder="inherit" .value=${cfg.info_color || ""} data-field="info_color" @input=${this._changed}></ha-textfield>
-
-      <div class="section">Pill background</div>
-      <div class="switch-row">
-        <ha-switch .checked=${!!cfg.info_pill} data-field="info_pill" @change=${this._changed}></ha-switch>
-        <span>Enable pill</span>
-      </div>
-      ${cfg.info_pill ? html`
-        <ha-textfield label="Pill background (CSS)" .value=${cfg.info_pill_background || "rgba(0,0,0,0.25)"} data-field="info_pill_background" @input=${this._changed}></ha-textfield>
-        <div class="inline-fields-2">
-          <ha-textfield label="Padding X (px)" type="number" .value=${String(cfg.info_pill_padding_x ?? 10)} data-field="info_pill_padding_x" @input=${this._changed}></ha-textfield>
-          <ha-textfield label="Padding Y (px)" type="number" .value=${String(cfg.info_pill_padding_y ?? 6)} data-field="info_pill_padding_y" @input=${this._changed}></ha-textfield>
-        </div>
-        <div class="inline-fields-2">
-          <ha-textfield label="Radius (px)" type="number" .value=${String(cfg.info_pill_radius ?? 999)} data-field="info_pill_radius" @input=${this._changed}></ha-textfield>
-          <ha-textfield label="Blur (px)" type="number" .value=${String(cfg.info_pill_blur ?? 0)} data-field="info_pill_blur" @input=${this._changed}></ha-textfield>
-        </div>
-      ` : ""}
 
       ${this._renderActionEditor("Tap action", "info_tap_action")}
     `;
 
-    // Render Global Styles Section
-    let optionsHTML = this._renderSection("Global Slot Styles", sharedOptions);
-
-    // Weather Section
-    if (usesWeather) {
-      const weatherContent = html`
-        ${this._renderEntityPicker("Weather entity", "weather_entity", cfg.weather_entity, "Select a weather entity", "weather")}
-
-        ${cfg.weather_entity ? html`
-          <div class="inline-fields-3">
-            <div class="switch-row"><ha-switch .checked=${cfg.weather_show_icon !== false} data-field="weather_show_icon" @change=${this._changed}></ha-switch><span>Icon</span></div>
-            <div class="switch-row"><ha-switch .checked=${cfg.weather_show_condition !== false} data-field="weather_show_condition" @change=${this._changed}></ha-switch><span>Condition</span></div>
-            <div class="switch-row"><ha-switch .checked=${cfg.weather_show_temperature !== false} data-field="weather_show_temperature" @change=${this._changed}></ha-switch><span>Temp</span></div>
-            <div class="switch-row"><ha-switch .checked=${!!cfg.weather_show_humidity} data-field="weather_show_humidity" @change=${this._changed}></ha-switch><span>Humidity</span></div>
-            <div class="switch-row"><ha-switch .checked=${!!cfg.weather_show_wind} data-field="weather_show_wind" @change=${this._changed}></ha-switch><span>Wind</span></div>
-            <div class="switch-row"><ha-switch .checked=${!!cfg.weather_show_pressure} data-field="weather_show_pressure" @change=${this._changed}></ha-switch><span>Pressure</span></div>
-          </div>
-
-          <ha-textfield label="Icon pack path (SVG)" helper="Path to folder (e.g., /local/icons/weather)" .value=${cfg.weather_icon_pack_path || ""} data-field="weather_icon_pack_path" @input=${this._changed}></ha-textfield>
-          
-          <div class="switch-row">
-            <ha-switch .checked=${cfg.weather_colored_icons !== false} data-field="weather_colored_icons" @change=${this._changed}></ha-switch>
-            <span>Colored icons</span>
-          </div>
-          <div class="inline-fields-2">
-            <ha-select label="Icon color mode" .value=${cfg.weather_icon_color_mode || "state"} data-field="weather_icon_color_mode" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-              <mwc-list-item value="state">By condition</mwc-list-item>
-              <mwc-list-item value="custom">Custom</mwc-list-item>
-              <mwc-list-item value="inherit">Inherit</mwc-list-item>
-            </ha-select>
-            <ha-select label="Icon animation" .value=${cfg.weather_animate_icon || "none"} data-field="weather_animate_icon" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-              <mwc-list-item value="none">None</mwc-list-item>
-              <mwc-list-item value="float">Float</mwc-list-item>
-              <mwc-list-item value="pulse">Pulse</mwc-list-item>
-              <mwc-list-item value="spin">Spin</mwc-list-item>
-            </ha-select>
-          </div>
-          ${cfg.weather_icon_color_mode === "custom" ? html`
-            <ha-textfield label="Custom icon color (CSS)" .value=${cfg.weather_icon_color || ""} data-field="weather_icon_color" @input=${this._changed}></ha-textfield>
-          ` : ""}
-        ` : html`
-          <ha-alert alert-type="warning">Please select a weather entity to configure weather display.</ha-alert>
-        `}
-      `;
-      optionsHTML = html`${optionsHTML} ${this._renderSection("Weather Settings", weatherContent)}`;
-    }
-
-    // Date & Time Section
-    if (usesDate) {
-      const dateContent = html`
-        <div class="inline-fields-3">
-          <div class="switch-row"><ha-switch .checked=${cfg.datetime_show_day !== false} data-field="datetime_show_day" @change=${this._changed}></ha-switch><span>Day</span></div>
-          <div class="switch-row"><ha-switch .checked=${cfg.datetime_show_date !== false} data-field="datetime_show_date" @change=${this._changed}></ha-switch><span>Date</span></div>
-          <div class="switch-row"><ha-switch .checked=${cfg.datetime_show_time !== false} data-field="datetime_show_time" @change=${this._changed}></ha-switch><span>Time</span></div>
-        </div>
-
-        <ha-textfield label="Time format" helper="HH:mm (24h) or h:mm A (12h)" .value=${cfg.datetime_time_format || "HH:mm"} data-field="datetime_time_format" @input=${this._changed}></ha-textfield>
-        <ha-textfield label="Date format" helper="D MMM, DD/MM/YYYY, MMMM D, etc." .value=${cfg.datetime_date_format || "D MMM"} data-field="datetime_date_format" @input=${this._changed}></ha-textfield>
-        <ha-textfield label="Separator" .value=${cfg.datetime_separator || " • "} data-field="datetime_separator" @input=${this._changed}></ha-textfield>
-
-        ${this._renderIconPicker("Icon", "datetime_icon", cfg.datetime_icon, "Optional icon to display")}
-        <div class="inline-fields-2">
-          <ha-textfield label="Icon color (CSS)" placeholder="inherit" .value=${cfg.datetime_icon_color || ""} data-field="datetime_icon_color" @input=${this._changed}></ha-textfield>
-          <ha-select label="Icon animation" .value=${cfg.datetime_animate_icon || "none"} data-field="datetime_animate_icon" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-            <mwc-list-item value="none">None</mwc-list-item>
-            <mwc-list-item value="float">Float</mwc-list-item>
-            <mwc-list-item value="pulse">Pulse</mwc-list-item>
-            <mwc-list-item value="spin">Spin</mwc-list-item>
-          </ha-select>
-        </div>
-      `;
-      optionsHTML = html`${optionsHTML} ${this._renderSection("Date & Time Settings", dateContent)}`;
-    }
-
-    // Custom Section
-    if (usesCustom) {
-        const customContent = html`
-          <ha-alert alert-type="warning" style="margin-bottom: 8px;">
-            This requires the <b>hki-notify</b> integration and the <b>custom:hki-notification-card</b> resource.
-          </ha-alert>
-          <div class="card-config">
-            <hui-card-element-editor
-              .hass=${this.hass}
-              .lovelace=${this.lovelace}
-              .value=${this._config.info_card}
-              @config-changed=${this._handleCustomCardChange}
-            ></hui-card-element-editor>
-          </div>
-        `;
-        optionsHTML = html`${optionsHTML} ${this._renderSection("Notification Settings", customContent)}`;
-    }
-
-    return optionsHTML;
+    return this._renderSection("Legacy Positioning", legacyOptions);
   }
 
   render() {
@@ -2396,7 +2311,6 @@ class HkiHeaderCardEditor extends LitElement {
                 <ha-textfield label="Bar padding X (px)" type="number" .value=${String(this._config.top_bar_padding_x ?? 5)} data-field="top_bar_padding_x" @input=${this._changed}></ha-textfield>
             </div>
             
-            <!-- Global Styling Section -->
             <details class="box-section">
               <summary>Global Styling (Defaults)</summary>
               <div class="box-content">
@@ -2436,7 +2350,6 @@ class HkiHeaderCardEditor extends LitElement {
               </div>
             </details>
 
-            <!-- Left Slot -->
             <details class="box-section">
               <summary>Left Slot: ${this._getSlotLabel(this._config.top_bar_left)}</summary>
               <div class="box-content">
@@ -2444,7 +2357,6 @@ class HkiHeaderCardEditor extends LitElement {
               </div>
             </details>
 
-            <!-- Center Slot -->
             <details class="box-section">
               <summary>Center Slot: ${this._getSlotLabel(this._config.top_bar_center)}</summary>
               <div class="box-content">
@@ -2452,7 +2364,6 @@ class HkiHeaderCardEditor extends LitElement {
               </div>
             </details>
 
-            <!-- Right Slot -->
             <details class="box-section">
               <summary>Right Slot: ${this._getSlotLabel(this._config.top_bar_right)}</summary>
               <div class="box-content">
