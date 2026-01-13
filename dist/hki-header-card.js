@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.2.1 ',
+  '%c HKI-HEADER-CARD %c v1.3.3 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -1680,6 +1680,26 @@ class HkiHeaderCardEditor extends LitElement {
     this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config } }));
   }
 
+  _handleBgSizeSelect(ev) {
+    ev.stopPropagation();
+    const val = ev.target.value;
+    if (!val) return;
+    
+    // If selecting "custom", we need to ensure the config has a valid value to start with if it was currently a preset.
+    // If it was already custom (e.g. 150%), we keep it. 
+    // If switching from "cover" to "custom", we default to "100% 100%" or similar to prep the input.
+    if (val === "custom") {
+       const current = this._config.background_size || "cover";
+       if (["cover", "contain", "auto"].includes(current)) {
+           // Reset to a safe custom default so input is not empty/confusing
+           this._changed({ target: { dataset: { field: "background_size" }, value: "100% 100%" } }, "background_size");
+       }
+    } else {
+       // Selected a preset
+       this._changed({ target: { dataset: { field: "background_size" }, value: val } }, "background_size");
+    }
+  }
+
   _changed(ev, explicitField = null) {
     ev.stopPropagation();
     const field = explicitField || ev.target?.dataset?.field;
@@ -1999,6 +2019,12 @@ class HkiHeaderCardEditor extends LitElement {
 
     const showCustomFont = this._config.font_family === "custom";
 
+    // --- LOGIC FOR BACKGROUND SIZE HYBRID SELECTOR ---
+    const bgSize = this._config.background_size || "cover";
+    const bgSizePresets = ["cover", "contain", "auto"];
+    const isCustomBgSize = !bgSizePresets.includes(bgSize);
+    const bgSizeSelectValue = isCustomBgSize ? "custom" : bgSize;
+
     return html`
       <div class="card-config">
         <div class="disclaimer">
@@ -2133,15 +2159,18 @@ class HkiHeaderCardEditor extends LitElement {
         </div>
 
         <div class="inline-fields-2">
-            <ha-combo-box 
+            <ha-select 
                 label="Background size" 
-                .value=${this._config.background_size || "cover"} 
-                .items=${["cover", "contain", "auto", "100% 100%"]} 
-                .allowCustomValue=${true}
-                helper="Type custom values like '120%' to zoom"
-                data-field="background_size" 
-                @value-changed=${this._changed}
-            ></ha-combo-box>
+                .value=${bgSizeSelectValue} 
+                .fixedMenuPosition=${true} 
+                @selected=${this._handleBgSizeSelect} 
+                @closed=${(e) => e.stopPropagation()}
+            >
+              <mwc-list-item value="cover">Cover</mwc-list-item>
+              <mwc-list-item value="contain">Contain</mwc-list-item>
+              <mwc-list-item value="auto">Auto</mwc-list-item>
+              <mwc-list-item value="custom">Custom</mwc-list-item>
+            </ha-select>
             
             <ha-select label="Background blend mode" .value=${this._config.background_blend_mode || "normal"} .fixedMenuPosition=${true} data-field="background_blend_mode" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
               <mwc-list-item value="normal">Normal</mwc-list-item>
@@ -2155,6 +2184,15 @@ class HkiHeaderCardEditor extends LitElement {
               <mwc-list-item value="difference">Difference</mwc-list-item>
             </ha-select>
         </div>
+        
+        ${isCustomBgSize ? html`
+            <ha-textfield 
+                label="Custom Size (e.g. 150%)" 
+                .value=${this._config.background_size} 
+                data-field="background_size" 
+                @input=${this._changed}
+            ></ha-textfield>
+        ` : ""}
 
         <div class="inline-fields-2">
           <ha-textfield label="Min height (px)" type="number" .value=${String(this._config.min_height)} data-field="min_height" @input=${this._changed}></ha-textfield>
