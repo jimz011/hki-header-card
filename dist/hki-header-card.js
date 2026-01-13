@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.2.1 ',
+  '%c HKI-HEADER-CARD %c v1.3.5 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -83,6 +83,13 @@ const DEFAULTS = Object.freeze({
   max_height: 220,
   blend_color: "var(--primary-background-color)",
   blend_stop: 95,
+  blend_enabled: true,
+  // Card styling
+  card_border_radius: "",
+  card_box_shadow: "",
+  card_border_style: "none",
+  card_border_width: 0,
+  card_border_color: "",
   fixed: true,
   fixed_top: 0,
   title_offset_x: 5,
@@ -314,12 +321,11 @@ class HkiHeaderCard extends LitElement {
         min-height: 180px;
         max-height: 340px;
         margin: 0;
-        border-radius: 0; /* Overridden by inline style when not fixed */
+        border-radius: 0; /* Overridden by inline style */
         overflow: hidden;
         box-sizing: border-box;
         color: var(--hki-header-text-color, #fff);
-        border: none;
-        box-shadow: none !important;
+        /* border and box-shadow controlled via inline styles */
       }
 
       .overlay {
@@ -804,6 +810,14 @@ class HkiHeaderCard extends LitElement {
     // Allow custom sizing, default to cover if missing
     m.background_size = m.background_size || "cover";
     m.background_color = m.background_color || "";
+    m.blend_enabled = m.blend_enabled !== false;
+    
+    // Card styling options
+    m.card_border_radius = m.card_border_radius || "";
+    m.card_box_shadow = m.card_box_shadow || "";
+    m.card_border_style = m.card_border_style || "none";
+    m.card_border_width = toNum(m.card_border_width, 0);
+    m.card_border_color = m.card_border_color || "";
 
     // Top Bar Settings
     m.top_bar_enabled = m.top_bar_enabled !== false;
@@ -1526,6 +1540,14 @@ class HkiHeaderCard extends LitElement {
     
     const resolvedBackground = this._resolveBackground(cfg.background);
 
+    // Determine border-radius: custom > system default (when not fixed) > 0 (when fixed)
+    let borderRadius = "";
+    if (cfg.card_border_radius) {
+      borderRadius = cfg.card_border_radius;
+    } else if (!effectiveFixed) {
+      borderRadius = "var(--ha-card-border-radius, 12px)";
+    }
+
     const cardStyle = [
       `width:${cardWidth}`,
       `height:${cfg.height_vh}vh`,
@@ -1537,11 +1559,18 @@ class HkiHeaderCard extends LitElement {
       cfg.background_repeat ? `background-repeat:${cfg.background_repeat}` : "",
       cfg.background_size ? `background-size:${cfg.background_size}` : "",
       cfg.background_blend_mode ? `background-blend-mode:${cfg.background_blend_mode}` : "",
-      // Use system border-radius when not fixed, 0 when fixed
-      effectiveFixed ? "" : "border-radius:var(--ha-card-border-radius, 12px)",
+      borderRadius ? `border-radius:${borderRadius}` : "",
+      cfg.card_box_shadow ? `box-shadow:${cfg.card_box_shadow}` : "",
+      cfg.card_border_style && cfg.card_border_style !== "none" ? `border-style:${cfg.card_border_style}` : "",
+      cfg.card_border_width ? `border-width:${cfg.card_border_width}px` : "",
+      cfg.card_border_color ? `border-color:${cfg.card_border_color}` : "",
     ].filter(Boolean).join(";");
 
-    const overlayStyle = `background:linear-gradient(to bottom, transparent 0%, ${cfg.blend_color} ${cfg.blend_stop}%, ${cfg.blend_color} 100%);`;
+    // Only show overlay gradient if blend is enabled
+    const blendEnabled = cfg.blend_enabled !== false;
+    const overlayStyle = blendEnabled 
+      ? `background:linear-gradient(to bottom, transparent 0%, ${cfg.blend_color} ${cfg.blend_stop}%, ${cfg.blend_color} 100%);`
+      : "display:none;";
     
     // Change: if not fixed, do not apply calculated offsets
     const contentStyle = effectiveFixed 
@@ -1646,7 +1675,8 @@ class HkiHeaderCardEditor extends LitElement {
     "top_bar_left_pill_padding_x", "top_bar_left_pill_padding_y", "top_bar_left_pill_radius", "top_bar_left_pill_blur",
     "top_bar_center_pill_padding_x", "top_bar_center_pill_padding_y", "top_bar_center_pill_radius", "top_bar_center_pill_blur",
     "top_bar_right_pill_padding_x", "top_bar_right_pill_padding_y", "top_bar_right_pill_radius", "top_bar_right_pill_blur",
-    "info_pill_border_width", "top_bar_left_pill_border_width", "top_bar_center_pill_border_width", "top_bar_right_pill_border_width"
+    "info_pill_border_width", "top_bar_left_pill_border_width", "top_bar_center_pill_border_width", "top_bar_right_pill_border_width",
+    "card_border_width"
   ]);
 
   static _nullableNumericFields = new Set([
@@ -1661,6 +1691,7 @@ class HkiHeaderCardEditor extends LitElement {
     "weather_show_temperature", "weather_show_humidity", "weather_show_wind",
     "weather_show_pressure", "weather_colored_icons", "info_pill",
     "datetime_show_time", "datetime_show_date", "datetime_show_day", "top_bar_enabled",
+    "blend_enabled",
     "top_bar_left_use_global", "top_bar_left_pill", "top_bar_left_overflow", "top_bar_left_show_icon", "top_bar_left_show_condition", "top_bar_left_show_temperature", "top_bar_left_show_humidity", "top_bar_left_show_wind", "top_bar_left_show_pressure", "top_bar_left_weather_colored_icons", "top_bar_left_show_day", "top_bar_left_show_date", "top_bar_left_show_time",
     "top_bar_center_use_global", "top_bar_center_pill", "top_bar_center_overflow", "top_bar_center_show_icon", "top_bar_center_show_condition", "top_bar_center_show_temperature", "top_bar_center_show_humidity", "top_bar_center_show_wind", "top_bar_center_show_pressure", "top_bar_center_weather_colored_icons", "top_bar_center_show_day", "top_bar_center_show_date", "top_bar_center_show_time",
     "top_bar_right_use_global", "top_bar_right_pill", "top_bar_right_overflow", "top_bar_right_show_icon", "top_bar_right_show_condition", "top_bar_right_show_temperature", "top_bar_right_show_humidity", "top_bar_right_show_wind", "top_bar_right_show_pressure", "top_bar_right_weather_colored_icons", "top_bar_right_show_day", "top_bar_right_show_date", "top_bar_right_show_time"
@@ -2226,8 +2257,34 @@ class HkiHeaderCardEditor extends LitElement {
         <ha-textfield label="Mobile Breakpoint (px)" type="number" .value=${String(this._config.mobile_breakpoint || 768)} data-field="mobile_breakpoint" @input=${this._changed}></ha-textfield>
 
         <div class="section">Blend</div>
-        <ha-textfield label="Blend color (CSS)" .value=${this._config.blend_color} data-field="blend_color" @input=${this._changed}></ha-textfield>
-        <ha-textfield label="Blend stop (%)" type="number" .value=${String(this._config.blend_stop)} data-field="blend_stop" @input=${this._changed}></ha-textfield>
+        <div class="switch-row">
+          <ha-formfield label="Enable background blend (gradient overlay)">
+            <ha-switch .checked=${this._config.blend_enabled !== false} data-field="blend_enabled" @change=${this._changed}></ha-switch>
+          </ha-formfield>
+        </div>
+        ${this._config.blend_enabled !== false ? html`
+          <ha-textfield label="Blend color (CSS)" .value=${this._config.blend_color} data-field="blend_color" @input=${this._changed}></ha-textfield>
+          <ha-textfield label="Blend stop (%)" type="number" .value=${String(this._config.blend_stop)} data-field="blend_stop" @input=${this._changed}></ha-textfield>
+        ` : ""}
+
+        <div class="section">Card Styling</div>
+        <ha-textfield label="Border Radius (CSS)" helper="e.g. 12px, 0, 50%" .value=${this._config.card_border_radius || ""} data-field="card_border_radius" @input=${this._changed}></ha-textfield>
+        <ha-textfield label="Box Shadow (CSS)" helper="e.g. 0 4px 12px rgba(0,0,0,0.3)" .value=${this._config.card_box_shadow || ""} data-field="card_box_shadow" @input=${this._changed}></ha-textfield>
+        <div class="inline-fields-3">
+          <ha-select label="Border Style" .value=${this._config.card_border_style || "none"} .fixedMenuPosition=${true} data-field="card_border_style" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+            <mwc-list-item value="none">None</mwc-list-item>
+            <mwc-list-item value="solid">Solid</mwc-list-item>
+            <mwc-list-item value="dashed">Dashed</mwc-list-item>
+            <mwc-list-item value="dotted">Dotted</mwc-list-item>
+            <mwc-list-item value="double">Double</mwc-list-item>
+            <mwc-list-item value="groove">Groove</mwc-list-item>
+            <mwc-list-item value="ridge">Ridge</mwc-list-item>
+            <mwc-list-item value="inset">Inset</mwc-list-item>
+            <mwc-list-item value="outset">Outset</mwc-list-item>
+          </ha-select>
+          <ha-textfield label="Border Width (px)" type="number" .value=${String(this._config.card_border_width || 0)} data-field="card_border_width" @input=${this._changed}></ha-textfield>
+          <ha-textfield label="Border Color" .value=${this._config.card_border_color || ""} data-field="card_border_color" @input=${this._changed}></ha-textfield>
+        </div>
 
         <div class="section">Typography</div>
         <ha-select label="Font family" .value=${this._config.font_family} .fixedMenuPosition=${true} data-field="font_family" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
