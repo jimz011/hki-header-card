@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.2.0 ',
+  '%c HKI-HEADER-CARD %c v1.2.1 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -74,6 +74,8 @@ const DEFAULTS = Object.freeze({
   background_position: "center",
   background_repeat: "no-repeat",
   background_size: "cover",
+  background_attachment: "scroll",
+  background_blend_mode: "normal",
   height_vh: 35,
   min_height: 180,
   max_height: 220,
@@ -417,6 +419,10 @@ class HkiHeaderCard extends LitElement {
         flex: 1 1 0%;
         min-width: 0;
         overflow: hidden;
+      }
+
+      .slot-visible {
+        overflow: visible !important;
       }
 
       .slot-left {
@@ -786,6 +792,10 @@ class HkiHeaderCard extends LitElement {
     m.badges_gap = toNum(m.badges_gap, 0);
     m.mobile_breakpoint = toNum(m.mobile_breakpoint, 768);
 
+    // Background extra options
+    m.background_attachment = ["scroll", "fixed", "local"].includes(m.background_attachment) ? m.background_attachment : "scroll";
+    m.background_blend_mode = m.background_blend_mode || "normal";
+
     // Top Bar Settings
     m.top_bar_enabled = m.top_bar_enabled !== false;
     m.top_bar_offset_y = toNum(m.top_bar_offset_y, 10);
@@ -817,6 +827,7 @@ class HkiHeaderCard extends LitElement {
       m[prefix + "pill_border_color"] = m[prefix + "pill_border_color"] || null;
       m[prefix + "offset_x"] = toNum(m[prefix + "offset_x"], 0);
       m[prefix + "offset_y"] = toNum(m[prefix + "offset_y"], 0);
+      m[prefix + "overflow"] = !!m[prefix + "overflow"]; // New overflow option
       // Offset mobile can be null to inherit desktop, so we check carefully
       m[prefix + "offset_x_mobile"] = m[prefix + "offset_x_mobile"] != null ? toNum(m[prefix + "offset_x_mobile"], 0) : null;
       m[prefix + "offset_y_mobile"] = m[prefix + "offset_y_mobile"] != null ? toNum(m[prefix + "offset_y_mobile"], 0) : null;
@@ -1467,12 +1478,17 @@ class HkiHeaderCard extends LitElement {
       const leftEmpty = cfg.top_bar_left === "none";
       const centerEmpty = cfg.top_bar_center === "none";
       const rightEmpty = cfg.top_bar_right === "none";
+      
+      // Determine overflow
+      const leftOverflow = !!cfg.top_bar_left_overflow;
+      const centerOverflow = !!cfg.top_bar_center_overflow;
+      const rightOverflow = !!cfg.top_bar_right_overflow;
 
       return html`
         <div class="top-bar-container" style="${topStyle}">
-            <div class="slot slot-left ${leftEmpty ? 'slot-empty' : ''}" style="${leftStyle}">${this._renderSlotContent(cfg.top_bar_left, "left")}</div>
-            <div class="slot slot-center ${centerEmpty ? 'slot-empty' : ''}" style="${centerStyle}">${this._renderSlotContent(cfg.top_bar_center, "center")}</div>
-            <div class="slot slot-right ${rightEmpty ? 'slot-empty' : ''}" style="${rightStyle}">${this._renderSlotContent(cfg.top_bar_right, "right")}</div>
+            <div class="slot slot-left ${leftEmpty ? 'slot-empty' : ''} ${leftOverflow ? 'slot-visible' : ''}" style="${leftStyle}">${this._renderSlotContent(cfg.top_bar_left, "left")}</div>
+            <div class="slot slot-center ${centerEmpty ? 'slot-empty' : ''} ${centerOverflow ? 'slot-visible' : ''}" style="${centerStyle}">${this._renderSlotContent(cfg.top_bar_center, "center")}</div>
+            <div class="slot slot-right ${rightEmpty ? 'slot-empty' : ''} ${rightOverflow ? 'slot-visible' : ''}" style="${rightStyle}">${this._renderSlotContent(cfg.top_bar_right, "right")}</div>
         </div>
       `;
   }
@@ -1505,6 +1521,8 @@ class HkiHeaderCard extends LitElement {
       cfg.background_position ? `background-position:${cfg.background_position}` : "",
       cfg.background_repeat ? `background-repeat:${cfg.background_repeat}` : "",
       cfg.background_size ? `background-size:${cfg.background_size}` : "",
+      cfg.background_attachment ? `background-attachment:${cfg.background_attachment}` : "",
+      cfg.background_blend_mode ? `background-blend-mode:${cfg.background_blend_mode}` : "",
       // Use system border-radius when not fixed, 0 when fixed
       effectiveFixed ? "" : "border-radius:var(--ha-card-border-radius, 12px)",
     ].filter(Boolean).join(";");
@@ -1702,9 +1720,9 @@ class HkiHeaderCardEditor extends LitElement {
       "weather_show_pressure", "weather_colored_icons", "info_pill",
       "datetime_show_time", "datetime_show_date", "datetime_show_day", "top_bar_enabled",
       // Per-slot booleans
-      "top_bar_left_use_global", "top_bar_left_pill", "top_bar_left_show_icon", "top_bar_left_show_condition", "top_bar_left_show_temperature", "top_bar_left_show_humidity", "top_bar_left_show_wind", "top_bar_left_show_pressure", "top_bar_left_weather_colored_icons", "top_bar_left_show_day", "top_bar_left_show_date", "top_bar_left_show_time",
-      "top_bar_center_use_global", "top_bar_center_pill", "top_bar_center_show_icon", "top_bar_center_show_condition", "top_bar_center_show_temperature", "top_bar_center_show_humidity", "top_bar_center_show_wind", "top_bar_center_show_pressure", "top_bar_center_weather_colored_icons", "top_bar_center_show_day", "top_bar_center_show_date", "top_bar_center_show_time",
-      "top_bar_right_use_global", "top_bar_right_pill", "top_bar_right_show_icon", "top_bar_right_show_condition", "top_bar_right_show_temperature", "top_bar_right_show_humidity", "top_bar_right_show_wind", "top_bar_right_show_pressure", "top_bar_right_weather_colored_icons", "top_bar_right_show_day", "top_bar_right_show_date", "top_bar_right_show_time"
+      "top_bar_left_use_global", "top_bar_left_pill", "top_bar_left_overflow", "top_bar_left_show_icon", "top_bar_left_show_condition", "top_bar_left_show_temperature", "top_bar_left_show_humidity", "top_bar_left_show_wind", "top_bar_left_show_pressure", "top_bar_left_weather_colored_icons", "top_bar_left_show_day", "top_bar_left_show_date", "top_bar_left_show_time",
+      "top_bar_center_use_global", "top_bar_center_pill", "top_bar_center_overflow", "top_bar_center_show_icon", "top_bar_center_show_condition", "top_bar_center_show_temperature", "top_bar_center_show_humidity", "top_bar_center_show_wind", "top_bar_center_show_pressure", "top_bar_center_weather_colored_icons", "top_bar_center_show_day", "top_bar_center_show_date", "top_bar_center_show_time",
+      "top_bar_right_use_global", "top_bar_right_pill", "top_bar_right_overflow", "top_bar_right_show_icon", "top_bar_right_show_condition", "top_bar_right_show_temperature", "top_bar_right_show_humidity", "top_bar_right_show_wind", "top_bar_right_show_pressure", "top_bar_right_weather_colored_icons", "top_bar_right_show_day", "top_bar_right_show_date", "top_bar_right_show_time"
     ]);
     if (bools.has(field)) value = !!(ev.target?.checked ?? value);
 
@@ -1802,6 +1820,11 @@ class HkiHeaderCardEditor extends LitElement {
         <div class="inline-fields-2">
           <ha-textfield label="Mobile X offset (px)" type="number" .value=${this._config[prefix + "offset_x_mobile"] == null ? "" : String(this._config[prefix + "offset_x_mobile"])} data-field="${prefix}offset_x_mobile" @input=${this._changed}></ha-textfield>
           <ha-textfield label="Mobile Y offset (px)" type="number" .value=${this._config[prefix + "offset_y_mobile"] == null ? "" : String(this._config[prefix + "offset_y_mobile"])} data-field="${prefix}offset_y_mobile" @input=${this._changed}></ha-textfield>
+        </div>
+        
+        <div class="switch-row" style="margin-top: 8px;">
+            <ha-switch .checked=${!!this._config[prefix + "overflow"]} data-field="${prefix}overflow" @change=${this._changed}></ha-switch>
+            <span>Allow Overflow (content bleeds out)</span>
         </div>
       ` : ''}
 
@@ -1960,7 +1983,7 @@ class HkiHeaderCardEditor extends LitElement {
         <ha-textfield label="URL" .value=${action.url_path || ""} data-field="${field}.url_path" @input=${this._changed}></ha-textfield>
       ` : ''}
       ${actionType === "more-info" || actionType === "toggle" ? html`
-        <ha-entity-picker .hass=${this.hass} .value=${action.entity || ""} @value-changed=${(e) => this._changed({target: {value: e.detail.value, dataset: {field: field + ".entity"}}})}></ha-entity-picker>
+        <ha-entity-picker .hass=${this.hass} .value=${action.entity || ""} @value-changed=${(e) => this._changed(e, field + ".entity")}></ha-entity-picker>
       ` : ''}
       ${actionType === "call-service" ? html`
         <ha-textfield label="Service" .value=${action.service || ""} data-field="${field}.service" @input=${this._changed}></ha-textfield>
@@ -2108,6 +2131,26 @@ class HkiHeaderCardEditor extends LitElement {
           <mwc-list-item value="contain">Contain</mwc-list-item>
           <mwc-list-item value="auto">Auto</mwc-list-item>
         </ha-select>
+        
+        <div class="inline-fields-2">
+            <ha-select label="Background attachment" .value=${this._config.background_attachment || "scroll"} .fixedMenuPosition=${true} data-field="background_attachment" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+              <mwc-list-item value="scroll">Scroll</mwc-list-item>
+              <mwc-list-item value="fixed">Fixed</mwc-list-item>
+              <mwc-list-item value="local">Local</mwc-list-item>
+            </ha-select>
+            
+            <ha-select label="Background blend mode" .value=${this._config.background_blend_mode || "normal"} .fixedMenuPosition=${true} data-field="background_blend_mode" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+              <mwc-list-item value="normal">Normal</mwc-list-item>
+              <mwc-list-item value="multiply">Multiply</mwc-list-item>
+              <mwc-list-item value="screen">Screen</mwc-list-item>
+              <mwc-list-item value="overlay">Overlay</mwc-list-item>
+              <mwc-list-item value="darken">Darken</mwc-list-item>
+              <mwc-list-item value="lighten">Lighten</mwc-list-item>
+              <mwc-list-item value="color-dodge">Color Dodge</mwc-list-item>
+              <mwc-list-item value="soft-light">Soft Light</mwc-list-item>
+              <mwc-list-item value="difference">Difference</mwc-list-item>
+            </ha-select>
+        </div>
 
         <div class="inline-fields-2">
           <ha-textfield label="Min height (px)" type="number" .value=${String(this._config.min_height)} data-field="min_height" @input=${this._changed}></ha-textfield>
