@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.2.2-dev-03 ',
+  '%c HKI-HEADER-CARD %c v1.2.2 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -375,6 +375,16 @@ class HkiHeaderCard extends LitElement {
         text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
         flex-shrink: 0;
         flex-grow: 0;
+      }
+
+      /* Custom card slot - needs to fill available space for marquee to work */
+      .custom-card-slot {
+        display: flex;
+        align-items: center;
+        flex: 1 1 auto;
+        min-width: 0;
+        max-width: 100%;
+        overflow: hidden;
       }
 
       .info-clickable {
@@ -1464,10 +1474,12 @@ class HkiHeaderCard extends LitElement {
     const cardEl = this._customCards[slotName];
     if (!cardEl) return html``;
     
-    const combinedStyle = `${slotStyle.inlineStyle} ${slotStyle.notifyVars}; min-width: 50px;`;
+    // Use custom-card-slot class which allows the card to fill available space
+    // This is important for marquee mode to detect overflow correctly
+    const combinedStyle = `${slotStyle.inlineStyle} ${slotStyle.notifyVars}`;
 
     return html`
-      <div class="info-item" style="${combinedStyle}">
+      <div class="custom-card-slot" style="${combinedStyle}">
         ${cardEl}
       </div>
     `;
