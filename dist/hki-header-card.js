@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.3.3 ',
+  '%c HKI-HEADER-CARD %c v1.2.1 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -16,6 +16,8 @@ const toNum = (v, fallback) => { const n = +v; return Number.isFinite(n) ? n : f
 const WEIGHT_MAP = Object.freeze({
   light: 300, regular: 400, medium: 500, semibold: 600, bold: 700, black: 900,
 });
+
+const BG_SIZE_PRESETS = Object.freeze(["cover", "contain", "auto"]);
 
 const FONT_FAMILY_MAP = Object.freeze({
   inherit: "inherit",
@@ -287,6 +289,10 @@ class HkiHeaderCard extends LitElement {
 
     this._hassReady = false;
     this._badgesEl = null;
+    
+    // Performance: Style caches
+    this._slotStyleCache = new Map();
+    this._lastConfigHash = null;
   }
 
   static get styles() {
@@ -582,6 +588,7 @@ class HkiHeaderCard extends LitElement {
 
   updated(changed) {
     if (changed.has("_config")) {
+      this._slotStyleCache.clear(); // Clear cached styles on config change
       this._detectPreview();
       this._debouncedMeasure(true);
       this._scheduleTemplateSetup(80);
@@ -1185,40 +1192,61 @@ class HkiHeaderCard extends LitElement {
     if (!window.loadCardHelpers) return;
     
     const slots = ['left', 'center', 'right'];
-    const helpers = await window.loadCardHelpers();
+    let helpersLoaded = null;
+    let needsUpdate = false;
     
     for (const slot of slots) {
         const type = this._config[`top_bar_${slot}`];
+        const cardConfigKey = `top_bar_${slot}_card`;
+        const cardConfig = this._config[cardConfigKey];
+        
+        // Generate a simple hash to detect config changes
+        const configHash = type === 'custom' ? JSON.stringify(cardConfig || {}) : '';
+        const cacheKey = `_customCardHash_${slot}`;
+        
         if (type === 'custom') {
-            let cardConfig = this._config[`top_bar_${slot}_card`] || { type: "custom:hki-notification-card" };
-            
-            // AUTOMATICALLY INJECT PRESETS AS DEFAULTS
-            // Modified order so these are defaults, not forced overwrites
-            cardConfig = { 
-                use_header_styling: true, 
-                show_background: false,
-                show_empty: true,
-                ...cardConfig 
-            };
+            // Only recreate if config has changed
+            if (this[cacheKey] !== configHash || !this._customCards[slot]) {
+                if (!helpersLoaded) helpersLoaded = await window.loadCardHelpers();
+                
+                let finalConfig = { 
+                    use_header_styling: true, 
+                    show_background: false,
+                    show_empty: true,
+                    ...(cardConfig || { type: "custom:hki-notification-card" })
+                };
 
-            try {
-                const element = await helpers.createCardElement(cardConfig);
-                if (this.hass) element.hass = this.hass;
-                element.style.display = "block";
-                this._customCards[slot] = element;
-            } catch (e) {
-                console.error(`Failed to create custom card for ${slot}`, e);
+                try {
+                    const element = await helpersLoaded.createCardElement(finalConfig);
+                    if (this.hass) element.hass = this.hass;
+                    element.style.display = "block";
+                    this._customCards[slot] = element;
+                    this[cacheKey] = configHash;
+                    needsUpdate = true;
+                } catch (e) {
+                    console.error(`Failed to create custom card for ${slot}`, e);
+                }
             }
-        } else {
+        } else if (this._customCards[slot]) {
             this._customCards[slot] = null;
+            this[cacheKey] = '';
+            needsUpdate = true;
         }
     }
-    this.requestUpdate();
+    
+    if (needsUpdate) this.requestUpdate();
   }
 
   _getSlotStyle(slotName) {
     const cfg = this._config;
     const prefix = `top_bar_${slotName}_`;
+    
+    // Generate cache key based on relevant config values
+    const cacheKey = `${slotName}:${cfg[prefix + "use_global"]}:${cfg[prefix + "size_px"]}:${cfg[prefix + "weight"]}:${cfg[prefix + "color"]}:${cfg[prefix + "pill"]}:${cfg.info_size_px}:${cfg.info_weight}:${cfg.info_color}:${cfg.info_pill}:${cfg.font_family}:${cfg.font_style}`;
+    
+    const cached = this._slotStyleCache.get(cacheKey);
+    if (cached) return cached;
+    
     const useGlobal = cfg[prefix + "use_global"] !== false;
     
     const fontFamily = this._resolveFontFamily();
@@ -1239,39 +1267,17 @@ class HkiHeaderCard extends LitElement {
     const pillBorderWidth = (!useGlobal && cfg[prefix + "pill_border_width"] != null) ? cfg[prefix + "pill_border_width"] : cfg.info_pill_border_width;
     const pillBorderColor = (!useGlobal && cfg[prefix + "pill_border_color"]) ? cfg[prefix + "pill_border_color"] : cfg.info_pill_border_color;
     
-    const inlineStyle = `font-family:${fontFamily};font-style:${cfg.font_style || "normal"};font-size:${sizePx}px;font-weight:${this._resolveWeightValue(weight)};color:${color};`;
+    const weightValue = this._resolveWeightValue(weight);
+    const fontStyleValue = cfg.font_style || "normal";
     
-    const pillStyle = pill ? [
-      `--hki-info-pill-background:${pillBg}`,
-      `--hki-info-pill-padding-x:${pillPaddingX}px`,
-      `--hki-info-pill-padding-y:${pillPaddingY}px`,
-      `--hki-info-pill-radius:${pillRadius}px`,
-      `--hki-info-pill-blur:${pillBlur}px`,
-      `--hki-info-pill-border-style:${pillBorderStyle}`,
-      `--hki-info-pill-border-width:${pillBorderWidth}px`,
-      `--hki-info-pill-border-color:${pillBorderColor}`
-    ].join(';') : "";
+    const inlineStyle = `font-family:${fontFamily};font-style:${fontStyleValue};font-size:${sizePx}px;font-weight:${weightValue};color:${color};`;
+    
+    const pillStyle = pill ? `--hki-info-pill-background:${pillBg};--hki-info-pill-padding-x:${pillPaddingX}px;--hki-info-pill-padding-y:${pillPaddingY}px;--hki-info-pill-radius:${pillRadius}px;--hki-info-pill-blur:${pillBlur}px;--hki-info-pill-border-style:${pillBorderStyle};--hki-info-pill-border-width:${pillBorderWidth}px;--hki-info-pill-border-color:${pillBorderColor}` : "";
     
     // CSS variables for notification card
-    const notifyVars = [
-      `--hki-notify-font-size: ${sizePx}px`,
-      `--hki-notify-font-weight: ${this._resolveWeightValue(weight)}`,
-      `--hki-notify-color: ${color}`,
-      `--hki-notify-icon-size: ${iconSize}px`,
-      `--hki-notify-font-family: ${fontFamily}`,
-      `--hki-notify-font-style: ${cfg.font_style || "normal"}`,
-      `--hki-notify-pill-enabled: ${pill ? '1' : '0'}`,
-      `--hki-notify-pill-bg: ${pillBg}`,
-      `--hki-notify-pill-padding-x: ${pillPaddingX}px`,
-      `--hki-notify-pill-padding-y: ${pillPaddingY}px`,
-      `--hki-notify-pill-radius: ${pillRadius}px`,
-      `--hki-notify-pill-blur: ${pillBlur}px`,
-      `--hki-notify-pill-border-style: ${pillBorderStyle}`,
-      `--hki-notify-pill-border-width: ${pillBorderWidth}px`,
-      `--hki-notify-pill-border-color: ${pillBorderColor}`
-    ].join(';');
+    const notifyVars = `--hki-notify-font-size:${sizePx}px;--hki-notify-font-weight:${weightValue};--hki-notify-color:${color};--hki-notify-icon-size:${iconSize}px;--hki-notify-font-family:${fontFamily};--hki-notify-font-style:${fontStyleValue};--hki-notify-pill-enabled:${pill ? '1' : '0'};--hki-notify-pill-bg:${pillBg};--hki-notify-pill-padding-x:${pillPaddingX}px;--hki-notify-pill-padding-y:${pillPaddingY}px;--hki-notify-pill-radius:${pillRadius}px;--hki-notify-pill-blur:${pillBlur}px;--hki-notify-pill-border-style:${pillBorderStyle};--hki-notify-pill-border-width:${pillBorderWidth}px;--hki-notify-pill-border-color:${pillBorderColor}`;
     
-    return { 
+    const result = { 
       inlineStyle, 
       pillStyle, 
       notifyVars, 
@@ -1283,6 +1289,12 @@ class HkiHeaderCard extends LitElement {
       pillBorderWidth,
       pillBorderColor
     };
+    
+    // Cache the result (limit cache size)
+    if (this._slotStyleCache.size > 20) this._slotStyleCache.clear();
+    this._slotStyleCache.set(cacheKey, result);
+    
+    return result;
   }
 
   _renderSlotContent(type, slotName) {
@@ -1619,6 +1631,41 @@ class HkiHeaderCardEditor extends LitElement {
     };
   }
 
+  // Pre-computed field sets for performance (avoid recreating on every change)
+  static _numericFields = new Set([
+    "height_vh", "min_height", "max_height", "blend_stop", "fixed_top",
+    "title_offset_x", "title_offset_y", "subtitle_offset_x", "subtitle_offset_y",
+    "title_size_px", "subtitle_size_px", "badges_offset_pinned", "badges_offset_unpinned",
+    "badges_gap", "info_offset_x", "info_offset_y", "info_size_px",
+    "mobile_breakpoint", "info_pill_padding_x", "info_pill_padding_y",
+    "info_pill_radius", "info_pill_blur", "top_bar_offset_y", "top_bar_padding_x",
+    "top_bar_left_offset_x", "top_bar_left_offset_y",
+    "top_bar_center_offset_x", "top_bar_center_offset_y",
+    "top_bar_right_offset_x", "top_bar_right_offset_y",
+    "top_bar_left_size_px", "top_bar_center_size_px", "top_bar_right_size_px",
+    "top_bar_left_pill_padding_x", "top_bar_left_pill_padding_y", "top_bar_left_pill_radius", "top_bar_left_pill_blur",
+    "top_bar_center_pill_padding_x", "top_bar_center_pill_padding_y", "top_bar_center_pill_radius", "top_bar_center_pill_blur",
+    "top_bar_right_pill_padding_x", "top_bar_right_pill_padding_y", "top_bar_right_pill_radius", "top_bar_right_pill_blur",
+    "info_pill_border_width", "top_bar_left_pill_border_width", "top_bar_center_pill_border_width", "top_bar_right_pill_border_width"
+  ]);
+
+  static _nullableNumericFields = new Set([
+    "info_offset_x_mobile", "info_offset_y_mobile",
+    "top_bar_left_offset_x_mobile", "top_bar_left_offset_y_mobile",
+    "top_bar_center_offset_x_mobile", "top_bar_center_offset_y_mobile",
+    "top_bar_right_offset_x_mobile", "top_bar_right_offset_y_mobile"
+  ]);
+
+  static _booleanFields = new Set([
+    "fixed", "badges_fixed", "weather_show_icon", "weather_show_condition",
+    "weather_show_temperature", "weather_show_humidity", "weather_show_wind",
+    "weather_show_pressure", "weather_colored_icons", "info_pill",
+    "datetime_show_time", "datetime_show_date", "datetime_show_day", "top_bar_enabled",
+    "top_bar_left_use_global", "top_bar_left_pill", "top_bar_left_overflow", "top_bar_left_show_icon", "top_bar_left_show_condition", "top_bar_left_show_temperature", "top_bar_left_show_humidity", "top_bar_left_show_wind", "top_bar_left_show_pressure", "top_bar_left_weather_colored_icons", "top_bar_left_show_day", "top_bar_left_show_date", "top_bar_left_show_time",
+    "top_bar_center_use_global", "top_bar_center_pill", "top_bar_center_overflow", "top_bar_center_show_icon", "top_bar_center_show_condition", "top_bar_center_show_temperature", "top_bar_center_show_humidity", "top_bar_center_show_wind", "top_bar_center_show_pressure", "top_bar_center_weather_colored_icons", "top_bar_center_show_day", "top_bar_center_show_date", "top_bar_center_show_time",
+    "top_bar_right_use_global", "top_bar_right_pill", "top_bar_right_overflow", "top_bar_right_show_icon", "top_bar_right_show_condition", "top_bar_right_show_temperature", "top_bar_right_show_humidity", "top_bar_right_show_wind", "top_bar_right_show_pressure", "top_bar_right_weather_colored_icons", "top_bar_right_show_day", "top_bar_right_show_date", "top_bar_right_show_time"
+  ]);
+
   constructor() {
     super();
     this._config = {};
@@ -1682,21 +1729,26 @@ class HkiHeaderCardEditor extends LitElement {
 
   _handleBgSizeSelect(ev) {
     ev.stopPropagation();
-    const val = ev.target.value;
+    // Use proper value extraction like other handlers - check detail.value first, then target.value
+    const val = ev.detail?.value ?? ev.target?.value;
     if (!val) return;
     
     // If selecting "custom", we need to ensure the config has a valid value to start with if it was currently a preset.
     // If it was already custom (e.g. 150%), we keep it. 
-    // If switching from "cover" to "custom", we default to "100% 100%" or similar to prep the input.
+    // If switching from "cover" to "custom", we default to "100%" or similar to prep the input.
     if (val === "custom") {
        const current = this._config.background_size || "cover";
-       if (["cover", "contain", "auto"].includes(current)) {
+       if (BG_SIZE_PRESETS.includes(current)) {
            // Reset to a safe custom default so input is not empty/confusing
-           this._changed({ target: { dataset: { field: "background_size" }, value: "100% 100%" } }, "background_size");
+           this._config = { ...this._config, background_size: "100%" };
+           this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config } }));
        }
+       // Force re-render to show the custom input field
+       this.requestUpdate();
     } else {
        // Selected a preset
-       this._changed({ target: { dataset: { field: "background_size" }, value: val } }, "background_size");
+       this._config = { ...this._config, background_size: val };
+       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config } }));
     }
   }
 
@@ -1707,46 +1759,19 @@ class HkiHeaderCardEditor extends LitElement {
 
     let value = this._val(ev);
 
-    const numeric = new Set([
-      "height_vh", "min_height", "max_height", "blend_stop", "fixed_top",
-      "title_offset_x", "title_offset_y", "subtitle_offset_x", "subtitle_offset_y",
-      "title_size_px", "subtitle_size_px", "badges_offset_pinned", "badges_offset_unpinned",
-      "badges_gap", "info_offset_x", "info_offset_y", "info_size_px",
-      "mobile_breakpoint", "info_pill_padding_x", "info_pill_padding_y",
-      "info_pill_radius", "info_pill_blur", "top_bar_offset_y", "top_bar_padding_x",
-      "top_bar_left_offset_x", "top_bar_left_offset_y",
-      "top_bar_center_offset_x", "top_bar_center_offset_y",
-      "top_bar_right_offset_x", "top_bar_right_offset_y"
-    ]);
+    // Use pre-computed static sets for field type checking
+    const { _numericFields, _nullableNumericFields, _booleanFields } = HkiHeaderCardEditor;
 
-    const nullableNumeric = new Set([
-        "info_offset_x_mobile", "info_offset_y_mobile",
-        "top_bar_left_offset_x_mobile", "top_bar_left_offset_y_mobile",
-        "top_bar_center_offset_x_mobile", "top_bar_center_offset_y_mobile",
-        "top_bar_right_offset_x_mobile", "top_bar_right_offset_y_mobile"
-    ]);
-
-    if (nullableNumeric.has(field)) {
+    if (_nullableNumericFields.has(field)) {
       value = value === "" || value == null ? null : toNum(value, null);
       if (value === null || !Number.isFinite(value)) value = null;
-    } else if (numeric.has(field)) {
+    } else if (_numericFields.has(field)) {
       const n = Number(value);
       if (!Number.isFinite(n)) return;
       value = n;
     }
 
-    // List of boolean fields
-    const bools = new Set([
-      "fixed", "badges_fixed", "weather_show_icon", "weather_show_condition",
-      "weather_show_temperature", "weather_show_humidity", "weather_show_wind",
-      "weather_show_pressure", "weather_colored_icons", "info_pill",
-      "datetime_show_time", "datetime_show_date", "datetime_show_day", "top_bar_enabled",
-      // Per-slot booleans
-      "top_bar_left_use_global", "top_bar_left_pill", "top_bar_left_overflow", "top_bar_left_show_icon", "top_bar_left_show_condition", "top_bar_left_show_temperature", "top_bar_left_show_humidity", "top_bar_left_show_wind", "top_bar_left_show_pressure", "top_bar_left_weather_colored_icons", "top_bar_left_show_day", "top_bar_left_show_date", "top_bar_left_show_time",
-      "top_bar_center_use_global", "top_bar_center_pill", "top_bar_center_overflow", "top_bar_center_show_icon", "top_bar_center_show_condition", "top_bar_center_show_temperature", "top_bar_center_show_humidity", "top_bar_center_show_wind", "top_bar_center_show_pressure", "top_bar_center_weather_colored_icons", "top_bar_center_show_day", "top_bar_center_show_date", "top_bar_center_show_time",
-      "top_bar_right_use_global", "top_bar_right_pill", "top_bar_right_overflow", "top_bar_right_show_icon", "top_bar_right_show_condition", "top_bar_right_show_temperature", "top_bar_right_show_humidity", "top_bar_right_show_wind", "top_bar_right_show_pressure", "top_bar_right_weather_colored_icons", "top_bar_right_show_day", "top_bar_right_show_date", "top_bar_right_show_time"
-    ]);
-    if (bools.has(field)) value = !!(ev.target?.checked ?? value);
+    if (_booleanFields.has(field)) value = !!(ev.target?.checked ?? value);
 
     let next;
 
@@ -2021,8 +2046,7 @@ class HkiHeaderCardEditor extends LitElement {
 
     // --- LOGIC FOR BACKGROUND SIZE HYBRID SELECTOR ---
     const bgSize = this._config.background_size || "cover";
-    const bgSizePresets = ["cover", "contain", "auto"];
-    const isCustomBgSize = !bgSizePresets.includes(bgSize);
+    const isCustomBgSize = !BG_SIZE_PRESETS.includes(bgSize);
     const bgSizeSelectValue = isCustomBgSize ? "custom" : bgSize;
 
     return html`
