@@ -71,10 +71,10 @@ const DEFAULTS = Object.freeze({
   title_color: "",
   subtitle_color: "",
   background: "https://github.com/jimz011/hki-header-card/blob/main/wallpapers/livingroom.jpg?raw=true",
+  background_color: "", // New backing color for blending
   background_position: "center",
   background_repeat: "no-repeat",
   background_size: "cover",
-  background_attachment: "scroll",
   background_blend_mode: "normal",
   height_vh: 35,
   min_height: 180,
@@ -793,8 +793,10 @@ class HkiHeaderCard extends LitElement {
     m.mobile_breakpoint = toNum(m.mobile_breakpoint, 768);
 
     // Background extra options
-    m.background_attachment = ["scroll", "fixed", "local"].includes(m.background_attachment) ? m.background_attachment : "scroll";
     m.background_blend_mode = m.background_blend_mode || "normal";
+    // Allow custom sizing, default to cover if missing
+    m.background_size = m.background_size || "cover";
+    m.background_color = m.background_color || "";
 
     // Top Bar Settings
     m.top_bar_enabled = m.top_bar_enabled !== false;
@@ -1517,11 +1519,11 @@ class HkiHeaderCard extends LitElement {
       `height:${cfg.height_vh}vh`,
       `min-height:${cfg.min_height}px`,
       `max-height:${cfg.max_height}px`,
-      resolvedBackground ? `background:${resolvedBackground}` : "",
+      cfg.background_color ? `background-color:${cfg.background_color}` : "",
+      resolvedBackground ? `background-image:${resolvedBackground}` : "",
       cfg.background_position ? `background-position:${cfg.background_position}` : "",
       cfg.background_repeat ? `background-repeat:${cfg.background_repeat}` : "",
       cfg.background_size ? `background-size:${cfg.background_size}` : "",
-      cfg.background_attachment ? `background-attachment:${cfg.background_attachment}` : "",
       cfg.background_blend_mode ? `background-blend-mode:${cfg.background_blend_mode}` : "",
       // Use system border-radius when not fixed, 0 when fixed
       effectiveFixed ? "" : "border-radius:var(--ha-card-border-radius, 12px)",
@@ -2111,33 +2113,35 @@ class HkiHeaderCardEditor extends LitElement {
         <div class="section">Background</div>
         <ha-textfield label="Background (color/gradient/url)" helper="Auto-wraps image paths in url() - just enter /local/image.jpg or color value" .value=${this._config.background} data-field="background" @input=${this._changed}></ha-textfield>
 
-        <ha-select label="Background position" .value=${this._config.background_position} .fixedMenuPosition=${true} data-field="background_position" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-          <mwc-list-item value="top">Top</mwc-list-item>
-          <mwc-list-item value="center">Center</mwc-list-item>
-          <mwc-list-item value="bottom">Bottom</mwc-list-item>
-          <mwc-list-item value="left">Left</mwc-list-item>
-          <mwc-list-item value="right">Right</mwc-list-item>
-        </ha-select>
+        <ha-textfield label="Background Color (backing layer)" helper="Used for blend modes. Pick a color to mix with the image above." .value=${this._config.background_color} data-field="background_color" @input=${this._changed}></ha-textfield>
 
-        <ha-select label="Background repeat" .value=${this._config.background_repeat} .fixedMenuPosition=${true} data-field="background_repeat" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-          <mwc-list-item value="no-repeat">No repeat</mwc-list-item>
-          <mwc-list-item value="repeat">Repeat</mwc-list-item>
-          <mwc-list-item value="repeat-x">Repeat horizontally</mwc-list-item>
-          <mwc-list-item value="repeat-y">Repeat vertically</mwc-list-item>
-        </ha-select>
-
-        <ha-select label="Background size" .value=${this._config.background_size} .fixedMenuPosition=${true} data-field="background_size" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-          <mwc-list-item value="cover">Cover</mwc-list-item>
-          <mwc-list-item value="contain">Contain</mwc-list-item>
-          <mwc-list-item value="auto">Auto</mwc-list-item>
-        </ha-select>
-        
         <div class="inline-fields-2">
-            <ha-select label="Background attachment" .value=${this._config.background_attachment || "scroll"} .fixedMenuPosition=${true} data-field="background_attachment" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-              <mwc-list-item value="scroll">Scroll</mwc-list-item>
-              <mwc-list-item value="fixed">Fixed</mwc-list-item>
-              <mwc-list-item value="local">Local</mwc-list-item>
+            <ha-select label="Background position" .value=${this._config.background_position} .fixedMenuPosition=${true} data-field="background_position" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+              <mwc-list-item value="top">Top</mwc-list-item>
+              <mwc-list-item value="center">Center</mwc-list-item>
+              <mwc-list-item value="bottom">Bottom</mwc-list-item>
+              <mwc-list-item value="left">Left</mwc-list-item>
+              <mwc-list-item value="right">Right</mwc-list-item>
             </ha-select>
+
+            <ha-select label="Background repeat" .value=${this._config.background_repeat} .fixedMenuPosition=${true} data-field="background_repeat" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+              <mwc-list-item value="no-repeat">No repeat</mwc-list-item>
+              <mwc-list-item value="repeat">Repeat</mwc-list-item>
+              <mwc-list-item value="repeat-x">Repeat horizontally</mwc-list-item>
+              <mwc-list-item value="repeat-y">Repeat vertically</mwc-list-item>
+            </ha-select>
+        </div>
+
+        <div class="inline-fields-2">
+            <ha-combo-box 
+                label="Background size" 
+                .value=${this._config.background_size || "cover"} 
+                .items=${["cover", "contain", "auto", "100% 100%"]} 
+                .allowCustomValue=${true}
+                helper="Type custom values like '120%' to zoom"
+                data-field="background_size" 
+                @value-changed=${this._changed}
+            ></ha-combo-box>
             
             <ha-select label="Background blend mode" .value=${this._config.background_blend_mode || "normal"} .fixedMenuPosition=${true} data-field="background_blend_mode" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
               <mwc-list-item value="normal">Normal</mwc-list-item>
