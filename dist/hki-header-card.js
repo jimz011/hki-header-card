@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.2.2-dev-01 ',
+  '%c HKI-HEADER-CARD %c v1.2.2-dev-02 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -1548,6 +1548,16 @@ class HkiHeaderCard extends LitElement {
       borderRadius = "var(--ha-card-border-radius, 12px)";
     }
 
+    // Build border style - always explicit to override ha-card defaults
+    let borderStyle = "";
+    if (cfg.card_border_style && cfg.card_border_style !== "none" && cfg.card_border_width > 0) {
+      // Custom border configured
+      borderStyle = `border-style:${cfg.card_border_style};border-width:${cfg.card_border_width}px;border-color:${cfg.card_border_color || 'transparent'}`;
+    } else {
+      // No border - explicitly set to none to override ha-card defaults
+      borderStyle = "border:none";
+    }
+
     const cardStyle = [
       `width:${cardWidth}`,
       `height:${cfg.height_vh}vh`,
@@ -1560,10 +1570,8 @@ class HkiHeaderCard extends LitElement {
       cfg.background_size ? `background-size:${cfg.background_size}` : "",
       cfg.background_blend_mode ? `background-blend-mode:${cfg.background_blend_mode}` : "",
       borderRadius ? `border-radius:${borderRadius}` : "",
-      cfg.card_box_shadow ? `box-shadow:${cfg.card_box_shadow}` : "",
-      cfg.card_border_style && cfg.card_border_style !== "none" ? `border-style:${cfg.card_border_style}` : "",
-      cfg.card_border_width ? `border-width:${cfg.card_border_width}px` : "",
-      cfg.card_border_color ? `border-color:${cfg.card_border_color}` : "",
+      cfg.card_box_shadow ? `box-shadow:${cfg.card_box_shadow}` : "box-shadow:none",
+      borderStyle,
     ].filter(Boolean).join(";");
 
     // Only show overlay gradient if blend is enabled
