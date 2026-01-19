@@ -1,11 +1,11 @@
-// HKI Header Card - Optimized & Updated with Native Visual Editor for Custom Cards
+// HKI Header Card
 
 import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?module";
 
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.3.0-dev-02 ',
+  '%c HKI-HEADER-CARD %c v1.3.0 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -84,7 +84,7 @@ const DEFAULTS = Object.freeze({
   blend_color: "var(--primary-background-color)",
   blend_stop: 95,
   blend_enabled: true,
-  // Card styling
+  // Header styling
   card_border_radius: "",
   card_box_shadow: "",
   card_border_style: "none",
@@ -813,7 +813,7 @@ class HkiHeaderCard extends LitElement {
     m.background_color = m.background_color || "";
     m.blend_enabled = m.blend_enabled !== false;
     
-    // Card styling options
+    // Header styling options
     m.card_border_radius = m.card_border_radius || "";
     m.card_box_shadow = m.card_box_shadow || "";
     m.card_border_style = m.card_border_style || "none";
@@ -1539,7 +1539,24 @@ class HkiHeaderCard extends LitElement {
     // Change: if not fixed (or in preview), allow normal card width
     const cardWidth = effectiveFixed ? "100vw" : "100%";
     
-    const resolvedBackground = this._resolveBackground(cfg.background);
+    // Background can be a CSS color, a gradient, or an image URL.
+    // Colors must map to background-color (not background-image).
+    const bgRaw = (cfg.background ?? "").toString();
+    const bgTrim = bgRaw.trim();
+    const isGradient = bgTrim.startsWith("linear-gradient(") || bgTrim.startsWith("radial-gradient(");
+    const isUrl = bgTrim.startsWith("url(");
+    const isPath = bgTrim.startsWith("/") || bgTrim.startsWith("./") || bgTrim.startsWith("../") ||
+                   bgTrim.startsWith("http://") || bgTrim.startsWith("https://") ||
+                   /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(bgTrim);
+
+    let bgImage = "";
+    let bgColor = "";
+
+    if (bgTrim) {
+      if (isGradient || isUrl) bgImage = bgTrim;
+      else if (isPath) bgImage = `url('${bgTrim}')`;
+      else bgColor = bgTrim;
+    }
 
     // Determine border-radius: custom > system default (when not fixed) > 0 (when fixed)
     let borderRadius = "";
@@ -1563,9 +1580,8 @@ class HkiHeaderCard extends LitElement {
       `width:${cardWidth}`,
       `height:${cfg.height_vh}vh`,
       `min-height:${cfg.min_height}px`,
-      `max-height:${cfg.max_height}px`,
-      cfg.background_color ? `background-color:${cfg.background_color}` : "",
-      resolvedBackground ? `background-image:${resolvedBackground}` : "",
+      `max-height:${cfg.max_height}px`,      (bgColor || cfg.background_color) ? `background-color:${bgColor || cfg.background_color}` : "",
+      bgImage ? `background-image:${bgImage}` : "",
       cfg.background_position ? `background-position:${cfg.background_position}` : "",
       cfg.background_repeat ? `background-repeat:${cfg.background_repeat}` : "",
       cfg.background_size ? `background-size:${cfg.background_size}` : "",
@@ -2148,12 +2164,6 @@ class HkiHeaderCardEditor extends LitElement {
               <mwc-list-item value="center">Center</mwc-list-item>
               <mwc-list-item value="right">Right</mwc-list-item>
             </ha-select>
-
-            <div class="section">Colors</div>
-            <div class="inline-fields-2">
-              <ha-textfield label="Title color" helper="Any CSS color (hex, rgb, rgba, etc.)" placeholder="inherit" .value=${this._config.title_color || ""} data-field="title_color" @input=${this._changed}></ha-textfield>
-              <ha-textfield label="Subtitle color" helper="Any CSS color (hex, rgb, rgba, etc.)" placeholder="inherit" .value=${this._config.subtitle_color || ""} data-field="subtitle_color" @input=${this._changed}></ha-textfield>
-            </div>
           </div>
         </details>
 
@@ -2180,87 +2190,17 @@ class HkiHeaderCardEditor extends LitElement {
             <ha-textfield label="Mobile Breakpoint (px)" type="number" .value=${String(this._config.mobile_breakpoint || 768)} data-field="mobile_breakpoint" @input=${this._changed}></ha-textfield>
           </div>
         </details>
+>
 
         <details class="box-section">
-          <summary>Top Bar</summary>
+          <summary>Header Styling</summary>
           <div class="box-content">
-            <div class="switch-row">
-                <ha-switch .checked=${this._config.top_bar_enabled !== false} data-field="top_bar_enabled" @change=${this._changed}></ha-switch>
-                <span>Enable top bar</span>
+            <div class="section">Text Colors</div>
+            <div class="inline-fields-2">
+              <ha-textfield label="Title color" helper="Any CSS color (hex, rgb, rgba, etc.)" placeholder="inherit" .value=${this._config.title_color || ""} data-field="title_color" @input=${this._changed}></ha-textfield>
+              <ha-textfield label="Subtitle color" helper="Any CSS color (hex, rgb, rgba, etc.)" placeholder="inherit" .value=${this._config.subtitle_color || ""} data-field="subtitle_color" @input=${this._changed}></ha-textfield>
             </div>
 
-            ${this._config.top_bar_enabled !== false ? html`
-                <div class="inline-fields-2">
-                    <ha-textfield label="Bar vertical offset (px)" type="number" .value=${String(this._config.top_bar_offset_y ?? 10)} data-field="top_bar_offset_y" @input=${this._changed}></ha-textfield>
-                    <ha-textfield label="Bar padding X (px)" type="number" .value=${String(this._config.top_bar_padding_x ?? 5)} data-field="top_bar_padding_x" @input=${this._changed}></ha-textfield>
-                </div>
-                
-                <details class="box-section">
-                  <summary>Global Styling (Defaults)</summary>
-                  <div class="box-content">
-                    <div class="inline-fields-2">
-                      <ha-textfield label="Font Size (px)" type="number" .value=${String(this._config.info_size_px || 12)} data-field="info_size_px" @input=${this._changed}></ha-textfield>
-                      <ha-select label="Font Weight" .value=${this._config.info_weight || "medium"} .fixedMenuPosition=${true} data-field="info_weight" @selected=${this._changed} @closed=${this._changed}>
-                        ${["light", "regular", "medium", "semibold", "bold", "extrabold"].map(w => html`<mwc-list-item .value=${w}>${w.charAt(0).toUpperCase() + w.slice(1)}</mwc-list-item>`)}
-                      </ha-select>
-                    </div>
-                    <ha-textfield label="Text Color" .value=${this._config.info_color || ""} data-field="info_color" @input=${this._changed}></ha-textfield>
-                    
-                    <div class="switch-row">
-                      <ha-switch .checked=${!!this._config.info_pill} data-field="info_pill" @change=${this._changed}></ha-switch>
-                      <span>Enable Pill Style</span>
-                    </div>
-                    ${this._config.info_pill ? html`
-                      <ha-textfield label="Pill Background" .value=${this._config.info_pill_background || "rgba(0,0,0,0.25)"} data-field="info_pill_background" @input=${this._changed}></ha-textfield>
-                      <div class="inline-fields-2">
-                        <ha-textfield label="Padding X (px)" type="number" .value=${String(this._config.info_pill_padding_x ?? 10)} data-field="info_pill_padding_x" @input=${this._changed}></ha-textfield>
-                        <ha-textfield label="Padding Y (px)" type="number" .value=${String(this._config.info_pill_padding_y ?? 6)} data-field="info_pill_padding_y" @input=${this._changed}></ha-textfield>
-                      </div>
-                      <div class="inline-fields-2">
-                        <ha-textfield label="Border Radius (px)" type="number" .value=${String(this._config.info_pill_radius ?? 999)} data-field="info_pill_radius" @input=${this._changed}></ha-textfield>
-                        <ha-textfield label="Blur (px)" type="number" .value=${String(this._config.info_pill_blur ?? 0)} data-field="info_pill_blur" @input=${this._changed}></ha-textfield>
-                      </div>
-                      <div class="inline-fields-3">
-                        <ha-select label="Border Style" .value=${this._config.info_pill_border_style || "none"} .fixedMenuPosition=${true} data-field="info_pill_border_style" @selected=${this._changed} @closed=${this._changed}>
-                          <mwc-list-item value="none">None</mwc-list-item>
-                          <mwc-list-item value="solid">Solid</mwc-list-item>
-                          <mwc-list-item value="dashed">Dashed</mwc-list-item>
-                          <mwc-list-item value="dotted">Dotted</mwc-list-item>
-                        </ha-select>
-                        <ha-textfield label="Border Width" type="number" .value=${String(this._config.info_pill_border_width ?? 0)} data-field="info_pill_border_width" @input=${this._changed}></ha-textfield>
-                        <ha-textfield label="Border Color" .value=${this._config.info_pill_border_color || "rgba(255,255,255,0.1)"} data-field="info_pill_border_color" @input=${this._changed}></ha-textfield>
-                      </div>
-                    ` : ''}
-                  </div>
-                </details>
-
-                <details class="box-section">
-                  <summary>Left Slot: ${this._getSlotLabel(this._config.top_bar_left)}</summary>
-                  <div class="box-content">
-                    ${this._renderSlotEditor('left')}
-                  </div>
-                </details>
-
-                <details class="box-section">
-                  <summary>Center Slot: ${this._getSlotLabel(this._config.top_bar_center)}</summary>
-                  <div class="box-content">
-                    ${this._renderSlotEditor('center')}
-                  </div>
-                </details>
-
-                <details class="box-section">
-                  <summary>Right Slot: ${this._getSlotLabel(this._config.top_bar_right)}</summary>
-                  <div class="box-content">
-                    ${this._renderSlotEditor('right')}
-                  </div>
-                </details>
-            ` : ''}
-          </div>
-        </details>
-
-        <details class="box-section">
-          <summary>Card Styling</summary>
-          <div class="box-content">
             <div class="section">Background</div>
             <ha-textfield label="Background" helper="CSS color (hex, rgb, rgba, color name), gradient, or image URL (/local/image.jpg)" .value=${this._config.background} data-field="background" @input=${this._changed}></ha-textfield>
 
@@ -2397,6 +2337,82 @@ class HkiHeaderCardEditor extends LitElement {
                 <mwc-list-item value="black">Black</mwc-list-item>
               </ha-select>
             </div>
+          </div>
+        </details
+        <details class="box-section">
+          <summary>Top Bar</summary>
+          <div class="box-content">
+            <div class="switch-row">
+                <ha-switch .checked=${this._config.top_bar_enabled !== false} data-field="top_bar_enabled" @change=${this._changed}></ha-switch>
+                <span>Enable top bar</span>
+            </div>
+
+            ${this._config.top_bar_enabled !== false ? html`
+                <div class="inline-fields-2">
+                    <ha-textfield label="Bar vertical offset (px)" type="number" .value=${String(this._config.top_bar_offset_y ?? 10)} data-field="top_bar_offset_y" @input=${this._changed}></ha-textfield>
+                    <ha-textfield label="Bar padding X (px)" type="number" .value=${String(this._config.top_bar_padding_x ?? 5)} data-field="top_bar_padding_x" @input=${this._changed}></ha-textfield>
+                </div>
+                
+                <details class="box-section">
+                  <summary>Global Styling (Defaults)</summary>
+                  <div class="box-content">
+                    <div class="inline-fields-2">
+                      <ha-textfield label="Font Size (px)" type="number" .value=${String(this._config.info_size_px || 12)} data-field="info_size_px" @input=${this._changed}></ha-textfield>
+                      <ha-select label="Font Weight" .value=${this._config.info_weight || "medium"} .fixedMenuPosition=${true} data-field="info_weight" @selected=${this._changed} @closed=${this._changed}>
+                        ${["light", "regular", "medium", "semibold", "bold", "extrabold"].map(w => html`<mwc-list-item .value=${w}>${w.charAt(0).toUpperCase() + w.slice(1)}</mwc-list-item>`)}
+                      </ha-select>
+                    </div>
+                    <ha-textfield label="Text Color" .value=${this._config.info_color || ""} data-field="info_color" @input=${this._changed}></ha-textfield>
+                    
+                    <div class="switch-row">
+                      <ha-switch .checked=${!!this._config.info_pill} data-field="info_pill" @change=${this._changed}></ha-switch>
+                      <span>Enable Pill Style</span>
+                    </div>
+                    ${this._config.info_pill ? html`
+                      <ha-textfield label="Pill Background" .value=${this._config.info_pill_background || "rgba(0,0,0,0.25)"} data-field="info_pill_background" @input=${this._changed}></ha-textfield>
+                      <div class="inline-fields-2">
+                        <ha-textfield label="Padding X (px)" type="number" .value=${String(this._config.info_pill_padding_x ?? 10)} data-field="info_pill_padding_x" @input=${this._changed}></ha-textfield>
+                        <ha-textfield label="Padding Y (px)" type="number" .value=${String(this._config.info_pill_padding_y ?? 6)} data-field="info_pill_padding_y" @input=${this._changed}></ha-textfield>
+                      </div>
+                      <div class="inline-fields-2">
+                        <ha-textfield label="Border Radius (px)" type="number" .value=${String(this._config.info_pill_radius ?? 999)} data-field="info_pill_radius" @input=${this._changed}></ha-textfield>
+                        <ha-textfield label="Blur (px)" type="number" .value=${String(this._config.info_pill_blur ?? 0)} data-field="info_pill_blur" @input=${this._changed}></ha-textfield>
+                      </div>
+                      <div class="inline-fields-3">
+                        <ha-select label="Border Style" .value=${this._config.info_pill_border_style || "none"} .fixedMenuPosition=${true} data-field="info_pill_border_style" @selected=${this._changed} @closed=${this._changed}>
+                          <mwc-list-item value="none">None</mwc-list-item>
+                          <mwc-list-item value="solid">Solid</mwc-list-item>
+                          <mwc-list-item value="dashed">Dashed</mwc-list-item>
+                          <mwc-list-item value="dotted">Dotted</mwc-list-item>
+                        </ha-select>
+                        <ha-textfield label="Border Width" type="number" .value=${String(this._config.info_pill_border_width ?? 0)} data-field="info_pill_border_width" @input=${this._changed}></ha-textfield>
+                        <ha-textfield label="Border Color" .value=${this._config.info_pill_border_color || "rgba(255,255,255,0.1)"} data-field="info_pill_border_color" @input=${this._changed}></ha-textfield>
+                      </div>
+                    ` : ''}
+                  </div>
+                </details>
+
+                <details class="box-section">
+                  <summary>Left Slot: ${this._getSlotLabel(this._config.top_bar_left)}</summary>
+                  <div class="box-content">
+                    ${this._renderSlotEditor('left')}
+                  </div>
+                </details>
+
+                <details class="box-section">
+                  <summary>Center Slot: ${this._getSlotLabel(this._config.top_bar_center)}</summary>
+                  <div class="box-content">
+                    ${this._renderSlotEditor('center')}
+                  </div>
+                </details>
+
+                <details class="box-section">
+                  <summary>Right Slot: ${this._getSlotLabel(this._config.top_bar_right)}</summary>
+                  <div class="box-content">
+                    ${this._renderSlotEditor('right')}
+                  </div>
+                </details>
+            ` : ''}
           </div>
         </details>
 
