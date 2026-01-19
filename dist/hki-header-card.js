@@ -1184,7 +1184,18 @@ class HkiHeaderCard extends LitElement {
       case "url":
         if (action.url_path) window.open(action.url_path, "_blank");
         break;
+      case "perform-action":
+        if (action.perform_action) {
+          const [domain, service] = action.perform_action.split(".");
+          if (domain && service) {
+            const serviceData = action.data || {};
+            const target = action.target || {};
+            this.hass.callService(domain, service, serviceData, target);
+          }
+        }
+        break;
       case "call-service":
+        // Legacy support for old call-service action
         if (action.service) {
           const [domain, service] = action.service.split(".");
           if (domain && service) this.hass.callService(domain, service, this._parseServiceData(action.service_data));
@@ -1881,7 +1892,10 @@ class HkiHeaderCardEditor extends LitElement {
       const currentValue = this._config[rootField] || {};
       next = { ...this._config, [rootField]: { ...currentValue, [subField]: value } };
 
-      if (subField === "action" && value === "call-service") {
+      if (subField === "action" && value === "perform-action") {
+        next[rootField] = { ...next[rootField], perform_action: next[rootField].perform_action ?? "" };
+      } else if (subField === "action" && value === "call-service") {
+        // Legacy support for old call-service action
         next[rootField] = { ...next[rootField], service: next[rootField].service ?? "", service_data: next[rootField].service_data ?? "entity_id: \n" };
       }
     } else {
