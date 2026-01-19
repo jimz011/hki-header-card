@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.3.4 ',
+  '%c HKI-HEADER-CARD %c v1.3.5 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -318,7 +318,7 @@ class HkiHeaderCard extends LitElement {
 
       ha-card.header {
         position: relative;
-        width: 100vw;
+        width: 100%; /* Use 100% instead of 100vw - works in all contexts */
         height: 35vh;
         min-height: 180px;
         max-height: 340px;
@@ -1618,8 +1618,23 @@ class HkiHeaderCard extends LitElement {
       ? `background:linear-gradient(to bottom, transparent 0%, ${cfg.blend_color} ${cfg.blend_stop}%, ${cfg.blend_color} 100%);`
       : "display:none;";
     
-    // Change: if not fixed, do not apply calculated offsets
-    const contentStyle = effectiveFixed 
+    // Detect if we're in a constrained container (like Bubble popup)
+    // Transformed ancestors create new containing blocks for position:fixed
+    const inConstrainedContainer = effectiveFixed && (() => {
+      let el = this.parentElement;
+      while (el && el !== document.body) {
+        const style = window.getComputedStyle(el);
+        if (style.transform !== 'none' || style.filter !== 'none' || style.perspective !== 'none') {
+          return true;
+        }
+        el = el.parentElement;
+      }
+      return false;
+    })();
+    
+    // When in constrained container: use 100% width
+    // When in normal dashboard: use calculated offsets for content alignment
+    const contentStyle = (effectiveFixed && !inConstrainedContainer)
       ? `margin-left:${this._offsetLeft}px;width:${this._contentWidth}px;`
       : `width:100%;`;
 
