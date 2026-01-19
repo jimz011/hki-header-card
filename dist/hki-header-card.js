@@ -96,6 +96,13 @@ const DEFAULTS = Object.freeze({
   card_border_color: "",
   fixed: true,
   fixed_top: 0,
+  // When fixed is false, allow resizing/bleeding the card within the view
+  // Positive left/right values make the card wider (bleed outwards)
+  // Positive top/bottom add spacing around the card
+  inset_top: 0,
+  inset_left: 0,
+  inset_right: 0,
+  inset_bottom: 0,
   title_offset_x: 5,
   title_offset_y: 32,
   subtitle_offset_x: 5,
@@ -1558,8 +1565,28 @@ class HkiHeaderCard extends LitElement {
     const subtitleText = this._isTemplateString(cfg.subtitle) ? (this._renderedSubtitle ?? "") : (cfg.subtitle ?? "");
     const subtitleVisible = !!subtitleText.trim();
 
-    // Change: if not fixed (or in preview), allow normal card width
-    const cardWidth = effectiveFixed ? "100vw" : "100%";
+    // When not fixed (or in preview), allow the header to "bleed" wider left/right and add spacing top/bottom.
+    // Left/Right: positive values make the card wider on that side.
+    // Top/Bottom: margin spacing.
+    const insetTop = toNum(cfg.inset_top, 0);
+    const insetLeft = toNum(cfg.inset_left, 0);
+    const insetRight = toNum(cfg.inset_right, 0);
+    const insetBottom = toNum(cfg.inset_bottom, 0);
+
+    const extraWidth = insetLeft + insetRight;
+    const cardWidth = effectiveFixed
+      ? "100vw"
+      : (extraWidth !== 0 ? `calc(100% + ${extraWidth}px)` : "100%");
+
+    const nonFixedBleedStyle = !effectiveFixed
+      ? [
+          insetTop ? `margin-top:${insetTop}px` : "",
+          insetBottom ? `margin-bottom:${insetBottom}px` : "",
+          (insetLeft || insetRight)
+            ? `margin-left:${-insetLeft}px;margin-right:${-insetRight}px`
+            : "",
+        ].filter(Boolean).join(";")
+      : "";
     
     // Background can be a CSS color, a gradient, or an image URL.
     // Colors must map to background-color (not background-image).
@@ -1627,9 +1654,11 @@ class HkiHeaderCard extends LitElement {
 
     const cardStyle = [
       `width:${cardWidth}`,
+      (!effectiveFixed && nonFixedBleedStyle) ? nonFixedBleedStyle : "",
       `height:${cfg.height_vh}vh`,
       `min-height:${cfg.min_height}px`,
-      `max-height:${cfg.max_height}px`,      (bgColor || cfg.background_color) ? `background-color:${bgColor || cfg.background_color}` : "",
+      `max-height:${cfg.max_height}px`,
+      (bgColor || cfg.background_color) ? `background-color:${bgColor || cfg.background_color}` : "",
       bgImage ? `background-image:${bgImage}` : "",
       cfg.background_position ? `background-position:${cfg.background_position}` : "",
       cfg.background_repeat ? `background-repeat:${cfg.background_repeat}` : "",
@@ -1741,6 +1770,7 @@ class HkiHeaderCardEditor extends LitElement {
   // Pre-computed field sets for performance (avoid recreating on every change)
   static _numericFields = new Set([
     "height_vh", "min_height", "max_height", "blend_stop", "fixed_top",
+    "inset_top", "inset_left", "inset_right", "inset_bottom",
     "title_offset_x", "title_offset_y", "subtitle_offset_x", "subtitle_offset_y",
     "title_size_px", "subtitle_size_px", "badges_offset_pinned", "badges_offset_unpinned",
     "badges_gap", "info_offset_x", "info_offset_y", "info_size_px",
@@ -1950,20 +1980,23 @@ class HkiHeaderCardEditor extends LitElement {
   _renderTemplateEditor(label, field, options = {}) {
     const value = this._config?.[field] ?? "";
     return html`
-      <ha-yaml-editor
+      <div class="section">${label}</div>
+      <ha-code-editor
         .hass=${this.hass}
-        .label=${label}
         .value=${value}
+        mode="jinja2"
+        autocomplete-entities
         @value-changed=${(ev) => {
           ev.stopPropagation();
           const newValue = ev.detail?.value;
           if (newValue !== value) {
-            this._config = { ...this._config, [field]: newValue || undefined };
-            this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: this._config }, bubbles: true, composed: true }));
+            this._config = { ...this._config, [field]: (newValue ?? "") };
+            const strippedConfig = this._stripDefaults(this._config);
+            this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: strippedConfig }, bubbles: true, composed: true }));
           }
         }}
         @click=${(e) => e.stopPropagation()}
-      ></ha-yaml-editor>
+      ></ha-code-editor>
     `;
   }
 
@@ -2253,8 +2286,8 @@ class HkiHeaderCardEditor extends LitElement {
         <details class="box-section" open>
           <summary>Entity</summary>
           <div class="box-content">
-            ${this._renderTemplateEditor("Title (Accepts jinja2 templates)", "title")}
-            ${this._renderTemplateEditor("Subtitle (Accepts jinja2 templates)", "subtitle")}
+            ${this._renderTemplateEditor("Title template (Jinja)", "title")}
+            ${this._renderTemplateEditor("Subtitle template (Jinja)", "subtitle")}
 
             <ha-select label="Text alignment" .value=${this._config.text_align} .fixedMenuPosition=${true} data-field="text_align" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
               <mwc-list-item value="left">Left</mwc-list-item>
@@ -2537,7 +2570,19 @@ class HkiHeaderCardEditor extends LitElement {
               </ha-formfield>
             </div>
 
-            ${this._config.fixed ? html`<ha-textfield label="Fixed top offset (px)" type="number" .value=${String(this._config.fixed_top)} data-field="fixed_top" @input=${this._changed}></ha-textfield>` : ""}
+            ${this._config.fixed ? html`
+              <ha-textfield label="Fixed top offset (px)" type="number" .value=${String(this._config.fixed_top)} data-field="fixed_top" @input=${this._changed}></ha-textfield>
+            ` : html`
+              <div class="section">Card size (not fixed)</div>
+              <div class="inline-fields-2">
+                <ha-textfield label="Inset top (px)" type="number" .value=${String(this._config.inset_top ?? 0)} data-field="inset_top" @input=${this._changed}></ha-textfield>
+                <ha-textfield label="Inset bottom (px)" type="number" .value=${String(this._config.inset_bottom ?? 0)} data-field="inset_bottom" @input=${this._changed}></ha-textfield>
+              </div>
+              <div class="inline-fields-2">
+                <ha-textfield label="Inset left (px)" helper="Positive values make the card wider left" type="number" .value=${String(this._config.inset_left ?? 0)} data-field="inset_left" @input=${this._changed}></ha-textfield>
+                <ha-textfield label="Inset right (px)" helper="Positive values make the card wider right" type="number" .value=${String(this._config.inset_right ?? 0)} data-field="inset_right" @input=${this._changed}></ha-textfield>
+              </div>
+            `}
           </div>
         </details>
 
@@ -2586,7 +2631,7 @@ class HkiHeaderCardEditor extends LitElement {
       .switch-row { display: flex; align-items: center; gap: 12px; }
       .inline-fields-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
       .inline-fields-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-      ha-textfield, ha-select, ha-combo-box, ha-navigation-picker, ha-entity-picker, ha-selector, ha-service-picker, ha-yaml-editor { width: 100%; }
+      ha-textfield, ha-select, ha-combo-box, ha-navigation-picker, ha-entity-picker, ha-selector, ha-service-picker, ha-yaml-editor, ha-code-editor { width: 100%; }
       
       /* Collapsible Sections */
       details.box-section {
