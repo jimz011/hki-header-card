@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.3.5 ',
+  '%c HKI-HEADER-CARD %c v1.3.2 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -92,6 +92,13 @@ const DEFAULTS = Object.freeze({
   card_border_color: "",
   fixed: true,
   fixed_top: 0,
+
+  // When not fixed, allow shrinking/expanding the card by adding "insets" (margins)
+  // around the header card. These only apply when fixed: false.
+  inset_top: 0,
+  inset_left: 0,
+  inset_right: 0,
+  inset_bottom: 0,
   title_offset_x: 5,
   title_offset_y: 32,
   subtitle_offset_x: 5,
@@ -310,15 +317,14 @@ class HkiHeaderCard extends LitElement {
         position: fixed;
         left: 0;
         top: 0;
-        width: 100%;
+        width: 100vw;
         z-index: 1;
-        overflow: hidden !important; /* Respect border-radius and box-shadow of child - !important to override Bubble Card */
-        isolation: isolate; /* Create strong stacking context for proper overflow clipping */
+        overflow: hidden; /* Respect border-radius and box-shadow of child */
       }
 
       ha-card.header {
         position: relative;
-        width: 100%; /* Use 100% instead of 100vw - works in all contexts */
+        width: 100vw;
         height: 35vh;
         min-height: 180px;
         max-height: 340px;
@@ -798,6 +804,12 @@ class HkiHeaderCard extends LitElement {
     m.blend_stop = clamp(+m.blend_stop, 0, 100);
     m.fixed = !!m.fixed;
     m.fixed_top = toNum(m.fixed_top, 0);
+
+    // Insets (only used when fixed is false)
+    m.inset_top = toNum(m.inset_top, 0);
+    m.inset_left = toNum(m.inset_left, 0);
+    m.inset_right = toNum(m.inset_right, 0);
+    m.inset_bottom = toNum(m.inset_bottom, 0);
     m.title_offset_x = toNum(m.title_offset_x, 5);
     m.title_offset_y = toNum(m.title_offset_y, 32);
     m.subtitle_offset_x = toNum(m.subtitle_offset_x, 5);
@@ -1548,9 +1560,16 @@ class HkiHeaderCard extends LitElement {
     const subtitleText = this._isTemplateString(cfg.subtitle) ? (this._renderedSubtitle ?? "") : (cfg.subtitle ?? "");
     const subtitleVisible = !!subtitleText.trim();
 
-    // Change: always use 100% for card width - when inside containers like Bubble popups,
-    // 100vw can extend beyond the container boundaries
-    const cardWidth = "100%";
+    // If not fixed (or in preview), allow normal card width and optional "insets"
+    // (margins) to grow/shrink the card within the view.
+    const insetTop = toNum(cfg.inset_top, 0);
+    const insetLeft = toNum(cfg.inset_left, 0);
+    const insetRight = toNum(cfg.inset_right, 0);
+    const insetBottom = toNum(cfg.inset_bottom, 0);
+
+    const cardWidth = effectiveFixed
+      ? "100vw"
+      : `calc(100% - ${Math.max(0, insetLeft + insetRight)}px)`;
     
     // Background can be a CSS color, a gradient, or an image URL.
     // Colors must map to background-color (not background-image).
@@ -1596,9 +1615,11 @@ class HkiHeaderCard extends LitElement {
 
     const cardStyle = [
       `width:${cardWidth}`,
+      !effectiveFixed ? `margin:${insetTop}px ${insetRight}px ${insetBottom}px ${insetLeft}px` : "margin:0",
       `height:${cfg.height_vh}vh`,
       `min-height:${cfg.min_height}px`,
-      `max-height:${cfg.max_height}px`,      (bgColor || cfg.background_color) ? `background-color:${bgColor || cfg.background_color}` : "",
+      `max-height:${cfg.max_height}px`,
+      (bgColor || cfg.background_color) ? `background-color:${bgColor || cfg.background_color}` : "",
       bgImage ? `background-image:${bgImage}` : "",
       cfg.background_position ? `background-position:${cfg.background_position}` : "",
       cfg.background_repeat ? `background-repeat:${cfg.background_repeat}` : "",
@@ -1607,9 +1628,8 @@ class HkiHeaderCard extends LitElement {
       borderRadius ? `border-radius:${borderRadius}` : "",
       cfg.card_box_shadow ? `box-shadow:${cfg.card_box_shadow}` : "box-shadow:none",
       borderStyle,
-      // Apply overflow:hidden when not fixed OR when fixed with border-radius
-      // When fixed with border-radius, we need overflow:hidden on BOTH wrapper and card for proper clipping
-      (!effectiveFixed || borderRadius) ? "overflow:hidden" : ""
+      // Only apply overflow:hidden when not fixed to allow box-shadow to show through wrapper
+      !effectiveFixed ? "overflow:hidden" : ""
     ].filter(Boolean).join(";");
 
     // Only show overlay gradient if blend is enabled
@@ -1618,23 +1638,8 @@ class HkiHeaderCard extends LitElement {
       ? `background:linear-gradient(to bottom, transparent 0%, ${cfg.blend_color} ${cfg.blend_stop}%, ${cfg.blend_color} 100%);`
       : "display:none;";
     
-    // Detect if we're in a constrained container (like Bubble popup)
-    // Transformed ancestors create new containing blocks for position:fixed
-    const inConstrainedContainer = effectiveFixed && (() => {
-      let el = this.parentElement;
-      while (el && el !== document.body) {
-        const style = window.getComputedStyle(el);
-        if (style.transform !== 'none' || style.filter !== 'none' || style.perspective !== 'none') {
-          return true;
-        }
-        el = el.parentElement;
-      }
-      return false;
-    })();
-    
-    // When in constrained container: use 100% width
-    // When in normal dashboard: use calculated offsets for content alignment
-    const contentStyle = (effectiveFixed && !inConstrainedContainer)
+    // Change: if not fixed, do not apply calculated offsets
+    const contentStyle = effectiveFixed 
       ? `margin-left:${this._offsetLeft}px;width:${this._contentWidth}px;`
       : `width:100%;`;
 
@@ -1656,7 +1661,7 @@ class HkiHeaderCard extends LitElement {
 
     const topOffset = this._kioskMode ? (cfg.fixed_top || 0) : (cfg.fixed_top || 0) + 48;
     const wrapperStyle = effectiveFixed 
-      ? `top:${topOffset}px;${borderRadius ? `border-radius:${borderRadius};contain:paint;` : ''}` 
+      ? `top:${topOffset}px;${borderRadius ? `border-radius:${borderRadius};` : ''}` 
       : "";
 
     const badgesOffset = cfg.badges_fixed ? (cfg.badges_offset_pinned || 48) : (cfg.badges_offset_unpinned || 100);
@@ -1726,6 +1731,7 @@ class HkiHeaderCardEditor extends LitElement {
   // Pre-computed field sets for performance (avoid recreating on every change)
   static _numericFields = new Set([
     "height_vh", "min_height", "max_height", "blend_stop", "fixed_top",
+    "inset_top", "inset_left", "inset_right", "inset_bottom",
     "title_offset_x", "title_offset_y", "subtitle_offset_x", "subtitle_offset_y",
     "title_size_px", "subtitle_size_px", "badges_offset_pinned", "badges_offset_unpinned",
     "badges_gap", "info_offset_x", "info_offset_y", "info_size_px",
@@ -1935,20 +1941,24 @@ class HkiHeaderCardEditor extends LitElement {
   _renderTemplateEditor(label, field, options = {}) {
     const value = this._config?.[field] ?? "";
     return html`
-      <ha-yaml-editor
+      <ha-code-editor
         .hass=${this.hass}
         .label=${label}
         .value=${value}
+        .mode=${"yaml"}
         @value-changed=${(ev) => {
           ev.stopPropagation();
+          // ha-code-editor always returns a string (supports multiline), which is what
+          // we want for Jinja templates.
           const newValue = ev.detail?.value;
           if (newValue !== value) {
-            this._config = { ...this._config, [field]: newValue || undefined };
-            this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: this._config }, bubbles: true, composed: true }));
+            this._config = { ...this._config, [field]: newValue ?? "" };
+            const strippedConfig = this._stripDefaults(this._config);
+            this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: strippedConfig }, bubbles: true, composed: true }));
           }
         }}
         @click=${(e) => e.stopPropagation()}
-      ></ha-yaml-editor>
+      ></ha-code-editor>
     `;
   }
 
@@ -2507,7 +2517,29 @@ class HkiHeaderCardEditor extends LitElement {
               </ha-formfield>
             </div>
 
-            ${this._config.fixed ? html`<ha-textfield label="Fixed top offset (px)" type="number" .value=${String(this._config.fixed_top)} data-field="fixed_top" @input=${this._changed}></ha-textfield>` : ""}
+            ${this._config.fixed
+              ? html`
+                  <ha-textfield
+                    label="Fixed top offset (px)"
+                    type="number"
+                    .value=${String(this._config.fixed_top)}
+                    data-field="fixed_top"
+                    @input=${this._changed}
+                  ></ha-textfield>
+                `
+              : html`
+                  <ha-alert alert-type="info">
+                    Header is not fixed. Use the insets below to make the card larger/smaller within the view.
+                  </ha-alert>
+                  <div class="inline-fields-2">
+                    <ha-textfield label="Inset top (px)" type="number" .value=${String(this._config.inset_top || 0)} data-field="inset_top" @input=${this._changed}></ha-textfield>
+                    <ha-textfield label="Inset bottom (px)" type="number" .value=${String(this._config.inset_bottom || 0)} data-field="inset_bottom" @input=${this._changed}></ha-textfield>
+                  </div>
+                  <div class="inline-fields-2">
+                    <ha-textfield label="Inset left (px)" type="number" .value=${String(this._config.inset_left || 0)} data-field="inset_left" @input=${this._changed}></ha-textfield>
+                    <ha-textfield label="Inset right (px)" type="number" .value=${String(this._config.inset_right || 0)} data-field="inset_right" @input=${this._changed}></ha-textfield>
+                  </div>
+                `}
           </div>
         </details>
 
