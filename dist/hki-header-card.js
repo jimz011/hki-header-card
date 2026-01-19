@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.3.3 ',
+  '%c HKI-HEADER-CARD %c v1.3.4 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -310,7 +310,7 @@ class HkiHeaderCard extends LitElement {
         position: fixed;
         left: 0;
         top: 0;
-        width: 100vw;
+        width: 100%;
         z-index: 1;
         overflow: hidden !important; /* Respect border-radius and box-shadow of child - !important to override Bubble Card */
         isolation: isolate; /* Create strong stacking context for proper overflow clipping */
@@ -1548,8 +1548,9 @@ class HkiHeaderCard extends LitElement {
     const subtitleText = this._isTemplateString(cfg.subtitle) ? (this._renderedSubtitle ?? "") : (cfg.subtitle ?? "");
     const subtitleVisible = !!subtitleText.trim();
 
-    // Change: if not fixed (or in preview), allow normal card width
-    const cardWidth = effectiveFixed ? "100vw" : "100%";
+    // Change: always use 100% for card width - when inside containers like Bubble popups,
+    // 100vw can extend beyond the container boundaries
+    const cardWidth = "100%";
     
     // Background can be a CSS color, a gradient, or an image URL.
     // Colors must map to background-color (not background-image).
