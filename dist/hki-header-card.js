@@ -1560,8 +1560,13 @@ class HkiHeaderCard extends LitElement {
 
     // Determine border-radius: custom > system default (when not fixed) > 0 (when fixed)
     let borderRadius = "";
-    if (cfg.card_border_radius) {
-      borderRadius = cfg.card_border_radius;
+    const br = cfg.card_border_radius;
+    if (br !== undefined && br !== null && br !== "") {
+      if (typeof br === "number") borderRadius = `${br}px`;
+      else {
+        const s = String(br).trim();
+        borderRadius = /^\d+$/.test(s) ? `${s}px` : s;
+      }
     } else if (!effectiveFixed) {
       borderRadius = "var(--ha-card-border-radius, 12px)";
     }
@@ -1846,9 +1851,13 @@ class HkiHeaderCardEditor extends LitElement {
 
     let value = this._val(ev);
 
-    // Auto-append px for border radius if only a number is provided
-    if (field === "card_border_radius" && value && /^\d+$/.test(String(value).trim())) {
-      value = String(value).trim() + "px";
+    // Card border radius: allow users to enter just a number (stored as number, rendered as px)
+    // while still allowing any valid CSS value (e.g., 12px, 0, 50%, var(--x)).
+    if (field === "card_border_radius") {
+      const s = (value ?? "").toString().trim();
+      if (s === "") value = "";
+      else if (/^\d+$/.test(s)) value = Number(s);
+      else value = s;
     }
 
     // Use pre-computed static sets for field type checking
@@ -2272,7 +2281,7 @@ class HkiHeaderCardEditor extends LitElement {
             ` : ""}
 
             <div class="section">Border & Shadow</div>
-            <ha-textfield label="Border Radius" helper="Enter just a number (auto-adds px) or any CSS value (12px, 0, 50%)" .value=${this._config.card_border_radius || ""} data-field="card_border_radius" @input=${this._changed}></ha-textfield>
+            <ha-textfield label="Border Radius" helper="Enter a number (px) like 12, or any CSS value (12px, 0, 50%, var(--radius))" .value=${(this._config.card_border_radius ?? "").toString()} data-field="card_border_radius" @input=${this._changed}></ha-textfield>
             <ha-textfield label="Box Shadow" helper="e.g. 0 4px 12px rgba(0,0,0,0.3)" .value=${this._config.card_box_shadow || ""} data-field="card_box_shadow" @input=${this._changed}></ha-textfield>
             <div class="inline-fields-3">
               <ha-select label="Border Style" .value=${this._config.card_border_style || "none"} .fixedMenuPosition=${true} data-field="card_border_style" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
