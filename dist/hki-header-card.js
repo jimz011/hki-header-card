@@ -1560,16 +1560,17 @@ class HkiHeaderCard extends LitElement {
     const subtitleText = this._isTemplateString(cfg.subtitle) ? (this._renderedSubtitle ?? "") : (cfg.subtitle ?? "");
     const subtitleVisible = !!subtitleText.trim();
 
-    // If not fixed (or in preview), allow normal card width and optional "insets"
-    // (margins) to grow/shrink the card within the view.
+    // If not fixed (or in preview), allow normal card width and optional "insets".
+    // Top/Bottom act like normal margins.
+    // Left/Right behave like "bleed": positive values make the card wider beyond the
+    // container on that side; negative values shrink it.
     const insetTop = toNum(cfg.inset_top, 0);
     const insetLeft = toNum(cfg.inset_left, 0);
     const insetRight = toNum(cfg.inset_right, 0);
     const insetBottom = toNum(cfg.inset_bottom, 0);
 
-    const cardWidth = effectiveFixed
-      ? "100vw"
-      : `calc(100% - ${Math.max(0, insetLeft + insetRight)}px)`;
+    const lrSum = insetLeft + insetRight;
+    const cardWidth = effectiveFixed ? "100vw" : `calc(100% + ${lrSum}px)`;
     
     // Background can be a CSS color, a gradient, or an image URL.
     // Colors must map to background-color (not background-image).
@@ -1615,7 +1616,8 @@ class HkiHeaderCard extends LitElement {
 
     const cardStyle = [
       `width:${cardWidth}`,
-      !effectiveFixed ? `margin:${insetTop}px ${insetRight}px ${insetBottom}px ${insetLeft}px` : "margin:0",
+      // For bleed-left/right we use negative margins so the extra width expands outward.
+      !effectiveFixed ? `margin:${insetTop}px ${-insetRight}px ${insetBottom}px ${-insetLeft}px` : "margin:0",
       `height:${cfg.height_vh}vh`,
       `min-height:${cfg.min_height}px`,
       `max-height:${cfg.max_height}px`,
@@ -1941,8 +1943,10 @@ class HkiHeaderCardEditor extends LitElement {
   _renderTemplateEditor(label, field, options = {}) {
     const value = this._config?.[field] ?? "";
     return html`
+      <div class="section">${label}</div>
       <ha-code-editor
         .hass=${this.hass}
+        label=${label}
         .label=${label}
         .value=${value}
         .mode=${"yaml"}
@@ -2248,8 +2252,8 @@ class HkiHeaderCardEditor extends LitElement {
         <details class="box-section" open>
           <summary>Entity</summary>
           <div class="box-content">
-            ${this._renderTemplateEditor("Title (Accepts jinja2 templates)", "title")}
-            ${this._renderTemplateEditor("Subtitle (Accepts jinja2 templates)", "subtitle")}
+            ${this._renderTemplateEditor("Title template (Jinja)", "title")}
+            ${this._renderTemplateEditor("Subtitle template (Jinja)", "subtitle")}
 
             <ha-select label="Text alignment" .value=${this._config.text_align} .fixedMenuPosition=${true} data-field="text_align" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
               <mwc-list-item value="left">Left</mwc-list-item>
@@ -2529,15 +2533,15 @@ class HkiHeaderCardEditor extends LitElement {
                 `
               : html`
                   <ha-alert alert-type="info">
-                    Header is not fixed. Use the insets below to make the card larger/smaller within the view.
+                    Header is not fixed. Top/Bottom act like normal margins. Left/Right act like <b>bleed</b>: positive values make the card wider beyond the container.
                   </ha-alert>
                   <div class="inline-fields-2">
-                    <ha-textfield label="Inset top (px)" type="number" .value=${String(this._config.inset_top || 0)} data-field="inset_top" @input=${this._changed}></ha-textfield>
-                    <ha-textfield label="Inset bottom (px)" type="number" .value=${String(this._config.inset_bottom || 0)} data-field="inset_bottom" @input=${this._changed}></ha-textfield>
+                    <ha-textfield label="Inset top (px)" helper="Positive pushes the card down" type="number" .value=${String(this._config.inset_top || 0)} data-field="inset_top" @input=${this._changed}></ha-textfield>
+                    <ha-textfield label="Inset bottom (px)" helper="Positive adds space below" type="number" .value=${String(this._config.inset_bottom || 0)} data-field="inset_bottom" @input=${this._changed}></ha-textfield>
                   </div>
                   <div class="inline-fields-2">
-                    <ha-textfield label="Inset left (px)" type="number" .value=${String(this._config.inset_left || 0)} data-field="inset_left" @input=${this._changed}></ha-textfield>
-                    <ha-textfield label="Inset right (px)" type="number" .value=${String(this._config.inset_right || 0)} data-field="inset_right" @input=${this._changed}></ha-textfield>
+                    <ha-textfield label="Bleed left (px)" helper="Positive makes it wider to the left" type="number" .value=${String(this._config.inset_left || 0)} data-field="inset_left" @input=${this._changed}></ha-textfield>
+                    <ha-textfield label="Bleed right (px)" helper="Positive makes it wider to the right" type="number" .value=${String(this._config.inset_right || 0)} data-field="inset_right" @input=${this._changed}></ha-textfield>
                   </div>
                 `}
           </div>
