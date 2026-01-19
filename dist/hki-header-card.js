@@ -2156,8 +2156,10 @@ class HkiHeaderCardEditor extends LitElement {
         <details class="box-section" open>
           <summary>Entity</summary>
           <div class="box-content">
-            ${this._renderTemplateEditor("Title (Accepts jinja2 templates)", "title")}
-            ${this._renderTemplateEditor("Subtitle (Accepts jinja2 templates)", "subtitle")}
+            <div class="template-pair">
+              ${this._renderTemplateEditor("Title (Accepts jinja2 templates)", "title")}
+              ${this._renderTemplateEditor("Subtitle (Accepts jinja2 templates)", "subtitle")}
+            </div>
 
             <ha-select label="Text alignment" .value=${this._config.text_align} .fixedMenuPosition=${true} data-field="text_align" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
               <mwc-list-item value="left">Left</mwc-list-item>
@@ -2190,7 +2192,6 @@ class HkiHeaderCardEditor extends LitElement {
             <ha-textfield label="Mobile Breakpoint (px)" type="number" .value=${String(this._config.mobile_breakpoint || 768)} data-field="mobile_breakpoint" @input=${this._changed}></ha-textfield>
           </div>
         </details>
->
 
         <details class="box-section">
           <summary>Header Styling</summary>
@@ -2338,7 +2339,7 @@ class HkiHeaderCardEditor extends LitElement {
               </ha-select>
             </div>
           </div>
-        </details
+        </details>
         <details class="box-section">
           <summary>Top Bar</summary>
           <div class="box-content">
@@ -2477,6 +2478,8 @@ class HkiHeaderCardEditor extends LitElement {
       .inline-fields-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
       ha-textfield, ha-select, ha-combo-box, ha-navigation-picker, ha-entity-picker, ha-selector, ha-service-picker { width: 100%; }
       .code-wrap { display: flex; flex-direction: column; gap: 6px; }
+      /* Keep Title/Subitle YAML fields visually grouped */
+      .template-pair { display: flex; flex-direction: column; gap: 8px; }
       .code-label { font-size: 0.9rem; opacity: 0.9; }
       ha-code-editor { height: 180px; border-radius: 8px; overflow: hidden; }
       
