@@ -85,20 +85,17 @@ const DEFAULTS = Object.freeze({
   blend_stop: 95,
   blend_enabled: true,
   // Header styling
+  // Border radius (back-compat): card_border_radius applies to both top and bottom
+  // if the split options below are not provided.
   card_border_radius: "",
+  card_border_radius_top: "",
+  card_border_radius_bottom: "",
   card_box_shadow: "",
   card_border_style: "none",
   card_border_width: 0,
   card_border_color: "",
   fixed: true,
   fixed_top: 0,
-
-  // When not fixed, allow shrinking/expanding the card by adding "insets" (margins)
-  // around the header card. These only apply when fixed: false.
-  inset_top: 0,
-  inset_left: 0,
-  inset_right: 0,
-  inset_bottom: 0,
   title_offset_x: 5,
   title_offset_y: 32,
   subtitle_offset_x: 5,
@@ -804,12 +801,6 @@ class HkiHeaderCard extends LitElement {
     m.blend_stop = clamp(+m.blend_stop, 0, 100);
     m.fixed = !!m.fixed;
     m.fixed_top = toNum(m.fixed_top, 0);
-
-    // Insets (only used when fixed is false)
-    m.inset_top = toNum(m.inset_top, 0);
-    m.inset_left = toNum(m.inset_left, 0);
-    m.inset_right = toNum(m.inset_right, 0);
-    m.inset_bottom = toNum(m.inset_bottom, 0);
     m.title_offset_x = toNum(m.title_offset_x, 5);
     m.title_offset_y = toNum(m.title_offset_y, 32);
     m.subtitle_offset_x = toNum(m.subtitle_offset_x, 5);
@@ -827,7 +818,14 @@ class HkiHeaderCard extends LitElement {
     m.blend_enabled = m.blend_enabled !== false;
     
     // Header styling options
+    // Border radius split: if top/bottom are not set, fall back to legacy card_border_radius.
     m.card_border_radius = m.card_border_radius || "";
+    m.card_border_radius_top = m.card_border_radius_top || "";
+    m.card_border_radius_bottom = m.card_border_radius_bottom || "";
+    if (!m.card_border_radius_top && !m.card_border_radius_bottom && m.card_border_radius) {
+      m.card_border_radius_top = m.card_border_radius;
+      m.card_border_radius_bottom = m.card_border_radius;
+    }
     m.card_box_shadow = m.card_box_shadow || "";
     m.card_border_style = m.card_border_style || "none";
     m.card_border_width = toNum(m.card_border_width, 0);
@@ -1560,17 +1558,8 @@ class HkiHeaderCard extends LitElement {
     const subtitleText = this._isTemplateString(cfg.subtitle) ? (this._renderedSubtitle ?? "") : (cfg.subtitle ?? "");
     const subtitleVisible = !!subtitleText.trim();
 
-    // If not fixed (or in preview), allow normal card width and optional "insets".
-    // Top/Bottom act like normal margins.
-    // Left/Right behave like "bleed": positive values make the card wider beyond the
-    // container on that side; negative values shrink it.
-    const insetTop = toNum(cfg.inset_top, 0);
-    const insetLeft = toNum(cfg.inset_left, 0);
-    const insetRight = toNum(cfg.inset_right, 0);
-    const insetBottom = toNum(cfg.inset_bottom, 0);
-
-    const lrSum = insetLeft + insetRight;
-    const cardWidth = effectiveFixed ? "100vw" : `calc(100% + ${lrSum}px)`;
+    // Change: if not fixed (or in preview), allow normal card width
+    const cardWidth = effectiveFixed ? "100vw" : "100%";
     
     // Background can be a CSS color, a gradient, or an image URL.
     // Colors must map to background-color (not background-image).
@@ -1591,18 +1580,38 @@ class HkiHeaderCard extends LitElement {
       else bgColor = bgTrim;
     }
 
-    // Determine border-radius: custom > system default (when not fixed) > 0 (when fixed)
-    let borderRadius = "";
-    const br = cfg.card_border_radius;
-    if (br !== undefined && br !== null && br !== "") {
-      if (typeof br === "number") borderRadius = `${br}px`;
-      else {
-        const s = String(br).trim();
-        borderRadius = /^\d+$/.test(s) ? `${s}px` : s;
-      }
-    } else if (!effectiveFixed) {
-      borderRadius = "var(--ha-card-border-radius, 12px)";
+    // Determine border-radius: split top/bottom > legacy > system default (when not fixed)
+    const parseRadius = (v) => {
+      if (v === undefined || v === null || v === "") return "";
+      if (typeof v === "number") return `${v}px`;
+      const s = String(v).trim();
+      return /^\d+$/.test(s) ? `${s}px` : s;
+    };
+
+    let topRadius = parseRadius(cfg.card_border_radius_top);
+    let bottomRadius = parseRadius(cfg.card_border_radius_bottom);
+
+    // Back-compat: if neither split value is set, use legacy card_border_radius
+    if (!topRadius && !bottomRadius) {
+      const legacy = parseRadius(cfg.card_border_radius);
+      topRadius = legacy;
+      bottomRadius = legacy;
     }
+
+    // If only one is provided, mirror it to the other for a sensible default
+    if (topRadius && !bottomRadius) bottomRadius = topRadius;
+    if (bottomRadius && !topRadius) topRadius = bottomRadius;
+
+    // System default when not fixed and nothing is set
+    if (!topRadius && !bottomRadius && !effectiveFixed) {
+      topRadius = "var(--ha-card-border-radius, 12px)";
+      bottomRadius = topRadius;
+    }
+
+    // CSS border-radius shorthand: tl tr br bl
+    const borderRadius = (topRadius || bottomRadius)
+      ? `${topRadius || "0"} ${topRadius || "0"} ${bottomRadius || "0"} ${bottomRadius || "0"}`
+      : "";
 
     // Build border style - always explicit to override ha-card defaults
     let borderStyle = "";
@@ -1616,12 +1625,9 @@ class HkiHeaderCard extends LitElement {
 
     const cardStyle = [
       `width:${cardWidth}`,
-      // For bleed-left/right we use negative margins so the extra width expands outward.
-      !effectiveFixed ? `margin:${insetTop}px ${-insetRight}px ${insetBottom}px ${-insetLeft}px` : "margin:0",
       `height:${cfg.height_vh}vh`,
       `min-height:${cfg.min_height}px`,
-      `max-height:${cfg.max_height}px`,
-      (bgColor || cfg.background_color) ? `background-color:${bgColor || cfg.background_color}` : "",
+      `max-height:${cfg.max_height}px`,      (bgColor || cfg.background_color) ? `background-color:${bgColor || cfg.background_color}` : "",
       bgImage ? `background-image:${bgImage}` : "",
       cfg.background_position ? `background-position:${cfg.background_position}` : "",
       cfg.background_repeat ? `background-repeat:${cfg.background_repeat}` : "",
@@ -1733,7 +1739,6 @@ class HkiHeaderCardEditor extends LitElement {
   // Pre-computed field sets for performance (avoid recreating on every change)
   static _numericFields = new Set([
     "height_vh", "min_height", "max_height", "blend_stop", "fixed_top",
-    "inset_top", "inset_left", "inset_right", "inset_bottom",
     "title_offset_x", "title_offset_y", "subtitle_offset_x", "subtitle_offset_y",
     "title_size_px", "subtitle_size_px", "badges_offset_pinned", "badges_offset_unpinned",
     "badges_gap", "info_offset_x", "info_offset_y", "info_size_px",
@@ -1890,7 +1895,7 @@ class HkiHeaderCardEditor extends LitElement {
 
     // Card border radius: allow users to enter just a number (stored as number, rendered as px)
     // while still allowing any valid CSS value (e.g., 12px, 0, 50%, var(--x)).
-    if (field === "card_border_radius") {
+    if (field === "card_border_radius" || field === "card_border_radius_top" || field === "card_border_radius_bottom") {
       const s = (value ?? "").toString().trim();
       if (s === "") value = "";
       else if (/^\d+$/.test(s)) value = Number(s);
@@ -1943,26 +1948,20 @@ class HkiHeaderCardEditor extends LitElement {
   _renderTemplateEditor(label, field, options = {}) {
     const value = this._config?.[field] ?? "";
     return html`
-      <div class="section">${label}</div>
-      <ha-code-editor
+      <ha-yaml-editor
         .hass=${this.hass}
-        label=${label}
         .label=${label}
         .value=${value}
-        .mode=${"yaml"}
         @value-changed=${(ev) => {
           ev.stopPropagation();
-          // ha-code-editor always returns a string (supports multiline), which is what
-          // we want for Jinja templates.
           const newValue = ev.detail?.value;
           if (newValue !== value) {
-            this._config = { ...this._config, [field]: newValue ?? "" };
-            const strippedConfig = this._stripDefaults(this._config);
-            this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: strippedConfig }, bubbles: true, composed: true }));
+            this._config = { ...this._config, [field]: newValue || undefined };
+            this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: this._config }, bubbles: true, composed: true }));
           }
         }}
         @click=${(e) => e.stopPropagation()}
-      ></ha-code-editor>
+      ></ha-yaml-editor>
     `;
   }
 
@@ -2252,8 +2251,8 @@ class HkiHeaderCardEditor extends LitElement {
         <details class="box-section" open>
           <summary>Entity</summary>
           <div class="box-content">
-            ${this._renderTemplateEditor("Title template (Jinja)", "title")}
-            ${this._renderTemplateEditor("Subtitle template (Jinja)", "subtitle")}
+            ${this._renderTemplateEditor("Title (Accepts jinja2 templates)", "title")}
+            ${this._renderTemplateEditor("Subtitle (Accepts jinja2 templates)", "subtitle")}
 
             <ha-select label="Text alignment" .value=${this._config.text_align} .fixedMenuPosition=${true} data-field="text_align" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
               <mwc-list-item value="left">Left</mwc-list-item>
@@ -2366,7 +2365,22 @@ class HkiHeaderCardEditor extends LitElement {
             ` : ""}
 
             <div class="section">Border & Shadow</div>
-            <ha-textfield label="Border Radius" helper="Enter a number (px) like 12, or any CSS value (12px, 0, 50%, var(--radius))" .value=${(this._config.card_border_radius ?? "").toString()} data-field="card_border_radius" @input=${this._changed}></ha-textfield>
+            <div class="inline-fields-2">
+              <ha-textfield
+                label="Border radius (top)"
+                helper="Number (px) like 12, or any CSS value (12px, 0, 50%, var(--radius))"
+                .value=${(this._config.card_border_radius_top ?? "").toString()}
+                data-field="card_border_radius_top"
+                @input=${this._changed}
+              ></ha-textfield>
+              <ha-textfield
+                label="Border radius (bottom)"
+                helper="Number (px) like 12, or any CSS value (12px, 0, 50%, var(--radius))"
+                .value=${(this._config.card_border_radius_bottom ?? "").toString()}
+                data-field="card_border_radius_bottom"
+                @input=${this._changed}
+              ></ha-textfield>
+            </div>
             <ha-textfield label="Box Shadow" helper="e.g. 0 4px 12px rgba(0,0,0,0.3)" .value=${this._config.card_box_shadow || ""} data-field="card_box_shadow" @input=${this._changed}></ha-textfield>
             <div class="inline-fields-3">
               <ha-select label="Border Style" .value=${this._config.card_border_style || "none"} .fixedMenuPosition=${true} data-field="card_border_style" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
@@ -2521,29 +2535,7 @@ class HkiHeaderCardEditor extends LitElement {
               </ha-formfield>
             </div>
 
-            ${this._config.fixed
-              ? html`
-                  <ha-textfield
-                    label="Fixed top offset (px)"
-                    type="number"
-                    .value=${String(this._config.fixed_top)}
-                    data-field="fixed_top"
-                    @input=${this._changed}
-                  ></ha-textfield>
-                `
-              : html`
-                  <ha-alert alert-type="info">
-                    Header is not fixed. Top/Bottom act like normal margins. Left/Right act like <b>bleed</b>: positive values make the card wider beyond the container.
-                  </ha-alert>
-                  <div class="inline-fields-2">
-                    <ha-textfield label="Inset top (px)" helper="Positive pushes the card down" type="number" .value=${String(this._config.inset_top || 0)} data-field="inset_top" @input=${this._changed}></ha-textfield>
-                    <ha-textfield label="Inset bottom (px)" helper="Positive adds space below" type="number" .value=${String(this._config.inset_bottom || 0)} data-field="inset_bottom" @input=${this._changed}></ha-textfield>
-                  </div>
-                  <div class="inline-fields-2">
-                    <ha-textfield label="Bleed left (px)" helper="Positive makes it wider to the left" type="number" .value=${String(this._config.inset_left || 0)} data-field="inset_left" @input=${this._changed}></ha-textfield>
-                    <ha-textfield label="Bleed right (px)" helper="Positive makes it wider to the right" type="number" .value=${String(this._config.inset_right || 0)} data-field="inset_right" @input=${this._changed}></ha-textfield>
-                  </div>
-                `}
+            ${this._config.fixed ? html`<ha-textfield label="Fixed top offset (px)" type="number" .value=${String(this._config.fixed_top)} data-field="fixed_top" @input=${this._changed}></ha-textfield>` : ""}
           </div>
         </details>
 
