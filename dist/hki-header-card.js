@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.3.0 ',
+  '%c HKI-HEADER-CARD %c v1.3.1 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -1902,36 +1902,25 @@ class HkiHeaderCardEditor extends LitElement {
 
   _renderTemplateEditor(label, field, options = {}) {
     const value = this._config?.[field] ?? "";
-    const { autocompleteIcons = false } = options;
     return html`
-      <div class="code-wrap">
-        <div class="code-label">${label}</div>
-        <ha-code-editor 
-          .hass=${this.hass} 
-          .value=${value} 
-          mode="jinja2" 
-          data-field=${field} 
-          ?autocomplete-entities=${true}
-          ?autocomplete-icons=${autocompleteIcons}
-          @value-changed=${this._changed}
-        ></ha-code-editor>
-      </div>
+      <ha-yaml-editor
+        .hass=${this.hass}
+        .label=${label}
+        .value=${value}
+        @value-changed=${(ev) => {
+          ev.stopPropagation();
+          const newValue = ev.detail?.value;
+          if (newValue !== value) {
+            this._config = { ...this._config, [field]: newValue || undefined };
+            this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: this._config }, bubbles: true, composed: true }));
+          }
+        }}
+        @click=${(e) => e.stopPropagation()}
+      ></ha-yaml-editor>
     `;
   }
 
-  _renderServiceDataEditor(field, serviceData) {
-    let value = "";
-    if (serviceData) {
-      if (typeof serviceData === 'string') value = serviceData;
-      else value = Object.entries(serviceData).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join('\n');
-    }
-    return html`
-      <div class="code-wrap">
-        <div class="code-label">Service data (YAML)</div>
-        <ha-code-editor .hass=${this.hass} .value=${value} mode="yaml" ?autocomplete-entities=${true} ?autocomplete-icons=${true} data-field="${field}.service_data" @value-changed=${this._changed}></ha-code-editor>
-      </div>
-    `;
-  }
+  // Removed - using ha-yaml-editor inline instead
 
   _getSlotLabel(type) {
     const labels = {
@@ -2123,7 +2112,7 @@ class HkiHeaderCardEditor extends LitElement {
         <mwc-list-item value="url">Open URL</mwc-list-item>
         <mwc-list-item value="more-info">More Info</mwc-list-item>
         <mwc-list-item value="toggle">Toggle Entity</mwc-list-item>
-        <mwc-list-item value="call-service">Call Service</mwc-list-item>
+        <mwc-list-item value="perform-action">Perform Action</mwc-list-item>
       </ha-select>
       ${actionType === "navigate" ? html`
         <ha-textfield label="Navigation path" .value=${action.navigation_path || ""} data-field="${field}.navigation_path" @input=${this._changed}></ha-textfield>
@@ -2134,9 +2123,61 @@ class HkiHeaderCardEditor extends LitElement {
       ${actionType === "more-info" || actionType === "toggle" ? html`
         <ha-entity-picker .hass=${this.hass} .value=${action.entity || ""} @value-changed=${(e) => this._changed(e, field + ".entity")}></ha-entity-picker>
       ` : ''}
-      ${actionType === "call-service" ? html`
-        <ha-textfield label="Service" .value=${action.service || ""} data-field="${field}.service" @input=${this._changed}></ha-textfield>
-        ${this._renderServiceDataEditor(field, action.service_data)}
+      ${actionType === "perform-action" ? html`
+        <ha-textfield
+          label="Service (e.g., light.turn_on)"
+          .value=${action.perform_action || ""}
+          data-field="${field}.perform_action"
+          @input=${this._changed}
+          placeholder="light.turn_on"
+        ></ha-textfield>
+        
+        ${action.perform_action ? html`
+          <ha-selector
+            .hass=${this.hass}
+            .selector=${{ target: {} }}
+            .label=${"Target (optional)"}
+            .value=${action.target || null}
+            @value-changed=${(ev) => {
+              ev.stopPropagation();
+              const target = ev.detail?.value;
+              const currentTarget = action.target;
+              if (JSON.stringify(currentTarget) !== JSON.stringify(target)) {
+                const updated = { ...action };
+                if (target && Object.keys(target).length > 0) {
+                  updated.target = target;
+                } else {
+                  delete updated.target;
+                }
+                this._config = { ...this._config, [field]: updated };
+                this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: this._config }, bubbles: true, composed: true }));
+              }
+            }}
+            @click=${(e) => e.stopPropagation()}
+          ></ha-selector>
+          
+          <ha-yaml-editor
+            .hass=${this.hass}
+            .label=${"Service Data (optional, YAML)"}
+            .value=${action.data || null}
+            @value-changed=${(ev) => {
+              ev.stopPropagation();
+              const data = ev.detail?.value;
+              const currentData = action.data;
+              if (JSON.stringify(currentData) !== JSON.stringify(data)) {
+                const updated = { ...action };
+                if (data && typeof data === 'object' && Object.keys(data).length > 0) {
+                  updated.data = data;
+                } else {
+                  delete updated.data;
+                }
+                this._config = { ...this._config, [field]: updated };
+                this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: this._config }, bubbles: true, composed: true }));
+              }
+            }}
+            @click=${(e) => e.stopPropagation()}
+          ></ha-yaml-editor>
+        ` : ''}
       ` : ''}
     `;
   }
@@ -2165,10 +2206,8 @@ class HkiHeaderCardEditor extends LitElement {
         <details class="box-section" open>
           <summary>Entity</summary>
           <div class="box-content">
-            <div class="template-pair">
-              ${this._renderTemplateEditor("Title (Accepts jinja2 templates)", "title")}
-              ${this._renderTemplateEditor("Subtitle (Accepts jinja2 templates)", "subtitle")}
-            </div>
+            ${this._renderTemplateEditor("Title (Accepts jinja2 templates)", "title")}
+            ${this._renderTemplateEditor("Subtitle (Accepts jinja2 templates)", "subtitle")}
 
             <ha-select label="Text alignment" .value=${this._config.text_align} .fixedMenuPosition=${true} data-field="text_align" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
               <mwc-list-item value="left">Left</mwc-list-item>
@@ -2485,12 +2524,7 @@ class HkiHeaderCardEditor extends LitElement {
       .switch-row { display: flex; align-items: center; gap: 12px; }
       .inline-fields-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
       .inline-fields-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-      ha-textfield, ha-select, ha-combo-box, ha-navigation-picker, ha-entity-picker, ha-selector, ha-service-picker { width: 100%; }
-      .code-wrap { display: flex; flex-direction: column; gap: 6px; }
-      /* Keep Title/Subitle YAML fields visually grouped */
-      .template-pair { display: flex; flex-direction: column; gap: 8px; }
-      .code-label { font-size: 0.9rem; opacity: 0.9; }
-      ha-code-editor { height: 180px; border-radius: 8px; overflow: hidden; }
+      ha-textfield, ha-select, ha-combo-box, ha-navigation-picker, ha-entity-picker, ha-selector, ha-service-picker, ha-yaml-editor { width: 100%; }
       
       /* Collapsible Sections */
       details.box-section {
