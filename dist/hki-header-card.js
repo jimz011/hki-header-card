@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.3.0-dev-01 ',
+  '%c HKI-HEADER-CARD %c v1.3.0-dev-02 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -73,7 +73,7 @@ const DEFAULTS = Object.freeze({
   title_color: "",
   subtitle_color: "",
   background: "https://github.com/jimz011/hki-header-card/blob/main/wallpapers/livingroom.jpg?raw=true",
-  background_color: "", // New backing color for blending
+  background_color: "", // Background blend color for blending
   background_position: "center",
   background_repeat: "no-repeat",
   background_size: "cover",
@@ -2182,7 +2182,7 @@ class HkiHeaderCardEditor extends LitElement {
         </details>
 
         <details class="box-section">
-          <summary>Climate Settings</summary>
+          <summary>Top Bar</summary>
           <div class="box-content">
             <div class="switch-row">
                 <ha-switch .checked=${this._config.top_bar_enabled !== false} data-field="top_bar_enabled" @change=${this._changed}></ha-switch>
@@ -2262,7 +2262,7 @@ class HkiHeaderCardEditor extends LitElement {
           <summary>Card Styling</summary>
           <div class="box-content">
             <div class="section">Background</div>
-            <ha-textfield label="Background" helper="Any CSS color, gradient, or image URL (hex, rgb, rgba, /local/image.jpg, etc.)" .value=${this._config.background} data-field="background" @input=${this._changed}></ha-textfield>
+            <ha-textfield label="Background" helper="CSS color (hex, rgb, rgba, color name), gradient, or image URL (/local/image.jpg)" .value=${this._config.background} data-field="background" @input=${this._changed}></ha-textfield>
 
             <div class="inline-fields-2">
                 <ha-select label="Background position" .value=${this._config.background_position} .fixedMenuPosition=${true} data-field="background_position" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
@@ -2317,7 +2317,7 @@ class HkiHeaderCardEditor extends LitElement {
                 ></ha-textfield>
             ` : ""}
 
-            <ha-textfield label="Background color" helper="Backing layer for blend modes. Any CSS color (hex, rgb, rgba, etc.)" .value=${this._config.background_color} data-field="background_color" @input=${this._changed}></ha-textfield>
+            <ha-textfield label="Background blend color" helper="Color to blend with background image using blend mode above" .value=${this._config.background_color} data-field="background_color" @input=${this._changed}></ha-textfield>
 
             <div class="section">Gradient Overlay</div>
             <div class="switch-row">
@@ -2352,9 +2352,9 @@ class HkiHeaderCardEditor extends LitElement {
         </details>
 
         <details class="box-section">
-          <summary>Icon Styling</summary>
+          <summary>Typography</summary>
           <div class="box-content">
-            <div class="section">Typography</div>
+            <div class="section">Font Settings</div>
             <ha-select label="Font family" .value=${this._config.font_family} .fixedMenuPosition=${true} data-field="font_family" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
               <mwc-list-item value="inherit">Inherit</mwc-list-item>
               <mwc-list-item value="system">System</mwc-list-item>
@@ -2401,9 +2401,9 @@ class HkiHeaderCardEditor extends LitElement {
         </details>
 
         <details class="box-section">
-          <summary>HKI Popup Options</summary>
+          <summary>Fixed Header</summary>
           <div class="box-content">
-            <div class="section">Fixed header</div>
+            <div class="section">Positioning</div>
             <div class="switch-row">
               <ha-formfield label="Keep header fixed to top">
                 <ha-switch .checked=${!!this._config.fixed} data-field="fixed" @change=${this._changed}></ha-switch>
@@ -2415,9 +2415,9 @@ class HkiHeaderCardEditor extends LitElement {
         </details>
 
         <details class="box-section">
-          <summary>Actions</summary>
+          <summary>Badge Positioning</summary>
           <div class="box-content">
-            <div class="section">Badge positioning</div>
+            <div class="section">Badge Settings</div>
             
             <ha-alert alert-type="warning" class="badge-warning">
               For badge positioning to work, this card must be placed in the <strong>header slot</strong> of your view/section. Otherwise, these badge settings will have no effect. <br><br>
