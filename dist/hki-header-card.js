@@ -312,7 +312,8 @@ class HkiHeaderCard extends LitElement {
         top: 0;
         width: 100vw;
         z-index: 1;
-        overflow: hidden; /* Respect border-radius and box-shadow of child */
+        overflow: hidden !important; /* Respect border-radius and box-shadow of child - !important to override Bubble Card */
+        isolation: isolate; /* Create strong stacking context for proper overflow clipping */
       }
 
       ha-card.header {
@@ -323,9 +324,10 @@ class HkiHeaderCard extends LitElement {
         max-height: 340px;
         margin: 0;
         border-radius: 0; /* Overridden by inline style */
+        overflow: visible; /* Allow box-shadow to show when fixed */
         box-sizing: border-box;
         color: var(--hki-header-text-color, #fff);
-        /* border, box-shadow, and overflow controlled via inline styles */
+        /* border and box-shadow controlled via inline styles */
       }
 
       .overlay {
@@ -1604,9 +1606,8 @@ class HkiHeaderCard extends LitElement {
       borderRadius ? `border-radius:${borderRadius}` : "",
       cfg.card_box_shadow ? `box-shadow:${cfg.card_box_shadow}` : "box-shadow:none",
       borderStyle,
-      // Apply overflow:hidden when: border-radius is set OR card is not in fixed mode
-      // When fixed with no border-radius, use overflow:visible so box-shadow shows through wrapper
-      (borderRadius || !effectiveFixed) ? "overflow:hidden" : "overflow:visible"
+      // Only apply overflow:hidden when not fixed to allow box-shadow to show through wrapper
+      !effectiveFixed ? "overflow:hidden" : ""
     ].filter(Boolean).join(";");
 
     // Only show overlay gradient if blend is enabled
@@ -1638,7 +1639,7 @@ class HkiHeaderCard extends LitElement {
 
     const topOffset = this._kioskMode ? (cfg.fixed_top || 0) : (cfg.fixed_top || 0) + 48;
     const wrapperStyle = effectiveFixed 
-      ? `top:${topOffset}px;${borderRadius ? `border-radius:${borderRadius};` : ''}` 
+      ? `top:${topOffset}px;${borderRadius ? `border-radius:${borderRadius};contain:paint;` : ''}` 
       : "";
 
     const badgesOffset = cfg.badges_fixed ? (cfg.badges_offset_pinned || 48) : (cfg.badges_offset_unpinned || 100);
