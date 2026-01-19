@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.3.1 ',
+  '%c HKI-HEADER-CARD %c v1.3.2 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -1605,8 +1605,9 @@ class HkiHeaderCard extends LitElement {
       borderRadius ? `border-radius:${borderRadius}` : "",
       cfg.card_box_shadow ? `box-shadow:${cfg.card_box_shadow}` : "box-shadow:none",
       borderStyle,
-      // Only apply overflow:hidden when not fixed to allow box-shadow to show through wrapper
-      !effectiveFixed ? "overflow:hidden" : ""
+      // Always apply overflow:hidden when border-radius is set to clip properly
+      // When fixed, overflow:hidden is also on wrapper so box-shadow still shows
+      borderRadius ? "overflow:hidden" : (!effectiveFixed ? "overflow:hidden" : "")
     ].filter(Boolean).join(";");
 
     // Only show overlay gradient if blend is enabled
