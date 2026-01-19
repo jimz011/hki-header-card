@@ -1,11 +1,11 @@
-// HKI Header Card - Optimized & Updated with Native Visual Editor for Custom Cards
+// HKI Header Card
 
 import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?module";
 
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.2.2-dev-03 ',
+  '%c HKI-HEADER-CARD %c v1.3.0 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -73,7 +73,7 @@ const DEFAULTS = Object.freeze({
   title_color: "",
   subtitle_color: "",
   background: "https://github.com/jimz011/hki-header-card/blob/main/wallpapers/livingroom.jpg?raw=true",
-  background_color: "", // New backing color for blending
+  background_color: "", // Background blend color for blending
   background_position: "center",
   background_repeat: "no-repeat",
   background_size: "cover",
@@ -84,7 +84,7 @@ const DEFAULTS = Object.freeze({
   blend_color: "var(--primary-background-color)",
   blend_stop: 95,
   blend_enabled: true,
-  // Card styling
+  // Header styling
   card_border_radius: "",
   card_box_shadow: "",
   card_border_style: "none",
@@ -312,6 +312,7 @@ class HkiHeaderCard extends LitElement {
         top: 0;
         width: 100vw;
         z-index: 1;
+        overflow: hidden; /* Respect border-radius and box-shadow of child */
       }
 
       ha-card.header {
@@ -322,7 +323,7 @@ class HkiHeaderCard extends LitElement {
         max-height: 340px;
         margin: 0;
         border-radius: 0; /* Overridden by inline style */
-        overflow: hidden;
+        overflow: visible; /* Allow box-shadow to show when fixed */
         box-sizing: border-box;
         color: var(--hki-header-text-color, #fff);
         /* border and box-shadow controlled via inline styles */
@@ -345,7 +346,7 @@ class HkiHeaderCard extends LitElement {
         position: absolute;
         display: flex;
         flex-direction: column;
-        gap: 4px;
+        gap: 2px;
         padding-right: 16px;
       }
 
@@ -812,7 +813,7 @@ class HkiHeaderCard extends LitElement {
     m.background_color = m.background_color || "";
     m.blend_enabled = m.blend_enabled !== false;
     
-    // Card styling options
+    // Header styling options
     m.card_border_radius = m.card_border_radius || "";
     m.card_box_shadow = m.card_box_shadow || "";
     m.card_border_style = m.card_border_style || "none";
@@ -1538,7 +1539,24 @@ class HkiHeaderCard extends LitElement {
     // Change: if not fixed (or in preview), allow normal card width
     const cardWidth = effectiveFixed ? "100vw" : "100%";
     
-    const resolvedBackground = this._resolveBackground(cfg.background);
+    // Background can be a CSS color, a gradient, or an image URL.
+    // Colors must map to background-color (not background-image).
+    const bgRaw = (cfg.background ?? "").toString();
+    const bgTrim = bgRaw.trim();
+    const isGradient = bgTrim.startsWith("linear-gradient(") || bgTrim.startsWith("radial-gradient(");
+    const isUrl = bgTrim.startsWith("url(");
+    const isPath = bgTrim.startsWith("/") || bgTrim.startsWith("./") || bgTrim.startsWith("../") ||
+                   bgTrim.startsWith("http://") || bgTrim.startsWith("https://") ||
+                   /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(bgTrim);
+
+    let bgImage = "";
+    let bgColor = "";
+
+    if (bgTrim) {
+      if (isGradient || isUrl) bgImage = bgTrim;
+      else if (isPath) bgImage = `url('${bgTrim}')`;
+      else bgColor = bgTrim;
+    }
 
     // Determine border-radius: custom > system default (when not fixed) > 0 (when fixed)
     let borderRadius = "";
@@ -1562,9 +1580,8 @@ class HkiHeaderCard extends LitElement {
       `width:${cardWidth}`,
       `height:${cfg.height_vh}vh`,
       `min-height:${cfg.min_height}px`,
-      `max-height:${cfg.max_height}px`,
-      cfg.background_color ? `background-color:${cfg.background_color}` : "",
-      resolvedBackground ? `background-image:${resolvedBackground}` : "",
+      `max-height:${cfg.max_height}px`,      (bgColor || cfg.background_color) ? `background-color:${bgColor || cfg.background_color}` : "",
+      bgImage ? `background-image:${bgImage}` : "",
       cfg.background_position ? `background-position:${cfg.background_position}` : "",
       cfg.background_repeat ? `background-repeat:${cfg.background_repeat}` : "",
       cfg.background_size ? `background-size:${cfg.background_size}` : "",
@@ -1572,6 +1589,8 @@ class HkiHeaderCard extends LitElement {
       borderRadius ? `border-radius:${borderRadius}` : "",
       cfg.card_box_shadow ? `box-shadow:${cfg.card_box_shadow}` : "box-shadow:none",
       borderStyle,
+      // Only apply overflow:hidden when not fixed to allow box-shadow to show through wrapper
+      !effectiveFixed ? "overflow:hidden" : ""
     ].filter(Boolean).join(";");
 
     // Only show overlay gradient if blend is enabled
@@ -1602,7 +1621,9 @@ class HkiHeaderCard extends LitElement {
     else titleBlockStyle = `left:${cfg.title_offset_x}px;top:${cfg.title_offset_y}px;text-align:left;align-items:flex-start;`;
 
     const topOffset = this._kioskMode ? (cfg.fixed_top || 0) : (cfg.fixed_top || 0) + 48;
-    const wrapperStyle = effectiveFixed ? `top:${topOffset}px;` : "";
+    const wrapperStyle = effectiveFixed 
+      ? `top:${topOffset}px;${borderRadius ? `border-radius:${borderRadius};` : ''}` 
+      : "";
 
     const badgesOffset = cfg.badges_fixed ? (cfg.badges_offset_pinned || 48) : (cfg.badges_offset_unpinned || 100);
     let spacerH = effectiveFixed ? Math.max(0, (this._headerHeight || 0) - badgesOffset + topOffset) : 0;
@@ -1714,6 +1735,30 @@ class HkiHeaderCardEditor extends LitElement {
     this._config = { ...DEFAULTS, ...config };
   }
 
+  _stripDefaults(config) {
+    // Create a clean config object with only changed values
+    const stripped = { type: config.type }; // Always keep type
+    
+    for (const [key, value] of Object.entries(config)) {
+      if (key === 'type') continue; // Already added
+      
+      const defaultValue = DEFAULTS[key];
+      
+      // Skip if value matches default
+      if (defaultValue === value) continue;
+      
+      // Handle deep equality for objects (like tap_action)
+      if (typeof value === 'object' && value !== null && typeof defaultValue === 'object' && defaultValue !== null) {
+        if (JSON.stringify(value) === JSON.stringify(defaultValue)) continue;
+      }
+      
+      // Keep the value if it's different from default
+      stripped[key] = value;
+    }
+    
+    return stripped;
+  }
+
   _renderEntityPicker(label, field, value, helper = "", domain = null) {
     return html`
       <ha-selector
@@ -1763,7 +1808,8 @@ class HkiHeaderCardEditor extends LitElement {
     const newCardConfig = ev.detail.config;
     const field = `top_bar_${slot}_card`;
     this._config = { ...this._config, [field]: newCardConfig };
-    this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config } }));
+    const strippedConfig = this._stripDefaults(this._config);
+    this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: strippedConfig } }));
   }
 
   _handleBgSizeSelect(ev) {
@@ -1780,14 +1826,16 @@ class HkiHeaderCardEditor extends LitElement {
        if (BG_SIZE_PRESETS.includes(current)) {
            // Reset to a safe custom default so input is not empty/confusing
            this._config = { ...this._config, background_size: "100%" };
-           this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config } }));
+           const strippedConfig = this._stripDefaults(this._config);
+           this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: strippedConfig } }));
        }
        // Force re-render to show the custom input field
        this.requestUpdate();
     } else {
        // Selected a preset
        this._config = { ...this._config, background_size: val };
-       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config } }));
+       const strippedConfig = this._stripDefaults(this._config);
+       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: strippedConfig } }));
     }
   }
 
@@ -1797,6 +1845,11 @@ class HkiHeaderCardEditor extends LitElement {
     if (!field || !this._config) return;
 
     let value = this._val(ev);
+
+    // Auto-append px for border radius if only a number is provided
+    if (field === "card_border_radius" && value && /^\d+$/.test(String(value).trim())) {
+      value = String(value).trim() + "px";
+    }
 
     // Use pre-computed static sets for field type checking
     const { _numericFields, _nullableNumericFields, _booleanFields } = HkiHeaderCardEditor;
@@ -1834,7 +1887,8 @@ class HkiHeaderCardEditor extends LitElement {
     }
 
     this._config = next;
-    this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: next } }));
+    const strippedConfig = this._stripDefaults(next);
+    this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: strippedConfig } }));
   }
 
   _renderTemplateEditor(label, field, options = {}) {
@@ -2099,272 +2153,308 @@ class HkiHeaderCardEditor extends LitElement {
           </ha-alert>
         </div>
 
-        ${this._renderTemplateEditor("Title (Accepts jinja2 templates)", "title")}
-        ${this._renderTemplateEditor("Subtitle (Accepts jinja2 templates)", "subtitle")}
-
-        <ha-select label="Text alignment" .value=${this._config.text_align} .fixedMenuPosition=${true} data-field="text_align" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-          <mwc-list-item value="left">Left</mwc-list-item>
-          <mwc-list-item value="center">Center</mwc-list-item>
-          <mwc-list-item value="right">Right</mwc-list-item>
-        </ha-select>
-
-        <div class="section">Colors</div>
-        <div class="inline-fields-2">
-          <ha-textfield label="Title color (CSS)" placeholder="inherit" .value=${this._config.title_color || ""} data-field="title_color" @input=${this._changed}></ha-textfield>
-          <ha-textfield label="Subtitle color (CSS)" placeholder="inherit" .value=${this._config.subtitle_color || ""} data-field="subtitle_color" @input=${this._changed}></ha-textfield>
-        </div>
-
-        <div class="section">Title position</div>
-        <div class="inline-fields-2">
-          <ha-textfield label="Title horizontal offset (px)" type="number" .value=${String(this._config.title_offset_x)} data-field="title_offset_x" @input=${this._changed}></ha-textfield>
-          <ha-textfield label="Title vertical offset (px)" type="number" .value=${String(this._config.title_offset_y)} data-field="title_offset_y" @input=${this._changed}></ha-textfield>
-        </div>
-
-        <div class="section">Subtitle position</div>
-        <div class="inline-fields-2">
-          <ha-textfield label="Subtitle horizontal offset (px)" type="number" .value=${String(this._config.subtitle_offset_x)} data-field="subtitle_offset_x" @input=${this._changed}></ha-textfield>
-          <ha-textfield label="Subtitle vertical offset (px)" type="number" .value=${String(this._config.subtitle_offset_y)} data-field="subtitle_offset_y" @input=${this._changed}></ha-textfield>
-        </div>
-
-        <div class="section">Top Bar Layout</div>
-        <div class="switch-row">
-            <ha-switch .checked=${this._config.top_bar_enabled !== false} data-field="top_bar_enabled" @change=${this._changed}></ha-switch>
-            <span>Enable top bar</span>
-        </div>
-
-        ${this._config.top_bar_enabled !== false ? html`
-            <div class="inline-fields-2">
-                <ha-textfield label="Bar vertical offset (px)" type="number" .value=${String(this._config.top_bar_offset_y ?? 10)} data-field="top_bar_offset_y" @input=${this._changed}></ha-textfield>
-                <ha-textfield label="Bar padding X (px)" type="number" .value=${String(this._config.top_bar_padding_x ?? 5)} data-field="top_bar_padding_x" @input=${this._changed}></ha-textfield>
+        <details class="box-section" open>
+          <summary>Entity</summary>
+          <div class="box-content">
+            <div class="template-pair">
+              ${this._renderTemplateEditor("Title (Accepts jinja2 templates)", "title")}
+              ${this._renderTemplateEditor("Subtitle (Accepts jinja2 templates)", "subtitle")}
             </div>
-            
-            <details class="box-section">
-              <summary>Global Styling (Defaults)</summary>
-              <div class="box-content">
-                <div class="inline-fields-2">
-                  <ha-textfield label="Font Size (px)" type="number" .value=${String(this._config.info_size_px || 12)} data-field="info_size_px" @input=${this._changed}></ha-textfield>
-                  <ha-select label="Font Weight" .value=${this._config.info_weight || "medium"} .fixedMenuPosition=${true} data-field="info_weight" @selected=${this._changed} @closed=${this._changed}>
-                    ${["light", "regular", "medium", "semibold", "bold", "extrabold"].map(w => html`<mwc-list-item .value=${w}>${w.charAt(0).toUpperCase() + w.slice(1)}</mwc-list-item>`)}
-                  </ha-select>
-                </div>
-                <ha-textfield label="Text Color" .value=${this._config.info_color || ""} data-field="info_color" @input=${this._changed}></ha-textfield>
-                
-                <div class="switch-row">
-                  <ha-switch .checked=${!!this._config.info_pill} data-field="info_pill" @change=${this._changed}></ha-switch>
-                  <span>Enable Pill Style</span>
-                </div>
-                ${this._config.info_pill ? html`
-                  <ha-textfield label="Pill Background" .value=${this._config.info_pill_background || "rgba(0,0,0,0.25)"} data-field="info_pill_background" @input=${this._changed}></ha-textfield>
-                  <div class="inline-fields-2">
-                    <ha-textfield label="Padding X (px)" type="number" .value=${String(this._config.info_pill_padding_x ?? 10)} data-field="info_pill_padding_x" @input=${this._changed}></ha-textfield>
-                    <ha-textfield label="Padding Y (px)" type="number" .value=${String(this._config.info_pill_padding_y ?? 6)} data-field="info_pill_padding_y" @input=${this._changed}></ha-textfield>
-                  </div>
-                  <div class="inline-fields-2">
-                    <ha-textfield label="Border Radius (px)" type="number" .value=${String(this._config.info_pill_radius ?? 999)} data-field="info_pill_radius" @input=${this._changed}></ha-textfield>
-                    <ha-textfield label="Blur (px)" type="number" .value=${String(this._config.info_pill_blur ?? 0)} data-field="info_pill_blur" @input=${this._changed}></ha-textfield>
-                  </div>
-                  <div class="inline-fields-3">
-                    <ha-select label="Border Style" .value=${this._config.info_pill_border_style || "none"} .fixedMenuPosition=${true} data-field="info_pill_border_style" @selected=${this._changed} @closed=${this._changed}>
-                      <mwc-list-item value="none">None</mwc-list-item>
-                      <mwc-list-item value="solid">Solid</mwc-list-item>
-                      <mwc-list-item value="dashed">Dashed</mwc-list-item>
-                      <mwc-list-item value="dotted">Dotted</mwc-list-item>
-                    </ha-select>
-                    <ha-textfield label="Border Width" type="number" .value=${String(this._config.info_pill_border_width ?? 0)} data-field="info_pill_border_width" @input=${this._changed}></ha-textfield>
-                    <ha-textfield label="Border Color" .value=${this._config.info_pill_border_color || "rgba(255,255,255,0.1)"} data-field="info_pill_border_color" @input=${this._changed}></ha-textfield>
-                  </div>
-                ` : ''}
-              </div>
-            </details>
 
-            <details class="box-section">
-              <summary>Left Slot: ${this._getSlotLabel(this._config.top_bar_left)}</summary>
-              <div class="box-content">
-                ${this._renderSlotEditor('left')}
-              </div>
-            </details>
-
-            <details class="box-section">
-              <summary>Center Slot: ${this._getSlotLabel(this._config.top_bar_center)}</summary>
-              <div class="box-content">
-                ${this._renderSlotEditor('center')}
-              </div>
-            </details>
-
-            <details class="box-section">
-              <summary>Right Slot: ${this._getSlotLabel(this._config.top_bar_right)}</summary>
-              <div class="box-content">
-                ${this._renderSlotEditor('right')}
-              </div>
-            </details>
-        ` : ''}
-
-        <div class="section">Background</div>
-        <ha-textfield label="Background (color/gradient/url)" helper="Auto-wraps image paths in url() - just enter /local/image.jpg or color value" .value=${this._config.background} data-field="background" @input=${this._changed}></ha-textfield>
-
-        <ha-textfield label="Background Color (backing layer)" helper="Used for blend modes. Pick a color to mix with the image above." .value=${this._config.background_color} data-field="background_color" @input=${this._changed}></ha-textfield>
-
-        <div class="inline-fields-2">
-            <ha-select label="Background position" .value=${this._config.background_position} .fixedMenuPosition=${true} data-field="background_position" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-              <mwc-list-item value="top">Top</mwc-list-item>
-              <mwc-list-item value="center">Center</mwc-list-item>
-              <mwc-list-item value="bottom">Bottom</mwc-list-item>
+            <ha-select label="Text alignment" .value=${this._config.text_align} .fixedMenuPosition=${true} data-field="text_align" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
               <mwc-list-item value="left">Left</mwc-list-item>
+              <mwc-list-item value="center">Center</mwc-list-item>
               <mwc-list-item value="right">Right</mwc-list-item>
             </ha-select>
+          </div>
+        </details>
 
-            <ha-select label="Background repeat" .value=${this._config.background_repeat} .fixedMenuPosition=${true} data-field="background_repeat" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-              <mwc-list-item value="no-repeat">No repeat</mwc-list-item>
-              <mwc-list-item value="repeat">Repeat</mwc-list-item>
-              <mwc-list-item value="repeat-x">Repeat horizontally</mwc-list-item>
-              <mwc-list-item value="repeat-y">Repeat vertically</mwc-list-item>
-            </ha-select>
-        </div>
+        <details class="box-section">
+          <summary>Layout & Visibility</summary>
+          <div class="box-content">
+            <div class="section">Title position</div>
+            <div class="inline-fields-2">
+              <ha-textfield label="Title horizontal offset (px)" type="number" .value=${String(this._config.title_offset_x)} data-field="title_offset_x" @input=${this._changed}></ha-textfield>
+              <ha-textfield label="Title vertical offset (px)" type="number" .value=${String(this._config.title_offset_y)} data-field="title_offset_y" @input=${this._changed}></ha-textfield>
+            </div>
 
-        <div class="inline-fields-2">
-            <ha-select 
-                label="Background size" 
-                .value=${bgSizeSelectValue} 
-                .fixedMenuPosition=${true} 
-                @selected=${this._handleBgSizeSelect} 
-                @closed=${(e) => e.stopPropagation()}
-            >
-              <mwc-list-item value="cover">Cover</mwc-list-item>
-              <mwc-list-item value="contain">Contain</mwc-list-item>
-              <mwc-list-item value="auto">Auto</mwc-list-item>
-              <mwc-list-item value="custom">Custom</mwc-list-item>
-            </ha-select>
+            <div class="section">Subtitle position</div>
+            <div class="inline-fields-2">
+              <ha-textfield label="Subtitle horizontal offset (px)" type="number" .value=${String(this._config.subtitle_offset_x)} data-field="subtitle_offset_x" @input=${this._changed}></ha-textfield>
+              <ha-textfield label="Subtitle vertical offset (px)" type="number" .value=${String(this._config.subtitle_offset_y)} data-field="subtitle_offset_y" @input=${this._changed}></ha-textfield>
+            </div>
+
+            <div class="inline-fields-2">
+              <ha-textfield label="Min height (px)" type="number" .value=${String(this._config.min_height)} data-field="min_height" @input=${this._changed}></ha-textfield>
+              <ha-textfield label="Max height (px)" type="number" .value=${String(this._config.max_height)} data-field="max_height" @input=${this._changed}></ha-textfield>
+            </div>
             
-            <ha-select label="Background blend mode" .value=${this._config.background_blend_mode || "normal"} .fixedMenuPosition=${true} data-field="background_blend_mode" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-              <mwc-list-item value="normal">Normal</mwc-list-item>
-              <mwc-list-item value="multiply">Multiply</mwc-list-item>
-              <mwc-list-item value="screen">Screen</mwc-list-item>
-              <mwc-list-item value="overlay">Overlay</mwc-list-item>
-              <mwc-list-item value="darken">Darken</mwc-list-item>
-              <mwc-list-item value="lighten">Lighten</mwc-list-item>
-              <mwc-list-item value="color-dodge">Color Dodge</mwc-list-item>
-              <mwc-list-item value="soft-light">Soft Light</mwc-list-item>
-              <mwc-list-item value="difference">Difference</mwc-list-item>
+            <ha-textfield label="Mobile Breakpoint (px)" type="number" .value=${String(this._config.mobile_breakpoint || 768)} data-field="mobile_breakpoint" @input=${this._changed}></ha-textfield>
+          </div>
+        </details>
+
+        <details class="box-section">
+          <summary>Header Styling</summary>
+          <div class="box-content">
+            <div class="section">Text Colors</div>
+            <div class="inline-fields-2">
+              <ha-textfield label="Title color" helper="Any CSS color (hex, rgb, rgba, etc.)" placeholder="inherit" .value=${this._config.title_color || ""} data-field="title_color" @input=${this._changed}></ha-textfield>
+              <ha-textfield label="Subtitle color" helper="Any CSS color (hex, rgb, rgba, etc.)" placeholder="inherit" .value=${this._config.subtitle_color || ""} data-field="subtitle_color" @input=${this._changed}></ha-textfield>
+            </div>
+
+            <div class="section">Background</div>
+            <ha-textfield label="Background" helper="CSS color (hex, rgb, rgba, color name), gradient, or image URL (/local/image.jpg)" .value=${this._config.background} data-field="background" @input=${this._changed}></ha-textfield>
+
+            <div class="inline-fields-2">
+                <ha-select label="Background position" .value=${this._config.background_position} .fixedMenuPosition=${true} data-field="background_position" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+                  <mwc-list-item value="top">Top</mwc-list-item>
+                  <mwc-list-item value="center">Center</mwc-list-item>
+                  <mwc-list-item value="bottom">Bottom</mwc-list-item>
+                  <mwc-list-item value="left">Left</mwc-list-item>
+                  <mwc-list-item value="right">Right</mwc-list-item>
+                </ha-select>
+
+                <ha-select label="Background repeat" .value=${this._config.background_repeat} .fixedMenuPosition=${true} data-field="background_repeat" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+                  <mwc-list-item value="no-repeat">No repeat</mwc-list-item>
+                  <mwc-list-item value="repeat">Repeat</mwc-list-item>
+                  <mwc-list-item value="repeat-x">Repeat horizontally</mwc-list-item>
+                  <mwc-list-item value="repeat-y">Repeat vertically</mwc-list-item>
+                </ha-select>
+            </div>
+
+            <div class="inline-fields-2">
+                <ha-select 
+                    label="Background size" 
+                    .value=${bgSizeSelectValue} 
+                    .fixedMenuPosition=${true} 
+                    @selected=${this._handleBgSizeSelect} 
+                    @closed=${(e) => e.stopPropagation()}
+                >
+                  <mwc-list-item value="cover">Cover</mwc-list-item>
+                  <mwc-list-item value="contain">Contain</mwc-list-item>
+                  <mwc-list-item value="auto">Auto</mwc-list-item>
+                  <mwc-list-item value="custom">Custom</mwc-list-item>
+                </ha-select>
+                
+                <ha-select label="Background blend mode" .value=${this._config.background_blend_mode || "normal"} .fixedMenuPosition=${true} data-field="background_blend_mode" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+                  <mwc-list-item value="normal">Normal</mwc-list-item>
+                  <mwc-list-item value="multiply">Multiply</mwc-list-item>
+                  <mwc-list-item value="screen">Screen</mwc-list-item>
+                  <mwc-list-item value="overlay">Overlay</mwc-list-item>
+                  <mwc-list-item value="darken">Darken</mwc-list-item>
+                  <mwc-list-item value="lighten">Lighten</mwc-list-item>
+                  <mwc-list-item value="color-dodge">Color Dodge</mwc-list-item>
+                  <mwc-list-item value="soft-light">Soft Light</mwc-list-item>
+                  <mwc-list-item value="difference">Difference</mwc-list-item>
+                </ha-select>
+            </div>
+            
+            ${isCustomBgSize ? html`
+                <ha-textfield 
+                    label="Custom Size (e.g. 150%)" 
+                    .value=${this._config.background_size} 
+                    data-field="background_size" 
+                    @input=${this._changed}
+                ></ha-textfield>
+            ` : ""}
+
+            <ha-textfield label="Background blend color" helper="Color to blend with background image using blend mode above" .value=${this._config.background_color} data-field="background_color" @input=${this._changed}></ha-textfield>
+
+            <div class="section">Gradient Overlay</div>
+            <div class="switch-row">
+              <ha-formfield label="Enable gradient overlay">
+                <ha-switch .checked=${this._config.blend_enabled !== false} data-field="blend_enabled" @change=${this._changed}></ha-switch>
+              </ha-formfield>
+            </div>
+            ${this._config.blend_enabled !== false ? html`
+              <ha-textfield label="Blend color" helper="Any CSS color" .value=${this._config.blend_color} data-field="blend_color" @input=${this._changed}></ha-textfield>
+              <ha-textfield label="Blend stop (%)" type="number" .value=${String(this._config.blend_stop)} data-field="blend_stop" @input=${this._changed}></ha-textfield>
+            ` : ""}
+
+            <div class="section">Border & Shadow</div>
+            <ha-textfield label="Border Radius" helper="Enter just a number (auto-adds px) or any CSS value (12px, 0, 50%)" .value=${this._config.card_border_radius || ""} data-field="card_border_radius" @input=${this._changed}></ha-textfield>
+            <ha-textfield label="Box Shadow" helper="e.g. 0 4px 12px rgba(0,0,0,0.3)" .value=${this._config.card_box_shadow || ""} data-field="card_box_shadow" @input=${this._changed}></ha-textfield>
+            <div class="inline-fields-3">
+              <ha-select label="Border Style" .value=${this._config.card_border_style || "none"} .fixedMenuPosition=${true} data-field="card_border_style" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+                <mwc-list-item value="none">None</mwc-list-item>
+                <mwc-list-item value="solid">Solid</mwc-list-item>
+                <mwc-list-item value="dashed">Dashed</mwc-list-item>
+                <mwc-list-item value="dotted">Dotted</mwc-list-item>
+                <mwc-list-item value="double">Double</mwc-list-item>
+                <mwc-list-item value="groove">Groove</mwc-list-item>
+                <mwc-list-item value="ridge">Ridge</mwc-list-item>
+                <mwc-list-item value="inset">Inset</mwc-list-item>
+                <mwc-list-item value="outset">Outset</mwc-list-item>
+              </ha-select>
+              <ha-textfield label="Border Width (px)" type="number" .value=${String(this._config.card_border_width || 0)} data-field="card_border_width" @input=${this._changed}></ha-textfield>
+              <ha-textfield label="Border Color" .value=${this._config.card_border_color || ""} data-field="card_border_color" @input=${this._changed}></ha-textfield>
+            </div>
+          </div>
+        </details>
+
+        <details class="box-section">
+          <summary>Typography</summary>
+          <div class="box-content">
+            <div class="section">Font Settings</div>
+            <ha-select label="Font family" .value=${this._config.font_family} .fixedMenuPosition=${true} data-field="font_family" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+              <mwc-list-item value="inherit">Inherit</mwc-list-item>
+              <mwc-list-item value="system">System</mwc-list-item>
+              <mwc-list-item value="roboto">Roboto</mwc-list-item>
+              <mwc-list-item value="inter">Inter</mwc-list-item>
+              <mwc-list-item value="arial">Arial</mwc-list-item>
+              <mwc-list-item value="georgia">Georgia</mwc-list-item>
+              <mwc-list-item value="mono">Monospace</mwc-list-item>
+              <mwc-list-item value="custom">Custom…</mwc-list-item>
             </ha-select>
-        </div>
-        
-        ${isCustomBgSize ? html`
-            <ha-textfield 
-                label="Custom Size (e.g. 150%)" 
-                .value=${this._config.background_size} 
-                data-field="background_size" 
-                @input=${this._changed}
-            ></ha-textfield>
-        ` : ""}
 
-        <div class="inline-fields-2">
-          <ha-textfield label="Min height (px)" type="number" .value=${String(this._config.min_height)} data-field="min_height" @input=${this._changed}></ha-textfield>
-          <ha-textfield label="Max height (px)" type="number" .value=${String(this._config.max_height)} data-field="max_height" @input=${this._changed}></ha-textfield>
-        </div>
-        
-        <ha-textfield label="Mobile Breakpoint (px)" type="number" .value=${String(this._config.mobile_breakpoint || 768)} data-field="mobile_breakpoint" @input=${this._changed}></ha-textfield>
+            ${showCustomFont ? html`<ha-textfield label="Custom font-family (CSS)" .value=${this._config.font_family_custom} data-field="font_family_custom" @input=${this._changed}></ha-textfield>` : ""}
 
-        <div class="section">Blend</div>
-        <div class="switch-row">
-          <ha-formfield label="Enable background blend (gradient overlay)">
-            <ha-switch .checked=${this._config.blend_enabled !== false} data-field="blend_enabled" @change=${this._changed}></ha-switch>
-          </ha-formfield>
-        </div>
-        ${this._config.blend_enabled !== false ? html`
-          <ha-textfield label="Blend color (CSS)" .value=${this._config.blend_color} data-field="blend_color" @input=${this._changed}></ha-textfield>
-          <ha-textfield label="Blend stop (%)" type="number" .value=${String(this._config.blend_stop)} data-field="blend_stop" @input=${this._changed}></ha-textfield>
-        ` : ""}
+            <ha-select label="Font style" .value=${this._config.font_style} .fixedMenuPosition=${true} data-field="font_style" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+              <mwc-list-item value="normal">Normal</mwc-list-item>
+              <mwc-list-item value="italic">Italic</mwc-list-item>
+            </ha-select>
 
-        <div class="section">Card Styling</div>
-        <ha-textfield label="Border Radius (CSS)" helper="e.g. 12px, 0, 50%" .value=${this._config.card_border_radius || ""} data-field="card_border_radius" @input=${this._changed}></ha-textfield>
-        <ha-textfield label="Box Shadow (CSS)" helper="e.g. 0 4px 12px rgba(0,0,0,0.3)" .value=${this._config.card_box_shadow || ""} data-field="card_box_shadow" @input=${this._changed}></ha-textfield>
-        <div class="inline-fields-3">
-          <ha-select label="Border Style" .value=${this._config.card_border_style || "none"} .fixedMenuPosition=${true} data-field="card_border_style" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-            <mwc-list-item value="none">None</mwc-list-item>
-            <mwc-list-item value="solid">Solid</mwc-list-item>
-            <mwc-list-item value="dashed">Dashed</mwc-list-item>
-            <mwc-list-item value="dotted">Dotted</mwc-list-item>
-            <mwc-list-item value="double">Double</mwc-list-item>
-            <mwc-list-item value="groove">Groove</mwc-list-item>
-            <mwc-list-item value="ridge">Ridge</mwc-list-item>
-            <mwc-list-item value="inset">Inset</mwc-list-item>
-            <mwc-list-item value="outset">Outset</mwc-list-item>
-          </ha-select>
-          <ha-textfield label="Border Width (px)" type="number" .value=${String(this._config.card_border_width || 0)} data-field="card_border_width" @input=${this._changed}></ha-textfield>
-          <ha-textfield label="Border Color" .value=${this._config.card_border_color || ""} data-field="card_border_color" @input=${this._changed}></ha-textfield>
-        </div>
+            <div class="inline-fields-2">
+              <ha-textfield label="Title size (px)" type="number" .value=${String(this._config.title_size_px)} data-field="title_size_px" @input=${this._changed}></ha-textfield>
+              <ha-textfield label="Subtitle size (px)" type="number" .value=${String(this._config.subtitle_size_px)} data-field="subtitle_size_px" @input=${this._changed}></ha-textfield>
+            </div>
 
-        <div class="section">Typography</div>
-        <ha-select label="Font family" .value=${this._config.font_family} .fixedMenuPosition=${true} data-field="font_family" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-          <mwc-list-item value="inherit">Inherit</mwc-list-item>
-          <mwc-list-item value="system">System</mwc-list-item>
-          <mwc-list-item value="roboto">Roboto</mwc-list-item>
-          <mwc-list-item value="inter">Inter</mwc-list-item>
-          <mwc-list-item value="arial">Arial</mwc-list-item>
-          <mwc-list-item value="georgia">Georgia</mwc-list-item>
-          <mwc-list-item value="mono">Monospace</mwc-list-item>
-          <mwc-list-item value="custom">Custom…</mwc-list-item>
-        </ha-select>
+            <div class="inline-fields-2">
+              <ha-select label="Title weight" .value=${this._config.title_weight} .fixedMenuPosition=${true} data-field="title_weight" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+                <mwc-list-item value="light">Light</mwc-list-item>
+                <mwc-list-item value="regular">Regular</mwc-list-item>
+                <mwc-list-item value="medium">Medium</mwc-list-item>
+                <mwc-list-item value="semibold">Semi-bold</mwc-list-item>
+                <mwc-list-item value="bold">Bold</mwc-list-item>
+                <mwc-list-item value="black">Black</mwc-list-item>
+              </ha-select>
 
-        ${showCustomFont ? html`<ha-textfield label="Custom font-family (CSS)" .value=${this._config.font_family_custom} data-field="font_family_custom" @input=${this._changed}></ha-textfield>` : ""}
+              <ha-select label="Subtitle weight" .value=${this._config.subtitle_weight} .fixedMenuPosition=${true} data-field="subtitle_weight" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+                <mwc-list-item value="light">Light</mwc-list-item>
+                <mwc-list-item value="regular">Regular</mwc-list-item>
+                <mwc-list-item value="medium">Medium</mwc-list-item>
+                <mwc-list-item value="semibold">Semi-bold</mwc-list-item>
+                <mwc-list-item value="bold">Bold</mwc-list-item>
+                <mwc-list-item value="black">Black</mwc-list-item>
+              </ha-select>
+            </div>
+          </div>
+        </details>
+        <details class="box-section">
+          <summary>Top Bar</summary>
+          <div class="box-content">
+            <div class="switch-row">
+                <ha-switch .checked=${this._config.top_bar_enabled !== false} data-field="top_bar_enabled" @change=${this._changed}></ha-switch>
+                <span>Enable top bar</span>
+            </div>
 
-        <ha-select label="Font style" .value=${this._config.font_style} .fixedMenuPosition=${true} data-field="font_style" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-          <mwc-list-item value="normal">Normal</mwc-list-item>
-          <mwc-list-item value="italic">Italic</mwc-list-item>
-        </ha-select>
+            ${this._config.top_bar_enabled !== false ? html`
+                <div class="inline-fields-2">
+                    <ha-textfield label="Bar vertical offset (px)" type="number" .value=${String(this._config.top_bar_offset_y ?? 10)} data-field="top_bar_offset_y" @input=${this._changed}></ha-textfield>
+                    <ha-textfield label="Bar padding X (px)" type="number" .value=${String(this._config.top_bar_padding_x ?? 5)} data-field="top_bar_padding_x" @input=${this._changed}></ha-textfield>
+                </div>
+                
+                <details class="box-section">
+                  <summary>Global Styling (Defaults)</summary>
+                  <div class="box-content">
+                    <div class="inline-fields-2">
+                      <ha-textfield label="Font Size (px)" type="number" .value=${String(this._config.info_size_px || 12)} data-field="info_size_px" @input=${this._changed}></ha-textfield>
+                      <ha-select label="Font Weight" .value=${this._config.info_weight || "medium"} .fixedMenuPosition=${true} data-field="info_weight" @selected=${this._changed} @closed=${this._changed}>
+                        ${["light", "regular", "medium", "semibold", "bold", "extrabold"].map(w => html`<mwc-list-item .value=${w}>${w.charAt(0).toUpperCase() + w.slice(1)}</mwc-list-item>`)}
+                      </ha-select>
+                    </div>
+                    <ha-textfield label="Text Color" .value=${this._config.info_color || ""} data-field="info_color" @input=${this._changed}></ha-textfield>
+                    
+                    <div class="switch-row">
+                      <ha-switch .checked=${!!this._config.info_pill} data-field="info_pill" @change=${this._changed}></ha-switch>
+                      <span>Enable Pill Style</span>
+                    </div>
+                    ${this._config.info_pill ? html`
+                      <ha-textfield label="Pill Background" .value=${this._config.info_pill_background || "rgba(0,0,0,0.25)"} data-field="info_pill_background" @input=${this._changed}></ha-textfield>
+                      <div class="inline-fields-2">
+                        <ha-textfield label="Padding X (px)" type="number" .value=${String(this._config.info_pill_padding_x ?? 10)} data-field="info_pill_padding_x" @input=${this._changed}></ha-textfield>
+                        <ha-textfield label="Padding Y (px)" type="number" .value=${String(this._config.info_pill_padding_y ?? 6)} data-field="info_pill_padding_y" @input=${this._changed}></ha-textfield>
+                      </div>
+                      <div class="inline-fields-2">
+                        <ha-textfield label="Border Radius (px)" type="number" .value=${String(this._config.info_pill_radius ?? 999)} data-field="info_pill_radius" @input=${this._changed}></ha-textfield>
+                        <ha-textfield label="Blur (px)" type="number" .value=${String(this._config.info_pill_blur ?? 0)} data-field="info_pill_blur" @input=${this._changed}></ha-textfield>
+                      </div>
+                      <div class="inline-fields-3">
+                        <ha-select label="Border Style" .value=${this._config.info_pill_border_style || "none"} .fixedMenuPosition=${true} data-field="info_pill_border_style" @selected=${this._changed} @closed=${this._changed}>
+                          <mwc-list-item value="none">None</mwc-list-item>
+                          <mwc-list-item value="solid">Solid</mwc-list-item>
+                          <mwc-list-item value="dashed">Dashed</mwc-list-item>
+                          <mwc-list-item value="dotted">Dotted</mwc-list-item>
+                        </ha-select>
+                        <ha-textfield label="Border Width" type="number" .value=${String(this._config.info_pill_border_width ?? 0)} data-field="info_pill_border_width" @input=${this._changed}></ha-textfield>
+                        <ha-textfield label="Border Color" .value=${this._config.info_pill_border_color || "rgba(255,255,255,0.1)"} data-field="info_pill_border_color" @input=${this._changed}></ha-textfield>
+                      </div>
+                    ` : ''}
+                  </div>
+                </details>
 
-        <div class="inline-fields-2">
-          <ha-textfield label="Title size (px)" type="number" .value=${String(this._config.title_size_px)} data-field="title_size_px" @input=${this._changed}></ha-textfield>
-          <ha-textfield label="Subtitle size (px)" type="number" .value=${String(this._config.subtitle_size_px)} data-field="subtitle_size_px" @input=${this._changed}></ha-textfield>
-        </div>
+                <details class="box-section">
+                  <summary>Left Slot: ${this._getSlotLabel(this._config.top_bar_left)}</summary>
+                  <div class="box-content">
+                    ${this._renderSlotEditor('left')}
+                  </div>
+                </details>
 
-        <div class="inline-fields-2">
-          <ha-select label="Title weight" .value=${this._config.title_weight} .fixedMenuPosition=${true} data-field="title_weight" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-            <mwc-list-item value="light">Light</mwc-list-item>
-            <mwc-list-item value="regular">Regular</mwc-list-item>
-            <mwc-list-item value="medium">Medium</mwc-list-item>
-            <mwc-list-item value="semibold">Semi-bold</mwc-list-item>
-            <mwc-list-item value="bold">Bold</mwc-list-item>
-            <mwc-list-item value="black">Black</mwc-list-item>
-          </ha-select>
+                <details class="box-section">
+                  <summary>Center Slot: ${this._getSlotLabel(this._config.top_bar_center)}</summary>
+                  <div class="box-content">
+                    ${this._renderSlotEditor('center')}
+                  </div>
+                </details>
 
-          <ha-select label="Subtitle weight" .value=${this._config.subtitle_weight} .fixedMenuPosition=${true} data-field="subtitle_weight" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-            <mwc-list-item value="light">Light</mwc-list-item>
-            <mwc-list-item value="regular">Regular</mwc-list-item>
-            <mwc-list-item value="medium">Medium</mwc-list-item>
-            <mwc-list-item value="semibold">Semi-bold</mwc-list-item>
-            <mwc-list-item value="bold">Bold</mwc-list-item>
-            <mwc-list-item value="black">Black</mwc-list-item>
-          </ha-select>
-        </div>
+                <details class="box-section">
+                  <summary>Right Slot: ${this._getSlotLabel(this._config.top_bar_right)}</summary>
+                  <div class="box-content">
+                    ${this._renderSlotEditor('right')}
+                  </div>
+                </details>
+            ` : ''}
+          </div>
+        </details>
 
-        <div class="section">Fixed header</div>
-        <div class="switch-row">
-          <ha-formfield label="Keep header fixed to top">
-            <ha-switch .checked=${!!this._config.fixed} data-field="fixed" @change=${this._changed}></ha-switch>
-          </ha-formfield>
-        </div>
+        <details class="box-section">
+          <summary>Fixed Header</summary>
+          <div class="box-content">
+            <div class="section">Positioning</div>
+            <div class="switch-row">
+              <ha-formfield label="Keep header fixed to top">
+                <ha-switch .checked=${!!this._config.fixed} data-field="fixed" @change=${this._changed}></ha-switch>
+              </ha-formfield>
+            </div>
 
-        ${this._config.fixed ? html`<ha-textfield label="Fixed top offset (px)" type="number" .value=${String(this._config.fixed_top)} data-field="fixed_top" @input=${this._changed}></ha-textfield>` : ""}
+            ${this._config.fixed ? html`<ha-textfield label="Fixed top offset (px)" type="number" .value=${String(this._config.fixed_top)} data-field="fixed_top" @input=${this._changed}></ha-textfield>` : ""}
+          </div>
+        </details>
 
-        <div class="section">Badge positioning</div>
-        
-        <ha-alert alert-type="warning" class="badge-warning">
-          For badge positioning to work, this card must be placed in the <strong>header slot</strong> of your view/section. Otherwise, these badge settings will have no effect. <br><br>
-          NOTE: This card does not manage or display any badges itself. Badges must be added separately using Home Assistant's native badge support (e.g. via the "badges" option in your Lovelace view/section configuration).
-        </ha-alert>
-        
-        <div class="switch-row">
-          <ha-formfield label="Pin badges in place (content scrolls beneath)">
-            <ha-switch .checked=${!!this._config.badges_fixed} data-field="badges_fixed" @change=${this._changed}></ha-switch>
-          </ha-formfield>
-        </div>
-        
-        ${this._config.badges_fixed
-          ? html`<ha-textfield label="Badges vertical offset when pinned (px)" helper="Negative values pull badges up (into header), positive values push down" type="number" .value=${String(this._config.badges_offset_pinned)} data-field="badges_offset_pinned" @input=${this._changed}></ha-textfield>`
-          : html`<ha-textfield label="Badges vertical offset when unpinned (px)" helper="Negative values pull badges up (into header), positive values push down" type="number" .value=${String(this._config.badges_offset_unpinned)} data-field="badges_offset_unpinned" @input=${this._changed}></ha-textfield>`}
-        
-        <ha-textfield label="Gap under badges (px)" helper="Space between badges and next content (auto-adjusts -48px when pinned, +48px in kiosk mode)" type="number" .value=${String(this._config.badges_gap)} data-field="badges_gap" @input=${this._changed}></ha-textfield>
+        <details class="box-section">
+          <summary>Badge Positioning</summary>
+          <div class="box-content">
+            <div class="section">Badge Settings</div>
+            
+            <ha-alert alert-type="warning" class="badge-warning">
+              For badge positioning to work, this card must be placed in the <strong>header slot</strong> of your view/section. Otherwise, these badge settings will have no effect. <br><br>
+              NOTE: This card does not manage or display any badges itself. Badges must be added separately using Home Assistant's native badge support (e.g. via the "badges" option in your Lovelace view/section configuration).
+            </ha-alert>
+            
+            <div class="switch-row">
+              <ha-formfield label="Pin badges in place (content scrolls beneath)">
+                <ha-switch .checked=${!!this._config.badges_fixed} data-field="badges_fixed" @change=${this._changed}></ha-switch>
+              </ha-formfield>
+            </div>
+            
+            ${this._config.badges_fixed
+              ? html`<ha-textfield label="Badges vertical offset when pinned (px)" helper="Negative values pull badges up (into header), positive values push down" type="number" .value=${String(this._config.badges_offset_pinned)} data-field="badges_offset_pinned" @input=${this._changed}></ha-textfield>`
+              : html`<ha-textfield label="Badges vertical offset when unpinned (px)" helper="Negative values pull badges up (into header), positive values push down" type="number" .value=${String(this._config.badges_offset_unpinned)} data-field="badges_offset_unpinned" @input=${this._changed}></ha-textfield>`}
+            
+            <ha-textfield label="Gap under badges (px)" helper="Space between badges and next content (auto-adjusts -48px when pinned, +48px in kiosk mode)" type="number" .value=${String(this._config.badges_gap)} data-field="badges_gap" @input=${this._changed}></ha-textfield>
+          </div>
+        </details>
+
       </div>
     `;
   }
@@ -2388,6 +2478,8 @@ class HkiHeaderCardEditor extends LitElement {
       .inline-fields-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
       ha-textfield, ha-select, ha-combo-box, ha-navigation-picker, ha-entity-picker, ha-selector, ha-service-picker { width: 100%; }
       .code-wrap { display: flex; flex-direction: column; gap: 6px; }
+      /* Keep Title/Subitle YAML fields visually grouped */
+      .template-pair { display: flex; flex-direction: column; gap: 8px; }
       .code-label { font-size: 0.9rem; opacity: 0.9; }
       ha-code-editor { height: 180px; border-radius: 8px; overflow: hidden; }
       
