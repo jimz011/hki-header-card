@@ -1583,9 +1583,11 @@ class HkiHeaderCard extends LitElement {
     // Determine border-radius: split top/bottom > legacy > system default (when not fixed)
     const parseRadius = (v) => {
       if (v === undefined || v === null || v === "") return "";
-      if (typeof v === "number") return `${v}px`;
+      if (typeof v === "number" && Number.isFinite(v)) return `${v}px`;
       const s = String(v).trim();
-      return /^\d+$/.test(s) ? `${s}px` : s;
+      // If user enters a plain number (incl. negative/decimal), interpret as px.
+      // Otherwise pass through as any valid CSS length/value.
+      return /^-?\d+(?:\.\d+)?$/.test(s) ? `${s}px` : s;
     };
 
     let topRadius = parseRadius(cfg.card_border_radius_top);
@@ -1893,13 +1895,13 @@ class HkiHeaderCardEditor extends LitElement {
 
     let value = this._val(ev);
 
-    // Card border radius: allow users to enter just a number (stored as number, rendered as px)
+    // Card border radius: allow users to enter just a number (interpreted as px at render time)
     // while still allowing any valid CSS value (e.g., 12px, 0, 50%, var(--x)).
+    // IMPORTANT: do NOT auto-append "px" or coerce to Number here, because @input fires per-keystroke
+    // and coercion can interfere with typing (e.g., "12." or "-" while editing).
     if (field === "card_border_radius" || field === "card_border_radius_top" || field === "card_border_radius_bottom") {
       const s = (value ?? "").toString().trim();
-      if (s === "") value = "";
-      else if (/^\d+$/.test(s)) value = Number(s);
-      else value = s;
+      value = s; // store raw string; conversion happens when building CSS
     }
 
     // Use pre-computed static sets for field type checking
