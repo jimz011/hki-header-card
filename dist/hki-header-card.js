@@ -323,10 +323,9 @@ class HkiHeaderCard extends LitElement {
         max-height: 340px;
         margin: 0;
         border-radius: 0; /* Overridden by inline style */
-        overflow: visible; /* Allow box-shadow to show when fixed */
         box-sizing: border-box;
         color: var(--hki-header-text-color, #fff);
-        /* border and box-shadow controlled via inline styles */
+        /* border, box-shadow, and overflow controlled via inline styles */
       }
 
       .overlay {
@@ -1605,9 +1604,9 @@ class HkiHeaderCard extends LitElement {
       borderRadius ? `border-radius:${borderRadius}` : "",
       cfg.card_box_shadow ? `box-shadow:${cfg.card_box_shadow}` : "box-shadow:none",
       borderStyle,
-      // Always apply overflow:hidden when border-radius is set to clip properly
-      // When fixed, overflow:hidden is also on wrapper so box-shadow still shows
-      borderRadius ? "overflow:hidden" : (!effectiveFixed ? "overflow:hidden" : "")
+      // Apply overflow:hidden when: border-radius is set OR card is not in fixed mode
+      // When fixed with no border-radius, use overflow:visible so box-shadow shows through wrapper
+      (borderRadius || !effectiveFixed) ? "overflow:hidden" : "overflow:visible"
     ].filter(Boolean).join(";");
 
     // Only show overlay gradient if blend is enabled
