@@ -2291,7 +2291,56 @@ class HkiHeaderCardEditor extends LitElement {
         <mwc-list-item value="perform-action">Perform Action</mwc-list-item>
       </ha-select>
       ${actionType === "navigate" ? html`
-        <ha-textfield label="Navigation path" .value=${action.navigation_path || ""} data-field="${field}.navigation_path" @input=${this._changed}></ha-textfield>
+        ${(() => {
+          const base = (() => {
+            const p = (window && window.location && window.location.pathname) ? window.location.pathname : '';
+            const seg = (p.split('/').filter(Boolean)[0]) || 'lovelace';
+            return '/' + seg;
+          })();
+          const views = (this.hass && this.hass.lovelace && this.hass.lovelace.config && Array.isArray(this.hass.lovelace.config.views)) ? this.hass.lovelace.config.views : [];
+          const opts = [];
+          // A couple of useful common targets
+          opts.push({ value: base, label: 'Dashboard' });
+          views.forEach((v, idx) => {
+            const key = (v && typeof v.path === 'string' && v.path.length) ? v.path : String(idx);
+            const label = (v && v.title) ? v.title : ((v && v.path) ? v.path : `View ${idx + 1}`);
+            opts.push({ value: `${base}/${key}`, label });
+          });
+          const current = String(action.navigation_path || '');
+          const inList = opts.some(o => o.value === current);
+          const selected = current ? (inList ? current : '__custom__') : '';
+          return html`
+            <ha-select
+              label="Navigation path"
+              .value=${selected || undefined}
+              @selected=${(e) => {
+                e.stopPropagation();
+                const v = e.target.value || '';
+                if (v === '__custom__') {
+                  // Keep existing value; user will edit the text field
+                  if (!current) this._changed({ target: { value: '', dataset: { field: `${field}.navigation_path` } } });
+                  return;
+                }
+                this._changed({ target: { value: v, dataset: { field: `${field}.navigation_path` } } });
+              }}
+              @closed=${(e) => e.stopPropagation()}
+              @click=${(e) => e.stopPropagation()}
+            >
+              <mwc-list-item value=""></mwc-list-item>
+              ${opts.map((o) => html`<mwc-list-item .value=${o.value}>${o.label}</mwc-list-item>`)}
+              <mwc-list-item value="__custom__">Custom…</mwc-list-item>
+            </ha-select>
+            ${selected === '__custom__' ? html`
+              <ha-textfield
+                label="Custom navigation path"
+                .value=${current}
+                data-field="${field}.navigation_path"
+                @input=${this._changed}
+                placeholder="/lovelace/0"
+              ></ha-textfield>
+            ` : ''}
+          `;
+        })()}
       ` : ''}
       ${actionType === "url" ? html`
         <ha-textfield label="URL" .value=${action.url_path || ""} data-field="${field}.url_path" @input=${this._changed}></ha-textfield>
