@@ -1808,6 +1808,41 @@ class HkiHeaderCardEditor extends LitElement {
   constructor() {
     super();
     this._config = {};
+    // Cache for domain selection when ha-service-picker isn't available
+    this._paDomainCache = {};
+  }
+
+  _renderNavigationPathPicker(label, value, onChange) {
+    const val = value || "";
+    if (customElements.get("ha-navigation-picker")) {
+      return html`
+        <ha-navigation-picker
+          .hass=${this.hass}
+          .label=${label}
+          .value=${val}
+          @value-changed=${(e) => onChange(e.detail?.value ?? "")}
+        ></ha-navigation-picker>
+      `;
+    }
+    if (customElements.get("ha-selector")) {
+      return html`
+        <ha-selector
+          .hass=${this.hass}
+          .label=${label}
+          .selector=${{ navigation: {} }}
+          .value=${val}
+          @value-changed=${(e) => onChange(e.detail?.value ?? "")}
+        ></ha-selector>
+      `;
+    }
+    return html`
+      <ha-textfield
+        .label=${label}
+        .value=${val}
+        placeholder="/lovelace/0"
+        @change=${(e) => onChange(e.target.value)}
+      ></ha-textfield>
+    `;
   }
 
   setConfig(config) {
@@ -2182,6 +2217,22 @@ class HkiHeaderCardEditor extends LitElement {
   _renderSlotActionEditor(field) {
     const action = this._config?.[field] || { action: "none" };
     const actionType = action.action || "none";
+
+    const setAction = (nextAction) => {
+      this._config = { ...this._config, [field]: nextAction };
+      this.dispatchEvent(
+        new CustomEvent("config-changed", {
+          detail: { config: this._config },
+          bubbles: true,
+          composed: true,
+        })
+      );
+    };
+
+    const patchAction = (patch) => {
+      const current = this._config?.[field] || { action: "none" };
+      setAction({ ...current, ...patch });
+    };
     
     return html`
       <ha-select label="Action" .value=${actionType} data-field="${field}.action" @selected=${this._changed} @closed=${this._changed}>
@@ -2195,7 +2246,7 @@ class HkiHeaderCardEditor extends LitElement {
         <mwc-list-item value="perform-action">Perform Action</mwc-list-item>
       </ha-select>
       ${actionType === "navigate" ? html`
-        <ha-textfield label="Navigation path" .value=${action.navigation_path || ""} data-field="${field}.navigation_path" @input=${this._changed}></ha-textfield>
+        ${this._renderNavigationPathPicker("Navigation path", action.navigation_path || "", (v) => patchAction({ navigation_path: v }))}
       ` : ''}
       ${actionType === "url" ? html`
         <ha-textfield label="URL" .value=${action.url_path || ""} data-field="${field}.url_path" @input=${this._changed}></ha-textfield>
@@ -2204,60 +2255,112 @@ class HkiHeaderCardEditor extends LitElement {
         <ha-entity-picker .hass=${this.hass} .value=${action.entity || ""} @value-changed=${(e) => this._changed(e, field + ".entity")}></ha-entity-picker>
       ` : ''}
       ${actionType === "perform-action" ? html`
-        <ha-textfield
-          label="Service (e.g., light.turn_on)"
-          .value=${action.perform_action || ""}
-          data-field="${field}.perform_action"
-          @input=${this._changed}
-          placeholder="light.turn_on"
-        ></ha-textfield>
-        
-        ${action.perform_action ? html`
-          <ha-selector
+        ${customElements.get("ha-service-picker") ? html`
+          <ha-service-picker
             .hass=${this.hass}
-            .selector=${{ target: {} }}
-            .label=${"Target (optional)"}
-            .value=${action.target || null}
+            .label=${"Action (service)"}
+            .value=${action.perform_action || ""}
             @value-changed=${(ev) => {
               ev.stopPropagation();
-              const target = ev.detail?.value;
-              const currentTarget = action.target;
-              if (JSON.stringify(currentTarget) !== JSON.stringify(target)) {
-                const updated = { ...action };
-                if (target && Object.keys(target).length > 0) {
-                  updated.target = target;
-                } else {
-                  delete updated.target;
-                }
-                this._config = { ...this._config, [field]: updated };
-                this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: this._config }, bubbles: true, composed: true }));
-              }
+              const v = ev.detail?.value ?? ev.target?.value ?? "";
+              patchAction({ perform_action: String(v || "") });
             }}
             @click=${(e) => e.stopPropagation()}
-          ></ha-selector>
-          
-          <ha-yaml-editor
-            .hass=${this.hass}
-            .label=${"Service Data (optional, YAML)"}
-            .value=${action.data || null}
-            @value-changed=${(ev) => {
-              ev.stopPropagation();
-              const data = ev.detail?.value;
-              const currentData = action.data;
-              if (JSON.stringify(currentData) !== JSON.stringify(data)) {
-                const updated = { ...action };
-                if (data && typeof data === 'object' && Object.keys(data).length > 0) {
-                  updated.data = data;
-                } else {
-                  delete updated.data;
-                }
-                this._config = { ...this._config, [field]: updated };
-                this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: this._config }, bubbles: true, composed: true }));
+          ></ha-service-picker>
+        ` : html`
+          ${(() => {
+            const key = `${field}`;
+            const full = String(action.perform_action || "");
+            const derivedDomain = full.includes(".") ? full.split(".")[0] : "";
+            const cachedDomain = this._paDomainCache?.[key] || "";
+            const domain = cachedDomain || derivedDomain;
+            const derivedService = (full.includes(".") && derivedDomain === domain)
+              ? (full.split(".")[1] || "")
+              : "";
+            const services = (domain && this.hass?.services?.[domain])
+              ? Object.keys(this.hass.services[domain]).sort()
+              : [];
+            return html`
+              <div class="inline-fields-2">
+                <ha-select
+                  label="Domain"
+                  .value=${domain || undefined}
+                  @selected=${(e) => {
+                    const nextDomain = e.target.value || "";
+                    this._paDomainCache[key] = nextDomain;
+                    // Clear service when domain changes
+                    patchAction({ perform_action: "" });
+                    this.requestUpdate();
+                  }}
+                  @closed=${(e) => e.stopPropagation()}
+                  @click=${(e) => e.stopPropagation()}
+                >
+                  <mwc-list-item value=""></mwc-list-item>
+                  ${Object.keys(this.hass?.services || {}).sort().map((d) => html`<mwc-list-item .value=${d}>${d}</mwc-list-item>`)}
+                </ha-select>
+
+                <ha-select
+                  label="Service"
+                  .value=${derivedService || undefined}
+                  .disabled=${!domain}
+                  @selected=${(e) => {
+                    const service = e.target.value || "";
+                    const d = this._paDomainCache[key] || domain;
+                    patchAction({ perform_action: (d && service) ? `${d}.${service}` : "" });
+                  }}
+                  @closed=${(e) => e.stopPropagation()}
+                  @click=${(e) => e.stopPropagation()}
+                >
+                  <mwc-list-item value=""></mwc-list-item>
+                  ${services.map((s) => html`<mwc-list-item .value=${s}>${s}</mwc-list-item>`)}
+                </ha-select>
+              </div>
+            `;
+          })()}
+        `}
+
+        <ha-selector
+          .hass=${this.hass}
+          .selector=${{ target: {} }}
+          .label=${"Target (optional)"}
+          .value=${action.target || null}
+          @value-changed=${(ev) => {
+            ev.stopPropagation();
+            const target = ev.detail?.value;
+            const currentTarget = action.target;
+            if (JSON.stringify(currentTarget) !== JSON.stringify(target)) {
+              const updated = { ...action };
+              if (target && Object.keys(target).length > 0) {
+                updated.target = target;
+              } else {
+                delete updated.target;
               }
-            }}
-            @click=${(e) => e.stopPropagation()}
-          ></ha-yaml-editor>
-        ` : ''}
+              setAction(updated);
+            }
+          }}
+          @click=${(e) => e.stopPropagation()}
+        ></ha-selector>
+
+        <ha-yaml-editor
+          .hass=${this.hass}
+          .label=${"Service Data (optional, YAML)"}
+          .value=${action.data || null}
+          @value-changed=${(ev) => {
+            ev.stopPropagation();
+            const data = ev.detail?.value;
+            const currentData = action.data;
+            if (JSON.stringify(currentData) !== JSON.stringify(data)) {
+              const updated = { ...action };
+              if (data && typeof data === "object" && Object.keys(data).length > 0) {
+                updated.data = data;
+              } else {
+                delete updated.data;
+              }
+              setAction(updated);
+            }
+          }}
+          @click=${(e) => e.stopPropagation()}
+        ></ha-yaml-editor>
       ` : ''}
     `;
   }
