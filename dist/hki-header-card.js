@@ -311,11 +311,6 @@ class HkiHeaderCard extends LitElement {
     // Performance: Style caches
     this._slotStyleCache = new Map();
     this._lastConfigHash = null;
-
-    // Gesture handling (tap / double tap / hold)
-    this._holdTimers = new Map();
-    this._tapState = { lastId: null, lastTime: 0, singleTimer: null };
-
   }
 
   static get styles() {
@@ -860,8 +855,6 @@ class HkiHeaderCard extends LitElement {
       m[prefix + "icon"] = m[prefix + "icon"] || "";
       m[prefix + "label"] = m[prefix + "label"] || "";
       m[prefix + "tap_action"] = m[prefix + "tap_action"] || { action: "none" };
-      m[prefix + "hold_action"] = m[prefix + "hold_action"] || { action: "none" };
-      m[prefix + "double_tap_action"] = m[prefix + "double_tap_action"] || { action: "none" };
       m[prefix + "size_px"] = m[prefix + "size_px"] != null ? clamp(+m[prefix + "size_px"], 8, 64) : null;
       m[prefix + "weight"] = m[prefix + "weight"] ? normalizeWeightKey(m[prefix + "weight"], "medium") : null;
       m[prefix + "color"] = m[prefix + "color"] || null;
@@ -1367,105 +1360,23 @@ class HkiHeaderCard extends LitElement {
     const prefix = `top_bar_${slotName}_`;
     const icon = cfg[prefix + "icon"] || "mdi:gesture-tap";
     const label = cfg[prefix + "label"] || "";
+    const tapAction = cfg[prefix + "tap_action"] || { action: "none" };
     
     const pillClass = slotStyle.pill ? "info-pill" : "";
     const combinedStyle = `${slotStyle.inlineStyle} ${slotStyle.pillStyle}`;
     
     return html`
-      <div class="info-item ${pillClass}" style="${combinedStyle}" @pointerdown=${(e) => this._onSlotPointerDown(e, slotName)}
-             @pointerup=${(e) => this._onSlotPointerUp(e, slotName)}
-             @pointercancel=${(e) => this._onSlotPointerCancel(e, slotName)}
-             @contextmenu=${(e) => this._onSlotContextMenu(e, slotName)}>
+      <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${() => this._handleSlotTapAction(tapAction, slotName)}>
         <ha-icon .icon=${icon} style="--mdc-icon-size:${slotStyle.iconSize}px;"></ha-icon>
         ${label ? html`<span>${label}</span>` : ''}
       </div>
     `;
   }
 
-  _getSlotAction(slotName, which) {
-    const cfg = this._config || {};
-    const prefix = `top_bar_${slotName}_`;
-    if (which === "tap_action") {
-      return cfg[prefix + "tap_action"] || cfg.info_tap_action || { action: "none" };
-    }
-    if (which === "hold_action") {
-      return cfg[prefix + "hold_action"] || { action: "none" };
-    }
-    if (which === "double_tap_action") {
-      return cfg[prefix + "double_tap_action"] || { action: "none" };
-    }
-    return { action: "none" };
-  }
-
-  _handleSlotAction(slotName, which) {
-    const action = this._getSlotAction(slotName, which);
+  _handleSlotTapAction(action, slotName) {
     if (!action || action.action === "none") return;
     this._handleAction(action);
   }
-
-  _onSlotPointerDown(e, slotName) {
-    e.stopPropagation();
-    if (e.button === 2) return;
-    const key = `${slotName}:${e.pointerId}`;
-    const t = setTimeout(() => {
-      this._holdTimers.delete(key);
-      this._handleSlotAction(slotName, "hold_action");
-    }, 520);
-    this._holdTimers.set(key, t);
-  }
-
-  _onSlotPointerUp(e, slotName) {
-    e.stopPropagation();
-    if (e.button === 2) return;
-    const key = `${slotName}:${e.pointerId}`;
-    const holdTimer = this._holdTimers.get(key);
-    if (holdTimer) {
-      clearTimeout(holdTimer);
-      this._holdTimers.delete(key);
-    } else return;
-
-    const dblAction = this._getSlotAction(slotName, "double_tap_action");
-    const hasDouble = dblAction && dblAction.action && dblAction.action !== "none";
-
-    const now = Date.now();
-    const dblWindow = 280;
-
-    if (hasDouble && this._tapState.lastId === slotName && (now - this._tapState.lastTime) < dblWindow) {
-      if (this._tapState.singleTimer) clearTimeout(this._tapState.singleTimer);
-      this._tapState = { lastId: null, lastTime: 0, singleTimer: null };
-      this._handleSlotAction(slotName, "double_tap_action");
-      return;
-    }
-
-    if (this._tapState.singleTimer) clearTimeout(this._tapState.singleTimer);
-    this._tapState.lastId = slotName;
-    this._tapState.lastTime = now;
-
-    if (!hasDouble) {
-      this._tapState = { lastId: null, lastTime: 0, singleTimer: null };
-      this._handleSlotAction(slotName, "tap_action");
-      return;
-    }
-
-    this._tapState.singleTimer = setTimeout(() => {
-      this._tapState = { lastId: null, lastTime: 0, singleTimer: null };
-      this._handleSlotAction(slotName, "tap_action");
-    }, dblWindow);
-  }
-
-  _onSlotPointerCancel(e, slotName) {
-    const key = `${slotName}:${e.pointerId}`;
-    const holdTimer = this._holdTimers.get(key);
-    if (holdTimer) clearTimeout(holdTimer);
-    this._holdTimers.delete(key);
-  }
-
-  _onSlotContextMenu(e, slotName) {
-    e.preventDefault();
-    e.stopPropagation();
-    this._handleSlotAction(slotName, "hold_action");
-  }
-
 
   _renderWeatherSlot(slotName, slotStyle) {
     const cfg = this._config;
@@ -1517,12 +1428,11 @@ class HkiHeaderCard extends LitElement {
 
     const pillClass = slotStyle.pill ? "info-pill" : "";
     const combinedStyle = `${slotStyle.inlineStyle} ${slotStyle.pillStyle}`;
+    
+    const tapAction = cfg[prefix + "tap_action"] || cfg.info_tap_action || { action: "none" };
 
     return html`
-      <div class="info-item ${pillClass}" style="${combinedStyle}" @pointerdown=${(e) => this._onSlotPointerDown(e, slotName)}
-             @pointerup=${(e) => this._onSlotPointerUp(e, slotName)}
-             @pointercancel=${(e) => this._onSlotPointerCancel(e, slotName)}
-             @contextmenu=${(e) => this._onSlotContextMenu(e, slotName)}>
+      <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${() => this._handleSlotTapAction(tapAction, slotName)}>
         ${showIcon ? (useSvg 
             ? html`<img src="${svgUrl}" class="info-icon ${animClass}" style="width:${slotStyle.iconSize}px;height:${slotStyle.iconSize}px;" alt="${state}" />`
             : html`<ha-icon class="info-weather-icon ${animClass}" .icon=${weatherIcon}
@@ -1566,12 +1476,11 @@ class HkiHeaderCard extends LitElement {
     
     const animateIcon = cfg[prefix + "animate_icon"] || cfg.datetime_animate_icon;
     const animClass = animateIcon && animateIcon !== "none" ? `animate-${animateIcon}` : "";
+    
+    const tapAction = cfg[prefix + "tap_action"] || cfg.info_tap_action || { action: "none" };
 
     return html`
-      <div class="info-item ${pillClass}" style="${combinedStyle}" @pointerdown=${(e) => this._onSlotPointerDown(e, slotName)}
-             @pointerup=${(e) => this._onSlotPointerUp(e, slotName)}
-             @pointercancel=${(e) => this._onSlotPointerCancel(e, slotName)}
-             @contextmenu=${(e) => this._onSlotContextMenu(e, slotName)}>
+      <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${() => this._handleSlotTapAction(tapAction, slotName)}>
         ${icon ? html`
           <ha-icon class="${animClass}" .icon=${icon}
                    style="--mdc-icon-size:${slotStyle.iconSize}px;"></ha-icon>
@@ -1899,7 +1808,41 @@ class HkiHeaderCardEditor extends LitElement {
   constructor() {
     super();
     this._config = {};
+    // Cache for domain selection when ha-service-picker isn't available
     this._paDomainCache = {};
+  }
+
+  _renderNavigationPathPicker(label, value, onChange) {
+    const val = value || "";
+    if (customElements.get("ha-navigation-picker")) {
+      return html`
+        <ha-navigation-picker
+          .hass=${this.hass}
+          .label=${label}
+          .value=${val}
+          @value-changed=${(e) => onChange(e.detail?.value ?? "")}
+        ></ha-navigation-picker>
+      `;
+    }
+    if (customElements.get("ha-selector")) {
+      return html`
+        <ha-selector
+          .hass=${this.hass}
+          .label=${label}
+          .selector=${{ navigation: {} }}
+          .value=${val}
+          @value-changed=${(e) => onChange(e.detail?.value ?? "")}
+        ></ha-selector>
+      `;
+    }
+    return html`
+      <ha-textfield
+        .label=${label}
+        .value=${val}
+        placeholder="/lovelace/0"
+        @change=${(e) => onChange(e.target.value)}
+      ></ha-textfield>
+    `;
   }
 
   setConfig(config) {
@@ -2225,17 +2168,13 @@ class HkiHeaderCardEditor extends LitElement {
       ` : ''}
       
       ${type === "spacer" ? html`
-        <div class="section" style="margin-top: 12px;">Actions</div>
-        <div class="subsection"><div class="subheader">Tap</div>${this._renderSlotActionEditor(prefix + "tap_action")}</div>
-        <div class="subsection"><div class="subheader">Hold</div>${this._renderSlotActionEditor(prefix + "hold_action")}</div>
-        <div class="subsection"><div class="subheader">Double tap</div>${this._renderSlotActionEditor(prefix + "double_tap_action")}</div>
+        <div class="section" style="margin-top: 12px;">Spacer Tap Action</div>
+        ${this._renderSlotActionEditor(prefix + "tap_action")}
       ` : ''}
       
       ${(type === "weather" || type === "datetime" || type === "button") ? html`
-        <div class="section" style="margin-top: 12px;">Actions</div>
-        <div class="subsection"><div class="subheader">Tap</div>${this._renderSlotActionEditor(prefix + "tap_action")}</div>
-        <div class="subsection"><div class="subheader">Hold</div>${this._renderSlotActionEditor(prefix + "hold_action")}</div>
-        <div class="subsection"><div class="subheader">Double tap</div>${this._renderSlotActionEditor(prefix + "double_tap_action")}</div>
+        <div class="section" style="margin-top: 12px;">Tap Action</div>
+        ${this._renderSlotActionEditor(prefix + "tap_action")}
       ` : ''}
       
       ${type !== "none" && type !== "custom" && type !== "spacer" ? html`
@@ -2278,6 +2217,22 @@ class HkiHeaderCardEditor extends LitElement {
   _renderSlotActionEditor(field) {
     const action = this._config?.[field] || { action: "none" };
     const actionType = action.action || "none";
+
+    const setAction = (nextAction) => {
+      this._config = { ...this._config, [field]: nextAction };
+      this.dispatchEvent(
+        new CustomEvent("config-changed", {
+          detail: { config: this._config },
+          bubbles: true,
+          composed: true,
+        })
+      );
+    };
+
+    const patchAction = (patch) => {
+      const current = this._config?.[field] || { action: "none" };
+      setAction({ ...current, ...patch });
+    };
     
     return html`
       <ha-select label="Action" .value=${actionType} data-field="${field}.action" @selected=${this._changed} @closed=${this._changed}>
@@ -2291,56 +2246,7 @@ class HkiHeaderCardEditor extends LitElement {
         <mwc-list-item value="perform-action">Perform Action</mwc-list-item>
       </ha-select>
       ${actionType === "navigate" ? html`
-        ${(() => {
-          const base = (() => {
-            const p = (window && window.location && window.location.pathname) ? window.location.pathname : '';
-            const seg = (p.split('/').filter(Boolean)[0]) || 'lovelace';
-            return '/' + seg;
-          })();
-          const views = (this.hass && this.hass.lovelace && this.hass.lovelace.config && Array.isArray(this.hass.lovelace.config.views)) ? this.hass.lovelace.config.views : [];
-          const opts = [];
-          // A couple of useful common targets
-          opts.push({ value: base, label: 'Dashboard' });
-          views.forEach((v, idx) => {
-            const key = (v && typeof v.path === 'string' && v.path.length) ? v.path : String(idx);
-            const label = (v && v.title) ? v.title : ((v && v.path) ? v.path : `View ${idx + 1}`);
-            opts.push({ value: `${base}/${key}`, label });
-          });
-          const current = String(action.navigation_path || '');
-          const inList = opts.some(o => o.value === current);
-          const selected = current ? (inList ? current : '__custom__') : '';
-          return html`
-            <ha-select
-              label="Navigation path"
-              .value=${selected || undefined}
-              @selected=${(e) => {
-                e.stopPropagation();
-                const v = e.target.value || '';
-                if (v === '__custom__') {
-                  // Keep existing value; user will edit the text field
-                  if (!current) this._changed({ target: { value: '', dataset: { field: `${field}.navigation_path` } } });
-                  return;
-                }
-                this._changed({ target: { value: v, dataset: { field: `${field}.navigation_path` } } });
-              }}
-              @closed=${(e) => e.stopPropagation()}
-              @click=${(e) => e.stopPropagation()}
-            >
-              <mwc-list-item value=""></mwc-list-item>
-              ${opts.map((o) => html`<mwc-list-item .value=${o.value}>${o.label}</mwc-list-item>`)}
-              <mwc-list-item value="__custom__">Custom…</mwc-list-item>
-            </ha-select>
-            ${selected === '__custom__' ? html`
-              <ha-textfield
-                label="Custom navigation path"
-                .value=${current}
-                data-field="${field}.navigation_path"
-                @input=${this._changed}
-                placeholder="/lovelace/0"
-              ></ha-textfield>
-            ` : ''}
-          `;
-        })()}
+        ${this._renderNavigationPathPicker("Navigation path", action.navigation_path || "", (v) => patchAction({ navigation_path: v }))}
       ` : ''}
       ${actionType === "url" ? html`
         <ha-textfield label="URL" .value=${action.url_path || ""} data-field="${field}.url_path" @input=${this._changed}></ha-textfield>
@@ -2357,7 +2263,7 @@ class HkiHeaderCardEditor extends LitElement {
             @value-changed=${(ev) => {
               ev.stopPropagation();
               const v = ev.detail?.value ?? ev.target?.value ?? "";
-              this._changed({ target: { value: v, dataset: { field: `${field}.perform_action` } } });
+              patchAction({ perform_action: String(v || "") });
             }}
             @click=${(e) => e.stopPropagation()}
           ></ha-service-picker>
@@ -2368,8 +2274,12 @@ class HkiHeaderCardEditor extends LitElement {
             const derivedDomain = full.includes(".") ? full.split(".")[0] : "";
             const cachedDomain = this._paDomainCache?.[key] || "";
             const domain = cachedDomain || derivedDomain;
-            const derivedService = (full.includes(".") && derivedDomain === domain) ? (full.split(".")[1] || "") : "";
-            const services = (domain && this.hass?.services?.[domain]) ? Object.keys(this.hass.services[domain]).sort() : [];
+            const derivedService = (full.includes(".") && derivedDomain === domain)
+              ? (full.split(".")[1] || "")
+              : "";
+            const services = (domain && this.hass?.services?.[domain])
+              ? Object.keys(this.hass.services[domain]).sort()
+              : [];
             return html`
               <div class="inline-fields-2">
                 <ha-select
@@ -2379,10 +2289,11 @@ class HkiHeaderCardEditor extends LitElement {
                     const nextDomain = e.target.value || "";
                     this._paDomainCache[key] = nextDomain;
                     // Clear service when domain changes
-                    this._changed({ target: { value: "", dataset: { field: `${field}.perform_action` } } });
+                    patchAction({ perform_action: "" });
                     this.requestUpdate();
                   }}
                   @closed=${(e) => e.stopPropagation()}
+                  @click=${(e) => e.stopPropagation()}
                 >
                   <mwc-list-item value=""></mwc-list-item>
                   ${Object.keys(this.hass?.services || {}).sort().map((d) => html`<mwc-list-item .value=${d}>${d}</mwc-list-item>`)}
@@ -2395,10 +2306,10 @@ class HkiHeaderCardEditor extends LitElement {
                   @selected=${(e) => {
                     const service = e.target.value || "";
                     const d = this._paDomainCache[key] || domain;
-                    const v = (d && service) ? `${d}.${service}` : "";
-                    this._changed({ target: { value: v, dataset: { field: `${field}.perform_action` } } });
+                    patchAction({ perform_action: (d && service) ? `${d}.${service}` : "" });
                   }}
                   @closed=${(e) => e.stopPropagation()}
+                  @click=${(e) => e.stopPropagation()}
                 >
                   <mwc-list-item value=""></mwc-list-item>
                   ${services.map((s) => html`<mwc-list-item .value=${s}>${s}</mwc-list-item>`)}
@@ -2408,54 +2319,48 @@ class HkiHeaderCardEditor extends LitElement {
           })()}
         `}
 
-        
-        
-        ${action.perform_action ? html`
-          <ha-selector
-            .hass=${this.hass}
-            .selector=${{ target: {} }}
-            .label=${"Target (optional)"}
-            .value=${action.target || null}
-            @value-changed=${(ev) => {
-              ev.stopPropagation();
-              const target = ev.detail?.value;
-              const currentTarget = action.target;
-              if (JSON.stringify(currentTarget) !== JSON.stringify(target)) {
-                const updated = { ...action };
-                if (target && Object.keys(target).length > 0) {
-                  updated.target = target;
-                } else {
-                  delete updated.target;
-                }
-                this._config = { ...this._config, [field]: updated };
-                this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: this._config }, bubbles: true, composed: true }));
+        <ha-selector
+          .hass=${this.hass}
+          .selector=${{ target: {} }}
+          .label=${"Target (optional)"}
+          .value=${action.target || null}
+          @value-changed=${(ev) => {
+            ev.stopPropagation();
+            const target = ev.detail?.value;
+            const currentTarget = action.target;
+            if (JSON.stringify(currentTarget) !== JSON.stringify(target)) {
+              const updated = { ...action };
+              if (target && Object.keys(target).length > 0) {
+                updated.target = target;
+              } else {
+                delete updated.target;
               }
-            }}
-            @click=${(e) => e.stopPropagation()}
-          ></ha-selector>
-          
-          <ha-yaml-editor
-            .hass=${this.hass}
-            .label=${"Service Data (optional, YAML)"}
-            .value=${action.data || null}
-            @value-changed=${(ev) => {
-              ev.stopPropagation();
-              const data = ev.detail?.value;
-              const currentData = action.data;
-              if (JSON.stringify(currentData) !== JSON.stringify(data)) {
-                const updated = { ...action };
-                if (data && typeof data === 'object' && Object.keys(data).length > 0) {
-                  updated.data = data;
-                } else {
-                  delete updated.data;
-                }
-                this._config = { ...this._config, [field]: updated };
-                this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: this._config }, bubbles: true, composed: true }));
+              setAction(updated);
+            }
+          }}
+          @click=${(e) => e.stopPropagation()}
+        ></ha-selector>
+
+        <ha-yaml-editor
+          .hass=${this.hass}
+          .label=${"Service Data (optional, YAML)"}
+          .value=${action.data || null}
+          @value-changed=${(ev) => {
+            ev.stopPropagation();
+            const data = ev.detail?.value;
+            const currentData = action.data;
+            if (JSON.stringify(currentData) !== JSON.stringify(data)) {
+              const updated = { ...action };
+              if (data && typeof data === "object" && Object.keys(data).length > 0) {
+                updated.data = data;
+              } else {
+                delete updated.data;
               }
-            }}
-            @click=${(e) => e.stopPropagation()}
-          ></ha-yaml-editor>
-        ` : ''}
+              setAction(updated);
+            }
+          }}
+          @click=${(e) => e.stopPropagation()}
+        ></ha-yaml-editor>
       ` : ''}
     `;
   }
