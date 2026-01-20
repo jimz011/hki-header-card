@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.3.2 ',
+  '%c HKI-HEADER-CARD %c v1.3.3 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -2020,7 +2020,7 @@ class HkiHeaderCardEditor extends LitElement {
     const useGlobal = this._config[prefix + "use_global"] !== false;
     
     return html`
-      <ha-select label="Content Type" .value=${type} .fixedMenuPosition=${true} data-field="top_bar_${slotName}" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+      <ha-select label="Content Type" .value=${type} data-field="top_bar_${slotName}" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
         <mwc-list-item value="none">None</mwc-list-item>
         <mwc-list-item value="spacer">Spacer</mwc-list-item>
         <mwc-list-item value="weather">Weather</mwc-list-item>
@@ -2067,12 +2067,12 @@ class HkiHeaderCardEditor extends LitElement {
         </div>
         
         <div class="inline-fields-2">
-          <ha-select label="Icon color mode" .value=${this._config[prefix + "weather_icon_color_mode"] || "state"} .fixedMenuPosition=${true} data-field="${prefix}weather_icon_color_mode" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+          <ha-select label="Icon color mode" .value=${this._config[prefix + "weather_icon_color_mode"] || "state"} data-field="${prefix}weather_icon_color_mode" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
             <mwc-list-item value="state">By condition</mwc-list-item>
             <mwc-list-item value="custom">Custom</mwc-list-item>
             <mwc-list-item value="inherit">Inherit</mwc-list-item>
           </ha-select>
-          <ha-select label="Icon animation" .value=${this._config[prefix + "animate_icon"] || "none"} .fixedMenuPosition=${true} data-field="${prefix}animate_icon" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+          <ha-select label="Icon animation" .value=${this._config[prefix + "animate_icon"] || "none"} data-field="${prefix}animate_icon" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
             <mwc-list-item value="none">None</mwc-list-item>
             <mwc-list-item value="float">Float</mwc-list-item>
             <mwc-list-item value="pulse">Pulse</mwc-list-item>
@@ -2097,7 +2097,7 @@ class HkiHeaderCardEditor extends LitElement {
         <ha-textfield label="Separator" .value=${this._config[prefix + "separator"] || " • "} data-field="${prefix}separator" @input=${this._changed}></ha-textfield>
         
         ${this._renderIconPicker("Icon", prefix + "icon", this._config[prefix + "icon"] || "", "Optional icon")}
-        <ha-select label="Icon animation" .value=${this._config[prefix + "animate_icon"] || "none"} .fixedMenuPosition=${true} data-field="${prefix}animate_icon" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+        <ha-select label="Icon animation" .value=${this._config[prefix + "animate_icon"] || "none"} data-field="${prefix}animate_icon" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
             <mwc-list-item value="none">None</mwc-list-item>
             <mwc-list-item value="float">Float</mwc-list-item>
             <mwc-list-item value="pulse">Pulse</mwc-list-item>
@@ -2152,7 +2152,7 @@ class HkiHeaderCardEditor extends LitElement {
         ${!useGlobal ? html`
           <div class="inline-fields-2">
             <ha-textfield label="Font Size (px)" type="number" .value=${String(this._config[prefix + "size_px"] ?? "")} data-field="${prefix}size_px" @input=${this._changed}></ha-textfield>
-            <ha-select label="Font Weight" .value=${this._config[prefix + "weight"] || ""} .fixedMenuPosition=${true} data-field="${prefix}weight" @selected=${this._changed} @closed=${this._changed}>
+            <ha-select label="Font Weight" .value=${this._config[prefix + "weight"] || ""} data-field="${prefix}weight" @selected=${this._changed} @closed=${this._changed}>
               <mwc-list-item value="">Use Global</mwc-list-item>
               ${["light", "regular", "medium", "semibold", "bold", "extrabold"].map(w => html`<mwc-list-item .value=${w}>${w.charAt(0).toUpperCase() + w.slice(1)}</mwc-list-item>`)}
             </ha-select>
@@ -2184,7 +2184,7 @@ class HkiHeaderCardEditor extends LitElement {
     const actionType = action.action || "none";
     
     return html`
-      <ha-select label="Action" .value=${actionType} .fixedMenuPosition=${true} data-field="${field}.action" @selected=${this._changed} @closed=${this._changed}>
+      <ha-select label="Action" .value=${actionType} data-field="${field}.action" @selected=${this._changed} @closed=${this._changed}>
         <mwc-list-item value="none">None</mwc-list-item>
         <mwc-list-item value="navigate">Navigate</mwc-list-item>
         <mwc-list-item value="back">Back</mwc-list-item>
@@ -2289,7 +2289,7 @@ class HkiHeaderCardEditor extends LitElement {
             ${this._renderTemplateEditor("Title template (Jinja)", "title")}
             ${this._renderTemplateEditor("Subtitle template (Jinja)", "subtitle")}
 
-            <ha-select label="Text alignment" .value=${this._config.text_align} .fixedMenuPosition=${true} data-field="text_align" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+            <ha-select label="Text alignment" .value=${this._config.text_align} data-field="text_align" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
               <mwc-list-item value="left">Left</mwc-list-item>
               <mwc-list-item value="center">Center</mwc-list-item>
               <mwc-list-item value="right">Right</mwc-list-item>
@@ -2334,7 +2334,7 @@ class HkiHeaderCardEditor extends LitElement {
             <ha-textfield label="Background" helper="CSS color (hex, rgb, rgba, color name), gradient, or image URL (/local/image.jpg)" .value=${this._config.background} data-field="background" @input=${this._changed}></ha-textfield>
 
             <div class="inline-fields-2">
-                <ha-select label="Background position" .value=${this._config.background_position} .fixedMenuPosition=${true} data-field="background_position" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+                <ha-select label="Background position" .value=${this._config.background_position} data-field="background_position" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
                   <mwc-list-item value="top">Top</mwc-list-item>
                   <mwc-list-item value="center">Center</mwc-list-item>
                   <mwc-list-item value="bottom">Bottom</mwc-list-item>
@@ -2342,7 +2342,7 @@ class HkiHeaderCardEditor extends LitElement {
                   <mwc-list-item value="right">Right</mwc-list-item>
                 </ha-select>
 
-                <ha-select label="Background repeat" .value=${this._config.background_repeat} .fixedMenuPosition=${true} data-field="background_repeat" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+                <ha-select label="Background repeat" .value=${this._config.background_repeat} data-field="background_repeat" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
                   <mwc-list-item value="no-repeat">No repeat</mwc-list-item>
                   <mwc-list-item value="repeat">Repeat</mwc-list-item>
                   <mwc-list-item value="repeat-x">Repeat horizontally</mwc-list-item>
@@ -2354,7 +2354,7 @@ class HkiHeaderCardEditor extends LitElement {
                 <ha-select 
                     label="Background size" 
                     .value=${bgSizeSelectValue} 
-                    .fixedMenuPosition=${true} 
+                    
                     @selected=${this._handleBgSizeSelect} 
                     @closed=${(e) => e.stopPropagation()}
                 >
@@ -2364,7 +2364,7 @@ class HkiHeaderCardEditor extends LitElement {
                   <mwc-list-item value="custom">Custom</mwc-list-item>
                 </ha-select>
                 
-                <ha-select label="Background blend mode" .value=${this._config.background_blend_mode || "normal"} .fixedMenuPosition=${true} data-field="background_blend_mode" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+                <ha-select label="Background blend mode" .value=${this._config.background_blend_mode || "normal"} data-field="background_blend_mode" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
                   <mwc-list-item value="normal">Normal</mwc-list-item>
                   <mwc-list-item value="multiply">Multiply</mwc-list-item>
                   <mwc-list-item value="screen">Screen</mwc-list-item>
@@ -2418,7 +2418,7 @@ class HkiHeaderCardEditor extends LitElement {
             </div>
             <ha-textfield label="Box Shadow" helper="e.g. 0 4px 12px rgba(0,0,0,0.3)" .value=${this._config.card_box_shadow || ""} data-field="card_box_shadow" @input=${this._changed}></ha-textfield>
             <div class="inline-fields-3">
-              <ha-select label="Border Style" .value=${this._config.card_border_style || "none"} .fixedMenuPosition=${true} data-field="card_border_style" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+              <ha-select label="Border Style" .value=${this._config.card_border_style || "none"} data-field="card_border_style" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
                 <mwc-list-item value="none">None</mwc-list-item>
                 <mwc-list-item value="solid">Solid</mwc-list-item>
                 <mwc-list-item value="dashed">Dashed</mwc-list-item>
@@ -2439,7 +2439,7 @@ class HkiHeaderCardEditor extends LitElement {
           <summary>Typography</summary>
           <div class="box-content">
             <div class="section">Font Settings</div>
-            <ha-select label="Font family" .value=${this._config.font_family} .fixedMenuPosition=${true} data-field="font_family" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+            <ha-select label="Font family" .value=${this._config.font_family} data-field="font_family" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
               <mwc-list-item value="inherit">Inherit</mwc-list-item>
               <mwc-list-item value="system">System</mwc-list-item>
               <mwc-list-item value="roboto">Roboto</mwc-list-item>
@@ -2452,7 +2452,7 @@ class HkiHeaderCardEditor extends LitElement {
 
             ${showCustomFont ? html`<ha-textfield label="Custom font-family (CSS)" .value=${this._config.font_family_custom} data-field="font_family_custom" @input=${this._changed}></ha-textfield>` : ""}
 
-            <ha-select label="Font style" .value=${this._config.font_style} .fixedMenuPosition=${true} data-field="font_style" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+            <ha-select label="Font style" .value=${this._config.font_style} data-field="font_style" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
               <mwc-list-item value="normal">Normal</mwc-list-item>
               <mwc-list-item value="italic">Italic</mwc-list-item>
             </ha-select>
@@ -2463,7 +2463,7 @@ class HkiHeaderCardEditor extends LitElement {
             </div>
 
             <div class="inline-fields-2">
-              <ha-select label="Title weight" .value=${this._config.title_weight} .fixedMenuPosition=${true} data-field="title_weight" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+              <ha-select label="Title weight" .value=${this._config.title_weight} data-field="title_weight" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
                 <mwc-list-item value="light">Light</mwc-list-item>
                 <mwc-list-item value="regular">Regular</mwc-list-item>
                 <mwc-list-item value="medium">Medium</mwc-list-item>
@@ -2472,7 +2472,7 @@ class HkiHeaderCardEditor extends LitElement {
                 <mwc-list-item value="black">Black</mwc-list-item>
               </ha-select>
 
-              <ha-select label="Subtitle weight" .value=${this._config.subtitle_weight} .fixedMenuPosition=${true} data-field="subtitle_weight" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+              <ha-select label="Subtitle weight" .value=${this._config.subtitle_weight} data-field="subtitle_weight" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
                 <mwc-list-item value="light">Light</mwc-list-item>
                 <mwc-list-item value="regular">Regular</mwc-list-item>
                 <mwc-list-item value="medium">Medium</mwc-list-item>
@@ -2502,7 +2502,7 @@ class HkiHeaderCardEditor extends LitElement {
                   <div class="box-content">
                     <div class="inline-fields-2">
                       <ha-textfield label="Font Size (px)" type="number" .value=${String(this._config.info_size_px || 12)} data-field="info_size_px" @input=${this._changed}></ha-textfield>
-                      <ha-select label="Font Weight" .value=${this._config.info_weight || "medium"} .fixedMenuPosition=${true} data-field="info_weight" @selected=${this._changed} @closed=${this._changed}>
+                      <ha-select label="Font Weight" .value=${this._config.info_weight || "medium"} data-field="info_weight" @selected=${this._changed} @closed=${this._changed}>
                         ${["light", "regular", "medium", "semibold", "bold", "extrabold"].map(w => html`<mwc-list-item .value=${w}>${w.charAt(0).toUpperCase() + w.slice(1)}</mwc-list-item>`)}
                       </ha-select>
                     </div>
@@ -2523,7 +2523,7 @@ class HkiHeaderCardEditor extends LitElement {
                         <ha-textfield label="Blur (px)" type="number" .value=${String(this._config.info_pill_blur ?? 0)} data-field="info_pill_blur" @input=${this._changed}></ha-textfield>
                       </div>
                       <div class="inline-fields-3">
-                        <ha-select label="Border Style" .value=${this._config.info_pill_border_style || "none"} .fixedMenuPosition=${true} data-field="info_pill_border_style" @selected=${this._changed} @closed=${this._changed}>
+                        <ha-select label="Border Style" .value=${this._config.info_pill_border_style || "none"} data-field="info_pill_border_style" @selected=${this._changed} @closed=${this._changed}>
                           <mwc-list-item value="none">None</mwc-list-item>
                           <mwc-list-item value="solid">Solid</mwc-list-item>
                           <mwc-list-item value="dashed">Dashed</mwc-list-item>
@@ -2638,7 +2638,6 @@ class HkiHeaderCardEditor extends LitElement {
         background: var(--secondary-background-color);
         border-radius: 4px;
         margin-bottom: 8px;
-        overflow: hidden;
         border: 1px solid var(--divider-color);
       }
       summary {
@@ -2651,6 +2650,11 @@ class HkiHeaderCardEditor extends LitElement {
         display: flex;
         align-items: center;
         justify-content: space-between;
+        border-radius: 4px 4px 0 0;
+      }
+      details:not([open]) summary {
+        border-radius: 4px;
+        border-bottom: none;
       }
       summary::-webkit-details-marker { display: none; } /* Hide Chrome marker */
       summary::after {
@@ -2666,6 +2670,7 @@ class HkiHeaderCardEditor extends LitElement {
         display: flex;
         flex-direction: column;
         gap: 12px;
+        border-radius: 0 0 4px 4px;
       }
     `;
   }
