@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.3.3 ',
+  '%c HKI-HEADER-CARD %c v1.3.4 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -311,6 +311,11 @@ class HkiHeaderCard extends LitElement {
     // Performance: Style caches
     this._slotStyleCache = new Map();
     this._lastConfigHash = null;
+
+    // Gesture handling (tap / double tap / hold)
+    this._holdTimers = new Map();
+    this._tapState = { lastId: null, lastTime: 0, singleTimer: null };
+
   }
 
   static get styles() {
@@ -855,6 +860,8 @@ class HkiHeaderCard extends LitElement {
       m[prefix + "icon"] = m[prefix + "icon"] || "";
       m[prefix + "label"] = m[prefix + "label"] || "";
       m[prefix + "tap_action"] = m[prefix + "tap_action"] || { action: "none" };
+      m[prefix + "hold_action"] = m[prefix + "hold_action"] || { action: "none" };
+      m[prefix + "double_tap_action"] = m[prefix + "double_tap_action"] || { action: "none" };
       m[prefix + "size_px"] = m[prefix + "size_px"] != null ? clamp(+m[prefix + "size_px"], 8, 64) : null;
       m[prefix + "weight"] = m[prefix + "weight"] ? normalizeWeightKey(m[prefix + "weight"], "medium") : null;
       m[prefix + "color"] = m[prefix + "color"] || null;
@@ -1360,23 +1367,105 @@ class HkiHeaderCard extends LitElement {
     const prefix = `top_bar_${slotName}_`;
     const icon = cfg[prefix + "icon"] || "mdi:gesture-tap";
     const label = cfg[prefix + "label"] || "";
-    const tapAction = cfg[prefix + "tap_action"] || { action: "none" };
     
     const pillClass = slotStyle.pill ? "info-pill" : "";
     const combinedStyle = `${slotStyle.inlineStyle} ${slotStyle.pillStyle}`;
     
     return html`
-      <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${() => this._handleSlotTapAction(tapAction, slotName)}>
+      <div class="info-item ${pillClass}" style="${combinedStyle}" @pointerdown=${(e) => this._onSlotPointerDown(e, slotName)}
+             @pointerup=${(e) => this._onSlotPointerUp(e, slotName)}
+             @pointercancel=${(e) => this._onSlotPointerCancel(e, slotName)}
+             @contextmenu=${(e) => this._onSlotContextMenu(e, slotName)}>
         <ha-icon .icon=${icon} style="--mdc-icon-size:${slotStyle.iconSize}px;"></ha-icon>
         ${label ? html`<span>${label}</span>` : ''}
       </div>
     `;
   }
 
-  _handleSlotTapAction(action, slotName) {
+  _getSlotAction(slotName, which) {
+    const cfg = this._config || {};
+    const prefix = `top_bar_${slotName}_`;
+    if (which === "tap_action") {
+      return cfg[prefix + "tap_action"] || cfg.info_tap_action || { action: "none" };
+    }
+    if (which === "hold_action") {
+      return cfg[prefix + "hold_action"] || { action: "none" };
+    }
+    if (which === "double_tap_action") {
+      return cfg[prefix + "double_tap_action"] || { action: "none" };
+    }
+    return { action: "none" };
+  }
+
+  _handleSlotAction(slotName, which) {
+    const action = this._getSlotAction(slotName, which);
     if (!action || action.action === "none") return;
     this._handleAction(action);
   }
+
+  _onSlotPointerDown(e, slotName) {
+    e.stopPropagation();
+    if (e.button === 2) return;
+    const key = `${slotName}:${e.pointerId}`;
+    const t = setTimeout(() => {
+      this._holdTimers.delete(key);
+      this._handleSlotAction(slotName, "hold_action");
+    }, 520);
+    this._holdTimers.set(key, t);
+  }
+
+  _onSlotPointerUp(e, slotName) {
+    e.stopPropagation();
+    if (e.button === 2) return;
+    const key = `${slotName}:${e.pointerId}`;
+    const holdTimer = this._holdTimers.get(key);
+    if (holdTimer) {
+      clearTimeout(holdTimer);
+      this._holdTimers.delete(key);
+    } else return;
+
+    const dblAction = this._getSlotAction(slotName, "double_tap_action");
+    const hasDouble = dblAction && dblAction.action && dblAction.action !== "none";
+
+    const now = Date.now();
+    const dblWindow = 280;
+
+    if (hasDouble && this._tapState.lastId === slotName && (now - this._tapState.lastTime) < dblWindow) {
+      if (this._tapState.singleTimer) clearTimeout(this._tapState.singleTimer);
+      this._tapState = { lastId: null, lastTime: 0, singleTimer: null };
+      this._handleSlotAction(slotName, "double_tap_action");
+      return;
+    }
+
+    if (this._tapState.singleTimer) clearTimeout(this._tapState.singleTimer);
+    this._tapState.lastId = slotName;
+    this._tapState.lastTime = now;
+
+    if (!hasDouble) {
+      this._tapState = { lastId: null, lastTime: 0, singleTimer: null };
+      this._handleSlotAction(slotName, "tap_action");
+      return;
+    }
+
+    this._tapState.singleTimer = setTimeout(() => {
+      this._tapState = { lastId: null, lastTime: 0, singleTimer: null };
+      this._handleSlotAction(slotName, "tap_action");
+    }, dblWindow);
+  }
+
+  _onSlotPointerCancel(e, slotName) {
+    const key = `${slotName}:${e.pointerId}`;
+    const holdTimer = this._holdTimers.get(key);
+    if (holdTimer) clearTimeout(holdTimer);
+    this._holdTimers.delete(key);
+  }
+
+  _onSlotContextMenu(e, slotName) {
+    e.preventDefault();
+    e.stopPropagation();
+    this._handleSlotAction(slotName, "hold_action");
+  }
+
 
   _renderWeatherSlot(slotName, slotStyle) {
     const cfg = this._config;
@@ -1428,11 +1517,12 @@ class HkiHeaderCard extends LitElement {
 
     const pillClass = slotStyle.pill ? "info-pill" : "";
     const combinedStyle = `${slotStyle.inlineStyle} ${slotStyle.pillStyle}`;
-    
-    const tapAction = cfg[prefix + "tap_action"] || cfg.info_tap_action || { action: "none" };
 
     return html`
-      <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${() => this._handleSlotTapAction(tapAction, slotName)}>
+      <div class="info-item ${pillClass}" style="${combinedStyle}" @pointerdown=${(e) => this._onSlotPointerDown(e, slotName)}
+             @pointerup=${(e) => this._onSlotPointerUp(e, slotName)}
+             @pointercancel=${(e) => this._onSlotPointerCancel(e, slotName)}
+             @contextmenu=${(e) => this._onSlotContextMenu(e, slotName)}>
         ${showIcon ? (useSvg 
             ? html`<img src="${svgUrl}" class="info-icon ${animClass}" style="width:${slotStyle.iconSize}px;height:${slotStyle.iconSize}px;" alt="${state}" />`
             : html`<ha-icon class="info-weather-icon ${animClass}" .icon=${weatherIcon}
@@ -1476,11 +1566,12 @@ class HkiHeaderCard extends LitElement {
     
     const animateIcon = cfg[prefix + "animate_icon"] || cfg.datetime_animate_icon;
     const animClass = animateIcon && animateIcon !== "none" ? `animate-${animateIcon}` : "";
-    
-    const tapAction = cfg[prefix + "tap_action"] || cfg.info_tap_action || { action: "none" };
 
     return html`
-      <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${() => this._handleSlotTapAction(tapAction, slotName)}>
+      <div class="info-item ${pillClass}" style="${combinedStyle}" @pointerdown=${(e) => this._onSlotPointerDown(e, slotName)}
+             @pointerup=${(e) => this._onSlotPointerUp(e, slotName)}
+             @pointercancel=${(e) => this._onSlotPointerCancel(e, slotName)}
+             @contextmenu=${(e) => this._onSlotContextMenu(e, slotName)}>
         ${icon ? html`
           <ha-icon class="${animClass}" .icon=${icon}
                    style="--mdc-icon-size:${slotStyle.iconSize}px;"></ha-icon>
@@ -1808,6 +1899,7 @@ class HkiHeaderCardEditor extends LitElement {
   constructor() {
     super();
     this._config = {};
+    this._paDomainCache = {};
   }
 
   setConfig(config) {
@@ -2133,13 +2225,17 @@ class HkiHeaderCardEditor extends LitElement {
       ` : ''}
       
       ${type === "spacer" ? html`
-        <div class="section" style="margin-top: 12px;">Spacer Tap Action</div>
-        ${this._renderSlotActionEditor(prefix + "tap_action")}
+        <div class="section" style="margin-top: 12px;">Actions</div>
+        <div class="subsection"><div class="subheader">Tap</div>${this._renderSlotActionEditor(prefix + "tap_action")}</div>
+        <div class="subsection"><div class="subheader">Hold</div>${this._renderSlotActionEditor(prefix + "hold_action")}</div>
+        <div class="subsection"><div class="subheader">Double tap</div>${this._renderSlotActionEditor(prefix + "double_tap_action")}</div>
       ` : ''}
       
       ${(type === "weather" || type === "datetime" || type === "button") ? html`
-        <div class="section" style="margin-top: 12px;">Tap Action</div>
-        ${this._renderSlotActionEditor(prefix + "tap_action")}
+        <div class="section" style="margin-top: 12px;">Actions</div>
+        <div class="subsection"><div class="subheader">Tap</div>${this._renderSlotActionEditor(prefix + "tap_action")}</div>
+        <div class="subsection"><div class="subheader">Hold</div>${this._renderSlotActionEditor(prefix + "hold_action")}</div>
+        <div class="subsection"><div class="subheader">Double tap</div>${this._renderSlotActionEditor(prefix + "double_tap_action")}</div>
       ` : ''}
       
       ${type !== "none" && type !== "custom" && type !== "spacer" ? html`
@@ -2204,13 +2300,66 @@ class HkiHeaderCardEditor extends LitElement {
         <ha-entity-picker .hass=${this.hass} .value=${action.entity || ""} @value-changed=${(e) => this._changed(e, field + ".entity")}></ha-entity-picker>
       ` : ''}
       ${actionType === "perform-action" ? html`
-        <ha-textfield
-          label="Service (e.g., light.turn_on)"
-          .value=${action.perform_action || ""}
-          data-field="${field}.perform_action"
-          @input=${this._changed}
-          placeholder="light.turn_on"
-        ></ha-textfield>
+        ${customElements.get("ha-service-picker") ? html`
+          <ha-service-picker
+            .hass=${this.hass}
+            .label=${"Action (service)"}
+            .value=${action.perform_action || ""}
+            @value-changed=${(ev) => {
+              ev.stopPropagation();
+              const v = ev.detail?.value ?? ev.target?.value ?? "";
+              this._changed({ target: { value: v, dataset: { field: `${field}.perform_action` } } });
+            }}
+            @click=${(e) => e.stopPropagation()}
+          ></ha-service-picker>
+        ` : html`
+          ${(() => {
+            const key = `${field}`;
+            const full = String(action.perform_action || "");
+            const derivedDomain = full.includes(".") ? full.split(".")[0] : "";
+            const cachedDomain = this._paDomainCache?.[key] || "";
+            const domain = cachedDomain || derivedDomain;
+            const derivedService = (full.includes(".") && derivedDomain === domain) ? (full.split(".")[1] || "") : "";
+            const services = (domain && this.hass?.services?.[domain]) ? Object.keys(this.hass.services[domain]).sort() : [];
+            return html`
+              <div class="inline-fields-2">
+                <ha-select
+                  label="Domain"
+                  .value=${domain || undefined}
+                  @selected=${(e) => {
+                    const nextDomain = e.target.value || "";
+                    this._paDomainCache[key] = nextDomain;
+                    // Clear service when domain changes
+                    this._changed({ target: { value: "", dataset: { field: `${field}.perform_action` } } });
+                    this.requestUpdate();
+                  }}
+                  @closed=${(e) => e.stopPropagation()}
+                >
+                  <mwc-list-item value=""></mwc-list-item>
+                  ${Object.keys(this.hass?.services || {}).sort().map((d) => html`<mwc-list-item .value=${d}>${d}</mwc-list-item>`)}
+                </ha-select>
+
+                <ha-select
+                  label="Service"
+                  .value=${derivedService || undefined}
+                  .disabled=${!domain}
+                  @selected=${(e) => {
+                    const service = e.target.value || "";
+                    const d = this._paDomainCache[key] || domain;
+                    const v = (d && service) ? `${d}.${service}` : "";
+                    this._changed({ target: { value: v, dataset: { field: `${field}.perform_action` } } });
+                  }}
+                  @closed=${(e) => e.stopPropagation()}
+                >
+                  <mwc-list-item value=""></mwc-list-item>
+                  ${services.map((s) => html`<mwc-list-item .value=${s}>${s}</mwc-list-item>`)}
+                </ha-select>
+              </div>
+            `;
+          })()}
+        `}
+
+        
         
         ${action.perform_action ? html`
           <ha-selector
