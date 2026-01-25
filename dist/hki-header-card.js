@@ -1413,7 +1413,11 @@ class HkiHeaderCard extends LitElement {
     const tapAction = cfg[prefix + "tap_action"] || { action: "none" };
     
     const pillClass = slotStyle.pill ? "info-pill" : "";
-    const combinedStyle = `${slotStyle.inlineStyle} ${slotStyle.pillStyle}`;
+    
+    // Button always has icon, so use 5px padding to match other pills with icons
+    const buttonPaddingY = slotStyle.pill ? 5 : slotStyle.pillPaddingY;
+    const buttonPillStyle = slotStyle.pill ? `--hki-info-pill-background:${slotStyle.pillBg};--hki-info-pill-padding-x:${slotStyle.pillPaddingX}px;--hki-info-pill-padding-y:${buttonPaddingY}px;--hki-info-pill-radius:${slotStyle.pillRadius}px;--hki-info-pill-blur:${slotStyle.pillBlur}px;--hki-info-pill-border-style:${slotStyle.pillBorderStyle};--hki-info-pill-border-width:${slotStyle.pillBorderWidth}px;--hki-info-pill-border-color:${slotStyle.pillBorderColor}` : "";
+    const combinedStyle = `${slotStyle.inlineStyle} ${buttonPillStyle}`;
     
     return html`
       <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${() => this._handleSlotTapAction(tapAction, slotName)}>
@@ -1478,8 +1482,10 @@ class HkiHeaderCard extends LitElement {
 
     const pillClass = slotStyle.pill ? "info-pill" : "";
     
-    // Adjust padding for weather pill when icon is shown (to match notification card height)
-    const weatherPaddingY = (slotStyle.pill && showIcon) ? 5 : slotStyle.pillPaddingY;
+    // Adjust padding for weather pill to maintain consistent height:
+    // - With icon: 5px (to match notification card with icon)
+    // - Without icon: 11px (compensates for missing icon height to match pill with icon)
+    const weatherPaddingY = slotStyle.pill ? (showIcon ? 5 : 11) : slotStyle.pillPaddingY;
     const weatherPillStyle = slotStyle.pill ? `--hki-info-pill-background:${slotStyle.pillBg};--hki-info-pill-padding-x:${slotStyle.pillPaddingX}px;--hki-info-pill-padding-y:${weatherPaddingY}px;--hki-info-pill-radius:${slotStyle.pillRadius}px;--hki-info-pill-blur:${slotStyle.pillBlur}px;--hki-info-pill-border-style:${slotStyle.pillBorderStyle};--hki-info-pill-border-width:${slotStyle.pillBorderWidth}px;--hki-info-pill-border-color:${slotStyle.pillBorderColor}` : "";
     const combinedStyle = `${slotStyle.inlineStyle} ${weatherPillStyle}`;
     
@@ -1526,7 +1532,13 @@ class HkiHeaderCard extends LitElement {
     const displayText = parts.join(sep);
 
     const pillClass = slotStyle.pill ? "info-pill" : "";
-    const combinedStyle = `${slotStyle.inlineStyle} ${slotStyle.pillStyle}`;
+    
+    // Adjust padding for datetime pill to maintain consistent height:
+    // - With icon: 5px (to match notification card with icon)
+    // - Without icon: 11px (compensates for missing icon height)
+    const datetimePaddingY = slotStyle.pill ? (icon ? 5 : 11) : slotStyle.pillPaddingY;
+    const datetimePillStyle = slotStyle.pill ? `--hki-info-pill-background:${slotStyle.pillBg};--hki-info-pill-padding-x:${slotStyle.pillPaddingX}px;--hki-info-pill-padding-y:${datetimePaddingY}px;--hki-info-pill-radius:${slotStyle.pillRadius}px;--hki-info-pill-blur:${slotStyle.pillBlur}px;--hki-info-pill-border-style:${slotStyle.pillBorderStyle};--hki-info-pill-border-width:${slotStyle.pillBorderWidth}px;--hki-info-pill-border-color:${slotStyle.pillBorderColor}` : "";
+    const combinedStyle = `${slotStyle.inlineStyle} ${datetimePillStyle}`;
     
     const animateIcon = cfg[prefix + "animate_icon"] || cfg.datetime_animate_icon;
     const animClass = animateIcon && animateIcon !== "none" ? `animate-${animateIcon}` : "";
