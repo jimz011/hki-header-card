@@ -396,9 +396,6 @@ class HkiHeaderCard extends LitElement {
       .info-clickable:hover { opacity: 0.8; }
 
       .info-icon {
-        --mdc-icon-size: var(--info-icon-size, 32px);
-        width: var(--info-icon-size, 32px);
-        height: var(--info-icon-size, 32px);
         color: var(--hki-header-text-color, #fff);
         filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
         display: flex;
@@ -1373,7 +1370,7 @@ class HkiHeaderCard extends LitElement {
     
     return html`
       <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${() => this._handleSlotTapAction(tapAction, slotName)}>
-        <ha-icon class="info-icon" .icon=${icon} style="--info-icon-size:${slotStyle.iconSize}px;--mdc-icon-size:${slotStyle.iconSize}px;"></ha-icon>
+        <ha-icon class="info-icon" .icon=${icon} style="width:${slotStyle.iconSize}px;height:${slotStyle.iconSize}px;--mdc-icon-size:${slotStyle.iconSize}px;"></ha-icon>
         ${label ? html`<span>${label}</span>` : ''}
       </div>
     `;
@@ -1442,7 +1439,7 @@ class HkiHeaderCard extends LitElement {
         ${showIcon ? (useSvg 
             ? html`<img src="${svgUrl}" class="info-icon ${animClass}" style="width:${slotStyle.iconSize}px;height:${slotStyle.iconSize}px;" alt="${state}" />`
             : html`<ha-icon class="info-icon ${animClass}" .icon=${weatherIcon}
-                   style="--info-icon-size:${slotStyle.iconSize}px;--mdc-icon-size:${slotStyle.iconSize}px;color:${iconColor};"></ha-icon>`)
+                   style="width:${slotStyle.iconSize}px;height:${slotStyle.iconSize}px;--mdc-icon-size:${slotStyle.iconSize}px;color:${iconColor};"></ha-icon>`)
         : ""}
         ${showCondition ? html`<span class="info-condition">${conditionText}</span>` : ""}
         ${showTemp && temperature != null ? html`<span class="info-temperature">${Math.round(temperature)}${unit}</span>` : ""}
@@ -1489,7 +1486,7 @@ class HkiHeaderCard extends LitElement {
       <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${() => this._handleSlotTapAction(tapAction, slotName)}>
         ${icon ? html`
           <ha-icon class="info-icon ${animClass}" .icon=${icon}
-                   style="--info-icon-size:${slotStyle.iconSize}px;--mdc-icon-size:${slotStyle.iconSize}px;"></ha-icon>
+                   style="width:${slotStyle.iconSize}px;height:${slotStyle.iconSize}px;--mdc-icon-size:${slotStyle.iconSize}px;"></ha-icon>
         ` : ""}
         <span>${displayText}</span>
       </div>
