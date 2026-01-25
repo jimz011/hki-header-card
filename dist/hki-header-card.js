@@ -387,6 +387,7 @@ class HkiHeaderCard extends LitElement {
         text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
         flex-shrink: 0;
         flex-grow: 0;
+        line-height: 1;
       }
 
       .info-clickable {
