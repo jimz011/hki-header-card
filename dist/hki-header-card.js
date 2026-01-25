@@ -1374,7 +1374,11 @@ class HkiHeaderCard extends LitElement {
       pill, 
       sizePx, 
       color,
+      pillBg,
+      pillPaddingX,
+      pillPaddingY,
       pillRadius,
+      pillBlur,
       pillBorderStyle,
       pillBorderWidth,
       pillBorderColor
@@ -1473,9 +1477,11 @@ class HkiHeaderCard extends LitElement {
     const svgUrl = useSvg ? `${iconPack}/${state}.svg` : "";
 
     const pillClass = slotStyle.pill ? "info-pill" : "";
-    // Override padding Y to 5px for weather pill when icon is shown (to match notification card height)
-    const weatherPaddingOverride = (slotStyle.pill && showIcon) ? "--hki-info-pill-padding-y:5px;" : "";
-    const combinedStyle = `${slotStyle.inlineStyle} ${slotStyle.pillStyle} ${weatherPaddingOverride}`;
+    
+    // Adjust padding for weather pill when icon is shown (to match notification card height)
+    const weatherPaddingY = (slotStyle.pill && showIcon) ? 5 : slotStyle.pillPaddingY;
+    const weatherPillStyle = slotStyle.pill ? `--hki-info-pill-background:${slotStyle.pillBg};--hki-info-pill-padding-x:${slotStyle.pillPaddingX}px;--hki-info-pill-padding-y:${weatherPaddingY}px;--hki-info-pill-radius:${slotStyle.pillRadius}px;--hki-info-pill-blur:${slotStyle.pillBlur}px;--hki-info-pill-border-style:${slotStyle.pillBorderStyle};--hki-info-pill-border-width:${slotStyle.pillBorderWidth}px;--hki-info-pill-border-color:${slotStyle.pillBorderColor}` : "";
+    const combinedStyle = `${slotStyle.inlineStyle} ${weatherPillStyle}`;
     
     const tapAction = cfg[prefix + "tap_action"] || cfg.info_tap_action || { action: "none" };
 
