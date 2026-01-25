@@ -1373,7 +1373,7 @@ class HkiHeaderCard extends LitElement {
     
     return html`
       <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${() => this._handleSlotTapAction(tapAction, slotName)}>
-        <ha-icon class="info-icon" .icon=${icon} style="--mdc-icon-size:${slotStyle.iconSize}px;"></ha-icon>
+        <ha-icon class="info-icon" .icon=${icon} style="--info-icon-size:${slotStyle.iconSize}px;--mdc-icon-size:${slotStyle.iconSize}px;"></ha-icon>
         ${label ? html`<span>${label}</span>` : ''}
       </div>
     `;
@@ -1442,7 +1442,7 @@ class HkiHeaderCard extends LitElement {
         ${showIcon ? (useSvg 
             ? html`<img src="${svgUrl}" class="info-icon ${animClass}" style="width:${slotStyle.iconSize}px;height:${slotStyle.iconSize}px;" alt="${state}" />`
             : html`<ha-icon class="info-icon ${animClass}" .icon=${weatherIcon}
-                   style="--mdc-icon-size:${slotStyle.iconSize}px;color:${iconColor};"></ha-icon>`)
+                   style="--info-icon-size:${slotStyle.iconSize}px;--mdc-icon-size:${slotStyle.iconSize}px;color:${iconColor};"></ha-icon>`)
         : ""}
         ${showCondition ? html`<span class="info-condition">${conditionText}</span>` : ""}
         ${showTemp && temperature != null ? html`<span class="info-temperature">${Math.round(temperature)}${unit}</span>` : ""}
@@ -1489,7 +1489,7 @@ class HkiHeaderCard extends LitElement {
       <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${() => this._handleSlotTapAction(tapAction, slotName)}>
         ${icon ? html`
           <ha-icon class="info-icon ${animClass}" .icon=${icon}
-                   style="--mdc-icon-size:${slotStyle.iconSize}px;"></ha-icon>
+                   style="--info-icon-size:${slotStyle.iconSize}px;--mdc-icon-size:${slotStyle.iconSize}px;"></ha-icon>
         ` : ""}
         <span>${displayText}</span>
       </div>
