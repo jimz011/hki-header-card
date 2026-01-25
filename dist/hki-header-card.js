@@ -402,6 +402,8 @@ class HkiHeaderCard extends LitElement {
         display: block;
         flex-shrink: 0;
         vertical-align: middle;
+        overflow: hidden;
+        line-height: 0;
       }
 
       img.info-icon {
@@ -415,10 +417,15 @@ class HkiHeaderCard extends LitElement {
         box-sizing: border-box;
         padding: 0;
         margin: 0;
+        max-width: 100%;
+        max-height: 100%;
+        overflow: hidden;
       }
       
       ha-icon svg {
         display: block;
+        max-width: 100%;
+        max-height: 100%;
       }
 
       .info-text { text-transform: capitalize; line-height: 1; }
@@ -439,6 +446,12 @@ class HkiHeaderCard extends LitElement {
         border-color: var(--hki-info-pill-border-color, rgba(255,255,255,0.1));
         box-sizing: border-box;
         overflow: hidden;
+      }
+
+      hki-notification-card {
+        display: block;
+        overflow: hidden;
+        border-radius: inherit;
       }
 
       /* TOP BAR LAYOUT */
@@ -1349,6 +1362,7 @@ class HkiHeaderCard extends LitElement {
       pill, 
       sizePx, 
       color,
+      pillRadius,
       pillBorderStyle,
       pillBorderWidth,
       pillBorderColor
@@ -1514,7 +1528,7 @@ class HkiHeaderCard extends LitElement {
     const cardEl = this._customCards[slotName];
     if (!cardEl) return html``;
     
-    const combinedStyle = `${slotStyle.inlineStyle} ${slotStyle.notifyVars}; min-width: 50px;`;
+    const combinedStyle = `${slotStyle.inlineStyle} ${slotStyle.notifyVars}; min-width: 50px; ${slotStyle.pill ? `overflow: hidden; border-radius: ${slotStyle.pillRadius}px;` : ''}`;
 
     return html`
       <div class="info-item" style="${combinedStyle}">
