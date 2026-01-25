@@ -399,10 +399,9 @@ class HkiHeaderCard extends LitElement {
       .info-icon {
         color: var(--hki-header-text-color, #fff);
         filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        display: block;
         flex-shrink: 0;
+        vertical-align: middle;
       }
 
       img.info-icon {
@@ -410,8 +409,24 @@ class HkiHeaderCard extends LitElement {
         display: block;
       }
 
-      .info-text { text-transform: capitalize; }
-      .info-temperature { font-weight: 500; }
+      ha-icon {
+        display: block;
+        line-height: 0;
+        box-sizing: border-box;
+        padding: 0;
+        margin: 0;
+      }
+      
+      ha-icon svg {
+        display: block;
+      }
+
+      .info-text { text-transform: capitalize; line-height: 1; }
+      .info-temperature { font-weight: 500; line-height: 1; }
+      .info-condition { line-height: 1; }
+      .info-humidity { line-height: 1; }
+      .info-wind { line-height: 1; }
+      .info-pressure { line-height: 1; }
 
       .info-pill {
         background: var(--hki-info-pill-background, rgba(0, 0, 0, 0.25));
@@ -423,6 +438,7 @@ class HkiHeaderCard extends LitElement {
         border-width: var(--hki-info-pill-border-width, 0);
         border-color: var(--hki-info-pill-border-color, rgba(255,255,255,0.1));
         box-sizing: border-box;
+        overflow: hidden;
       }
 
       /* TOP BAR LAYOUT */
