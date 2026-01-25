@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.3.5 ',
+  '%c HKI-HEADER-CARD %c v1.3.6 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -1369,7 +1369,7 @@ class HkiHeaderCard extends LitElement {
     
     return html`
       <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${() => this._handleSlotTapAction(tapAction, slotName)}>
-        <ha-icon .icon=${icon} style="--mdc-icon-size:${slotStyle.iconSize}px;"></ha-icon>
+        <ha-icon class="info-icon" .icon=${icon} style="--mdc-icon-size:${slotStyle.iconSize}px;"></ha-icon>
         ${label ? html`<span>${label}</span>` : ''}
       </div>
     `;
@@ -1437,7 +1437,7 @@ class HkiHeaderCard extends LitElement {
       <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${() => this._handleSlotTapAction(tapAction, slotName)}>
         ${showIcon ? (useSvg 
             ? html`<img src="${svgUrl}" class="info-icon ${animClass}" style="width:${slotStyle.iconSize}px;height:${slotStyle.iconSize}px;" alt="${state}" />`
-            : html`<ha-icon class="info-weather-icon ${animClass}" .icon=${weatherIcon}
+            : html`<ha-icon class="info-icon ${animClass}" .icon=${weatherIcon}
                    style="--mdc-icon-size:${slotStyle.iconSize}px;color:${iconColor};"></ha-icon>`)
         : ""}
         ${showCondition ? html`<span class="info-condition">${conditionText}</span>` : ""}
@@ -1484,7 +1484,7 @@ class HkiHeaderCard extends LitElement {
     return html`
       <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${() => this._handleSlotTapAction(tapAction, slotName)}>
         ${icon ? html`
-          <ha-icon class="${animClass}" .icon=${icon}
+          <ha-icon class="info-icon ${animClass}" .icon=${icon}
                    style="--mdc-icon-size:${slotStyle.iconSize}px;"></ha-icon>
         ` : ""}
         <span>${displayText}</span>
