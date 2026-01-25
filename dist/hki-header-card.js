@@ -419,21 +419,30 @@ class HkiHeaderCard extends LitElement {
         margin: 0;
         max-width: 100%;
         max-height: 100%;
+        min-width: 0;
+        min-height: 0;
         overflow: hidden;
+      }
+      
+      .info-icon.ha-icon,
+      ha-icon.info-icon {
+        line-height: 0 !important;
+        vertical-align: top;
       }
       
       ha-icon svg {
         display: block;
         max-width: 100%;
         max-height: 100%;
+        vertical-align: top;
       }
 
-      .info-text { text-transform: capitalize; line-height: 1; }
-      .info-temperature { font-weight: 500; line-height: 1; }
-      .info-condition { line-height: 1; }
-      .info-humidity { line-height: 1; }
-      .info-wind { line-height: 1; }
-      .info-pressure { line-height: 1; }
+      .info-text { text-transform: capitalize; line-height: 1; display: inline-block; vertical-align: middle; }
+      .info-temperature { font-weight: 500; line-height: 1; display: inline-block; vertical-align: middle; }
+      .info-condition { line-height: 1; display: inline-block; vertical-align: middle; }
+      .info-humidity { line-height: 1; display: inline-block; vertical-align: middle; }
+      .info-wind { line-height: 1; display: inline-block; vertical-align: middle; }
+      .info-pressure { line-height: 1; display: inline-block; vertical-align: middle; }
 
       .info-pill {
         background: var(--hki-info-pill-background, rgba(0, 0, 0, 0.25));
@@ -1401,7 +1410,7 @@ class HkiHeaderCard extends LitElement {
     
     return html`
       <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${() => this._handleSlotTapAction(tapAction, slotName)}>
-        <ha-icon class="info-icon" .icon=${icon} style="width:${slotStyle.iconSize}px;height:${slotStyle.iconSize}px;--mdc-icon-size:${slotStyle.iconSize}px;"></ha-icon>
+        <div class="info-icon" style="width:${slotStyle.iconSize}px;height:${slotStyle.iconSize}px;"><ha-icon .icon=${icon} style="width:100%;height:100%;--mdc-icon-size:${slotStyle.iconSize}px;"></ha-icon></div>
         ${label ? html`<span>${label}</span>` : ''}
       </div>
     `;
@@ -1469,8 +1478,8 @@ class HkiHeaderCard extends LitElement {
       <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${() => this._handleSlotTapAction(tapAction, slotName)}>
         ${showIcon ? (useSvg 
             ? html`<img src="${svgUrl}" class="info-icon ${animClass}" style="width:${slotStyle.iconSize}px;height:${slotStyle.iconSize}px;" alt="${state}" />`
-            : html`<ha-icon class="info-icon ${animClass}" .icon=${weatherIcon}
-                   style="width:${slotStyle.iconSize}px;height:${slotStyle.iconSize}px;--mdc-icon-size:${slotStyle.iconSize}px;color:${iconColor};"></ha-icon>`)
+            : html`<div class="info-icon" style="width:${slotStyle.iconSize}px;height:${slotStyle.iconSize}px;"><ha-icon class="${animClass}" .icon=${weatherIcon}
+                   style="width:100%;height:100%;--mdc-icon-size:${slotStyle.iconSize}px;color:${iconColor};"></ha-icon></div>`)
         : ""}
         ${showCondition ? html`<span class="info-condition">${conditionText}</span>` : ""}
         ${showTemp && temperature != null ? html`<span class="info-temperature">${Math.round(temperature)}${unit}</span>` : ""}
@@ -1516,8 +1525,8 @@ class HkiHeaderCard extends LitElement {
     return html`
       <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${() => this._handleSlotTapAction(tapAction, slotName)}>
         ${icon ? html`
-          <ha-icon class="info-icon ${animClass}" .icon=${icon}
-                   style="width:${slotStyle.iconSize}px;height:${slotStyle.iconSize}px;--mdc-icon-size:${slotStyle.iconSize}px;"></ha-icon>
+          <div class="info-icon ${animClass}" style="width:${slotStyle.iconSize}px;height:${slotStyle.iconSize}px;"><ha-icon .icon=${icon}
+                   style="width:100%;height:100%;--mdc-icon-size:${slotStyle.iconSize}px;"></ha-icon></div>
         ` : ""}
         <span>${displayText}</span>
       </div>
