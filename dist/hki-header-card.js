@@ -142,7 +142,7 @@ const DEFAULTS = Object.freeze({
   info_pill: false,
   info_pill_background: "rgba(0,0,0,0.25)",
   info_pill_padding_x: 12,
-  info_pill_padding_y: 8,
+  info_pill_padding_y: 6,
   info_pill_radius: 999,
   info_pill_blur: 0,
   info_pill_border_style: "none",
@@ -399,11 +399,13 @@ class HkiHeaderCard extends LitElement {
       .info-icon {
         color: var(--hki-header-text-color, #fff);
         filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
-        display: block;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         flex-shrink: 0;
-        vertical-align: middle;
         overflow: hidden;
         line-height: 0;
+        box-sizing: border-box;
       }
 
       img.info-icon {
@@ -417,17 +419,18 @@ class HkiHeaderCard extends LitElement {
         box-sizing: border-box;
         padding: 0;
         margin: 0;
+      }
+      
+      .info-icon ha-icon {
+        width: 100%;
+        height: 100%;
         max-width: 100%;
         max-height: 100%;
         min-width: 0;
         min-height: 0;
         overflow: hidden;
-      }
-      
-      .info-icon.ha-icon,
-      ha-icon.info-icon {
-        line-height: 0 !important;
-        vertical-align: top;
+        display: block;
+        line-height: 0;
       }
       
       ha-icon svg {
@@ -447,7 +450,7 @@ class HkiHeaderCard extends LitElement {
       .info-pill {
         background: var(--hki-info-pill-background, rgba(0, 0, 0, 0.25));
         border-radius: var(--hki-info-pill-radius, 999px);
-        padding: var(--hki-info-pill-padding-y, 8px) var(--hki-info-pill-padding-x, 12px);
+        padding: var(--hki-info-pill-padding-y, 6px) var(--hki-info-pill-padding-x, 12px);
         backdrop-filter: blur(var(--hki-info-pill-blur, 0px));
         -webkit-backdrop-filter: blur(var(--hki-info-pill-blur, 0px));
         border-style: var(--hki-info-pill-border-style, none);
@@ -922,7 +925,7 @@ class HkiHeaderCard extends LitElement {
     m.info_weight = normalizeWeightKey(m.info_weight ?? "medium", "medium");
     m.info_pill = !!m.info_pill;
     m.info_pill_padding_x = clamp(+m.info_pill_padding_x || 12, 0, 80);
-    m.info_pill_padding_y = clamp(+m.info_pill_padding_y || 8, 0, 80);
+    m.info_pill_padding_y = clamp(+m.info_pill_padding_y || 6, 0, 80);
     m.info_pill_radius = clamp(+m.info_pill_radius || 999, 0, 999);
     m.info_pill_blur = clamp(+m.info_pill_blur || 0, 0, 40);
     m.info_pill_border_style = ["none", "solid", "dashed", "dotted"].includes(m.info_pill_border_style) ? m.info_pill_border_style : "none";
@@ -2662,7 +2665,7 @@ class HkiHeaderCardEditor extends LitElement {
                       <ha-textfield label="Pill Background" .value=${this._config.info_pill_background || "rgba(0,0,0,0.25)"} data-field="info_pill_background" @input=${this._changed}></ha-textfield>
                       <div class="inline-fields-2">
                         <ha-textfield label="Padding X (px)" type="number" .value=${String(this._config.info_pill_padding_x ?? 12)} data-field="info_pill_padding_x" @input=${this._changed}></ha-textfield>
-                        <ha-textfield label="Padding Y (px)" type="number" .value=${String(this._config.info_pill_padding_y ?? 8)} data-field="info_pill_padding_y" @input=${this._changed}></ha-textfield>
+                        <ha-textfield label="Padding Y (px)" type="number" .value=${String(this._config.info_pill_padding_y ?? 6)} data-field="info_pill_padding_y" @input=${this._changed}></ha-textfield>
                       </div>
                       <div class="inline-fields-2">
                         <ha-textfield label="Border Radius (px)" type="number" .value=${String(this._config.info_pill_radius ?? 999)} data-field="info_pill_radius" @input=${this._changed}></ha-textfield>
