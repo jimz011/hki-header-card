@@ -122,6 +122,7 @@ const DEFAULTS = Object.freeze({
   persons_spacing: 0,
   persons_stack_order: "descending",
   persons_dynamic_order: true,
+  persons_hide_away: false,
   persons_use_entity_picture: true,
   persons_border_width: 1,
   persons_border_color: "rgba(255,255,255,0.3)",
@@ -349,6 +350,7 @@ function migrateToNestedFormat(oldConfig) {
       spacing: oldConfig.persons_spacing,
       stack_order: oldConfig.persons_stack_order,
       dynamic_order: oldConfig.persons_dynamic_order,
+      hide_away: oldConfig.persons_hide_away,
       use_entity_picture: oldConfig.persons_use_entity_picture,
       border_width: oldConfig.persons_border_width,
       border_color: oldConfig.persons_border_color,
@@ -490,6 +492,7 @@ function flattenNestedFormat(nested) {
     flat.persons_spacing = nested.persons.spacing;
     flat.persons_stack_order = nested.persons.stack_order;
     flat.persons_dynamic_order = nested.persons.dynamic_order;
+    flat.persons_hide_away = nested.persons.hide_away;
     flat.persons_use_entity_picture = nested.persons.use_entity_picture;
     flat.persons_border_width = nested.persons.border_width;
     flat.persons_border_color = nested.persons.border_color;
@@ -1279,6 +1282,7 @@ class HkiHeaderCard extends LitElement {
     m.persons_spacing = toNum(m.persons_spacing, -8);
     m.persons_stack_order = ["ascending", "descending"].includes(m.persons_stack_order) ? m.persons_stack_order : "ascending";
     m.persons_dynamic_order = !!m.persons_dynamic_order;
+    m.persons_hide_away = !!m.persons_hide_away;
     m.persons_use_entity_picture = m.persons_use_entity_picture !== false;
     m.persons_border_width = clamp(+m.persons_border_width || 1, 0, 10);
     m.persons_border_color = m.persons_border_color || "rgba(255,255,255,0.3)";
@@ -2211,16 +2215,27 @@ class HkiHeaderCard extends LitElement {
     const personsSpacing = cfg.persons_spacing != null ? cfg.persons_spacing : -8;
     const stackOrder = cfg.persons_stack_order || "ascending";
     const dynamicOrder = cfg.persons_dynamic_order || false;
+    const hideAway = cfg.persons_hide_away || false;
     const borderWidth = cfg.persons_border_width || 1;
     const borderColor = cfg.persons_border_color || "rgba(255,255,255,0.3)";
     const borderColorAway = cfg.persons_border_color_away || "rgba(255,100,100,0.5)";
     const grayscaleAway = cfg.persons_grayscale_away || false;
     const useEntityPicture = cfg.persons_use_entity_picture !== false;
 
+    // Filter out away persons if hide_away is enabled
+    let filteredPersons = [...cfg.persons_entities];
+    if (hideAway) {
+      filteredPersons = filteredPersons.filter(personConfig => {
+        const entityId = typeof personConfig === 'string' ? personConfig : personConfig.entity;
+        const entity = this.hass?.states[entityId];
+        return entity && entity.state === "home";
+      });
+    }
+
     // Sort persons if dynamic ordering is enabled
-    let sortedPersons = [...cfg.persons_entities];
+    let sortedPersons = filteredPersons;
     if (dynamicOrder) {
-      sortedPersons.sort((a, b) => {
+      sortedPersons = [...filteredPersons].sort((a, b) => {
         const entityIdA = typeof a === 'string' ? a : a.entity;
         const entityIdB = typeof b === 'string' ? b : b.entity;
         const entityA = this.hass?.states[entityIdA];
@@ -2238,6 +2253,11 @@ class HkiHeaderCard extends LitElement {
         // Within same group, maintain original order
         return 0;
       });
+    }
+
+    // If no persons to show after filtering, return empty
+    if (sortedPersons.length === 0) {
+      return html``;
     }
 
     let containerStyle;
@@ -2594,7 +2614,7 @@ class HkiHeaderCardEditor extends LitElement {
     "weather_show_temperature", "weather_show_humidity", "weather_show_wind",
     "weather_show_pressure", "weather_colored_icons", "info_pill",
     "datetime_show_time", "datetime_show_date", "datetime_show_day", "top_bar_enabled",
-    "blend_enabled", "persons_enabled", "persons_use_entity_picture", "persons_grayscale_away", "persons_dynamic_order",
+    "blend_enabled", "persons_enabled", "persons_use_entity_picture", "persons_grayscale_away", "persons_dynamic_order", "persons_hide_away",
     "top_bar_left_use_global", "top_bar_left_pill", "top_bar_left_overflow", "top_bar_left_show_icon", "top_bar_left_show_condition", "top_bar_left_show_temperature", "top_bar_left_show_humidity", "top_bar_left_show_wind", "top_bar_left_show_pressure", "top_bar_left_weather_colored_icons", "top_bar_left_show_day", "top_bar_left_show_date", "top_bar_left_show_time",
     "top_bar_center_use_global", "top_bar_center_pill", "top_bar_center_overflow", "top_bar_center_show_icon", "top_bar_center_show_condition", "top_bar_center_show_temperature", "top_bar_center_show_humidity", "top_bar_center_show_wind", "top_bar_center_show_pressure", "top_bar_center_weather_colored_icons", "top_bar_center_show_day", "top_bar_center_show_date", "top_bar_center_show_time",
     "top_bar_right_use_global", "top_bar_right_pill", "top_bar_right_overflow", "top_bar_right_show_icon", "top_bar_right_show_condition", "top_bar_right_show_temperature", "top_bar_right_show_humidity", "top_bar_right_show_wind", "top_bar_right_show_pressure", "top_bar_right_weather_colored_icons", "top_bar_right_show_day", "top_bar_right_show_date", "top_bar_right_show_time"
@@ -2916,7 +2936,7 @@ class HkiHeaderCardEditor extends LitElement {
     // Nest persons
     const personsKeys = ['persons_enabled', 'persons_align', 'persons_offset_x', 'persons_offset_y',
                          'persons_size', 'persons_spacing', 'persons_stack_order', 'persons_dynamic_order',
-                         'persons_use_entity_picture', 'persons_border_width', 'persons_border_color',
+                         'persons_hide_away', 'persons_use_entity_picture', 'persons_border_width', 'persons_border_color',
                          'persons_border_color_away', 'persons_grayscale_away', 'persons_entities'];
     const hasPersonsConfig = personsKeys.some(k => flat[k] !== undefined);
     if (hasPersonsConfig) {
@@ -2929,6 +2949,7 @@ class HkiHeaderCardEditor extends LitElement {
       if (flat.persons_spacing !== undefined) nested.persons.spacing = flat.persons_spacing;
       if (flat.persons_stack_order !== undefined) nested.persons.stack_order = flat.persons_stack_order;
       if (flat.persons_dynamic_order !== undefined) nested.persons.dynamic_order = flat.persons_dynamic_order;
+      if (flat.persons_hide_away !== undefined) nested.persons.hide_away = flat.persons_hide_away;
       if (flat.persons_use_entity_picture !== undefined) nested.persons.use_entity_picture = flat.persons_use_entity_picture;
       if (flat.persons_border_width !== undefined) nested.persons.border_width = flat.persons_border_width;
       if (flat.persons_border_color !== undefined) nested.persons.border_color = flat.persons_border_color;
@@ -3572,14 +3593,14 @@ class HkiHeaderCardEditor extends LitElement {
         </details>
 
         <details class="box-section">
-          <summary>Person Entities</summary>
+          <summary>Persons</summary>
           <div class="box-content">
-            <ha-formfield label="Enable person entities">
+            <ha-formfield label="Enable persons">
               <ha-switch .checked=${this._config.persons_enabled} data-field="persons_enabled" @change=${this._changed}></ha-switch>
             </ha-formfield>
 
             ${this._config.persons_enabled ? html`
-              <div class="section">Person entities</div>
+              <div class="section">Persons</div>
               <p style="opacity: 0.7; font-size: 0.9em; margin: 8px 0;">Configure individual persons below</p>
               
               ${(this._config.persons_entities || []).map((personConfig, index) => {
@@ -3662,6 +3683,10 @@ class HkiHeaderCardEditor extends LitElement {
 
               <ha-formfield label="Dynamic order (home persons first)">
                 <ha-switch .checked=${!!this._config.persons_dynamic_order} data-field="persons_dynamic_order" @change=${this._changed}></ha-switch>
+              </ha-formfield>
+
+              <ha-formfield label="Hide away persons">
+                <ha-switch .checked=${!!this._config.persons_hide_away} data-field="persons_hide_away" @change=${this._changed}></ha-switch>
               </ha-formfield>
 
               <div class="section">Position</div>
