@@ -2297,9 +2297,6 @@ class HkiHeaderCard extends LitElement {
           // Determine border color based on state
           const currentBorderColor = isHome ? borderColor : borderColorAway;
           
-          // Apply grayscale filter if away and option enabled
-          const grayscaleFilter = (!isHome && grayscaleAway) ? "filter:grayscale(100%);" : "";
-          
           // Calculate z-index based on stack order
           // ascending: later avatars on top (1, 2, 3, 4...)
           // descending: earlier avatars on top (4, 3, 2, 1...)
@@ -2308,31 +2305,38 @@ class HkiHeaderCard extends LitElement {
           // Apply spacing as margin-left on all but first avatar
           const marginLeft = index > 0 ? `margin-left:${personsSpacing}px;` : "";
 
-          const avatarStyle = `width:${personsSize}px;height:${personsSize}px;border-width:${borderWidth}px;border-color:${currentBorderColor};${grayscaleFilter}z-index:${zIndex};${marginLeft}`;
+          // Avatar container style (no filter here - border should always have color)
+          const avatarStyle = `width:${personsSize}px;height:${personsSize}px;border-width:${borderWidth}px;border-color:${currentBorderColor};z-index:${zIndex};${marginLeft}`;
+          
+          // Apply grayscale filter to image/icon only, not the container
+          const contentFilter = (!isHome && grayscaleAway) ? "filter:grayscale(100%);" : "";
 
-          // Touch event tracking for hold action
-          let touchTimer = null;
-          let touchMoved = false;
+          // Event tracking for hold action (both touch and mouse)
+          let holdTimer = null;
+          let moved = false;
+          let holdTriggered = false;
 
-          const handleTouchStart = (e) => {
-            touchMoved = false;
-            touchTimer = setTimeout(() => {
-              if (!touchMoved) {
+          const startHold = (e) => {
+            moved = false;
+            holdTriggered = false;
+            holdTimer = setTimeout(() => {
+              if (!moved && holdAction.action !== "none") {
+                holdTriggered = true;
                 e.preventDefault();
                 this._handleAction(holdAction, entityId);
               }
             }, 500);
           };
 
-          const handleTouchMove = () => {
-            touchMoved = true;
-            if (touchTimer) clearTimeout(touchTimer);
+          const cancelHold = () => {
+            moved = true;
+            if (holdTimer) clearTimeout(holdTimer);
           };
 
-          const handleTouchEnd = (e) => {
-            if (touchTimer) clearTimeout(touchTimer);
-            if (!touchMoved && holdAction.action === "none") {
-              // If no hold action, execute tap action
+          const endHold = (e, isTap = false) => {
+            if (holdTimer) clearTimeout(holdTimer);
+            // Only fire tap if hold didn't trigger
+            if (!moved && !holdTriggered && isTap) {
               this._handleAction(tapAction, entityId);
             }
           };
@@ -2342,24 +2346,30 @@ class HkiHeaderCard extends LitElement {
               class="person-avatar" 
               style="${avatarStyle}"
               @click=${(e) => {
-                e.preventDefault();
-                this._handleAction(tapAction, entityId);
+                // Only handle click if not from touch (to avoid double-firing)
+                if (e.detail !== 0 && !holdTriggered) {
+                  e.preventDefault();
+                  this._handleAction(tapAction, entityId);
+                }
               }}
               @dblclick=${(e) => {
                 e.preventDefault();
                 this._handleAction(doubleTapAction, entityId);
               }}
-              @touchstart=${handleTouchStart}
-              @touchmove=${handleTouchMove}
-              @touchend=${handleTouchEnd}
+              @mousedown=${startHold}
+              @mousemove=${cancelHold}
+              @mouseup=${(e) => endHold(e, false)}
+              @mouseleave=${cancelHold}
+              @touchstart=${startHold}
+              @touchmove=${cancelHold}
+              @touchend=${(e) => endHold(e, true)}
               @contextmenu=${(e) => {
                 e.preventDefault();
-                this._handleAction(holdAction, entityId);
               }}
             >
               ${showPicture 
-                ? html`<img src="${entityPicture}" alt="${entity.attributes?.friendly_name || entityId}" />`
-                : html`<ha-icon .icon="${icon}"></ha-icon>`
+                ? html`<img src="${entityPicture}" alt="${entity.attributes?.friendly_name || entityId}" style="${contentFilter}" />`
+                : html`<ha-icon .icon="${icon}" style="${contentFilter}"></ha-icon>`
               }
             </div>
           `;
