@@ -2612,18 +2612,17 @@ class HkiHeaderCardEditor extends LitElement {
 
             ${this._config.persons_enabled ? html`
               <div class="section">Person entities list</div>
-              <p style="opacity: 0.7; font-size: 0.9em; margin: 8px 0;">Enter person entity IDs (one per line)</p>
-              <ha-textarea
+              <p style="opacity: 0.7; font-size: 0.9em; margin: 8px 0;">Enter person entity IDs separated by commas (e.g., person.john, person.jane)</p>
+              <ha-textfield
                 label="Person Entities"
-                .value=${(this._config.persons_entities || []).join('\n')}
+                .value=${(this._config.persons_entities || []).join(', ')}
                 data-field="persons_entities"
                 @input=${(e) => {
                   const value = e.target.value || '';
-                  const entities = value.split('\n').map(s => s.trim()).filter(Boolean);
+                  const entities = value.split(',').map(s => s.trim()).filter(Boolean);
                   this._changed({target: {dataset: {field: 'persons_entities'}, value: entities}});
                 }}
-                rows="4"
-              ></ha-textarea>
+              ></ha-textfield>
 
               <div class="section">Position</div>
               <div class="inline-fields-2">
