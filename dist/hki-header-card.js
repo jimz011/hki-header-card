@@ -2395,18 +2395,31 @@ class HkiHeaderCard extends LitElement {
           const entityPicture = entity.attributes?.entity_picture;
           const icon = entity.attributes?.icon || "mdi:account";
           
+          // Debug: log personConfig structure
+          if (typeof personConfig !== 'string' && personConfig.grayscale_entity) {
+            console.log(`Person ${entityId} config:`, JSON.stringify(personConfig, null, 2));
+          }
+          
           // Get per-person grayscale entity if configured
           const grayscaleEntity = (typeof personConfig !== 'string' && personConfig.grayscale_entity) || "";
           
           // Determine "home" state - use grayscale_entity if configured, otherwise use person state
           let isHome;
           if (grayscaleEntity && this.hass?.states[grayscaleEntity]) {
-            // Use the grayscale entity's state: "on" = home, "off" = away
+            // Use the grayscale entity's state: "on"/"true"/true = home, anything else = away
             const grayscaleEntityState = this.hass.states[grayscaleEntity];
-            isHome = grayscaleEntityState.state === "on";
+            const state = String(grayscaleEntityState.state).toLowerCase();
+            isHome = state === "on" || state === "true" || state === "home";
+            
+            // Debug logging
+            console.log(`Person ${entityId}: grayscale_entity=${grayscaleEntity}, state=${state}, isHome=${isHome}, grayscaleAway=${grayscaleAway}`);
           } else {
             // Use the person entity's state
             isHome = entity.state === "home";
+            
+            if (grayscaleEntity) {
+              console.log(`Person ${entityId}: grayscale_entity=${grayscaleEntity} NOT FOUND in hass.states`);
+            }
           }
 
           // Get per-person actions (with fallback to defaults)
