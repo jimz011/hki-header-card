@@ -1960,7 +1960,8 @@ class HkiHeaderCardEditor extends LitElement {
     "top_bar_center_pill_padding_x", "top_bar_center_pill_padding_y", "top_bar_center_pill_radius", "top_bar_center_pill_blur",
     "top_bar_right_pill_padding_x", "top_bar_right_pill_padding_y", "top_bar_right_pill_radius", "top_bar_right_pill_blur",
     "info_pill_border_width", "top_bar_left_pill_border_width", "top_bar_center_pill_border_width", "top_bar_right_pill_border_width",
-    "card_border_width"
+    "card_border_width",
+    "persons_offset_x", "persons_offset_y", "persons_size", "persons_gap", "persons_border_width"
   ]);
 
   static _nullableNumericFields = new Set([
@@ -1975,7 +1976,7 @@ class HkiHeaderCardEditor extends LitElement {
     "weather_show_temperature", "weather_show_humidity", "weather_show_wind",
     "weather_show_pressure", "weather_colored_icons", "info_pill",
     "datetime_show_time", "datetime_show_date", "datetime_show_day", "top_bar_enabled",
-    "blend_enabled",
+    "blend_enabled", "persons_enabled", "persons_use_entity_picture",
     "top_bar_left_use_global", "top_bar_left_pill", "top_bar_left_overflow", "top_bar_left_show_icon", "top_bar_left_show_condition", "top_bar_left_show_temperature", "top_bar_left_show_humidity", "top_bar_left_show_wind", "top_bar_left_show_pressure", "top_bar_left_weather_colored_icons", "top_bar_left_show_day", "top_bar_left_show_date", "top_bar_left_show_time",
     "top_bar_center_use_global", "top_bar_center_pill", "top_bar_center_overflow", "top_bar_center_show_icon", "top_bar_center_show_condition", "top_bar_center_show_temperature", "top_bar_center_show_humidity", "top_bar_center_show_wind", "top_bar_center_show_pressure", "top_bar_center_weather_colored_icons", "top_bar_center_show_day", "top_bar_center_show_date", "top_bar_center_show_time",
     "top_bar_right_use_global", "top_bar_right_pill", "top_bar_right_overflow", "top_bar_right_show_icon", "top_bar_right_show_condition", "top_bar_right_show_temperature", "top_bar_right_show_humidity", "top_bar_right_show_wind", "top_bar_right_show_pressure", "top_bar_right_weather_colored_icons", "top_bar_right_show_day", "top_bar_right_show_date", "top_bar_right_show_time"
@@ -2023,6 +2024,7 @@ class HkiHeaderCardEditor extends LitElement {
 
   setConfig(config) {
     this._config = { ...DEFAULTS, ...config };
+    this.requestUpdate();
   }
 
   _stripDefaults(config) {
@@ -2186,6 +2188,7 @@ class HkiHeaderCardEditor extends LitElement {
     this._config = next;
     const strippedConfig = this._stripDefaults(next);
     this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: strippedConfig } }));
+    this.requestUpdate();
   }
 
   _renderTemplateEditor(label, field, options = {}) {
