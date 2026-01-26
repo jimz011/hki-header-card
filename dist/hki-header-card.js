@@ -121,6 +121,7 @@ const DEFAULTS = Object.freeze({
   persons_size: 48,
   persons_spacing: -8,
   persons_stack_order: "ascending",
+  persons_dynamic_order: false,
   persons_use_entity_picture: true,
   persons_border_width: 1,
   persons_border_color: "rgba(255,255,255,0.3)",
@@ -398,7 +399,6 @@ class HkiHeaderCard extends LitElement {
       .persons-container {
         position: absolute;
         display: flex;
-        gap: 8px;
         align-items: center;
         z-index: 2;
       }
@@ -962,6 +962,7 @@ class HkiHeaderCard extends LitElement {
     m.persons_size = clamp(+m.persons_size || 48, 24, 128);
     m.persons_spacing = toNum(m.persons_spacing, -8);
     m.persons_stack_order = ["ascending", "descending"].includes(m.persons_stack_order) ? m.persons_stack_order : "ascending";
+    m.persons_dynamic_order = !!m.persons_dynamic_order;
     m.persons_use_entity_picture = m.persons_use_entity_picture !== false;
     m.persons_border_width = clamp(+m.persons_border_width || 1, 0, 10);
     m.persons_border_color = m.persons_border_color || "rgba(255,255,255,0.3)";
@@ -1827,26 +1828,50 @@ class HkiHeaderCard extends LitElement {
     const personsSize = cfg.persons_size || 48;
     const personsSpacing = cfg.persons_spacing != null ? cfg.persons_spacing : -8;
     const stackOrder = cfg.persons_stack_order || "ascending";
+    const dynamicOrder = cfg.persons_dynamic_order || false;
     const borderWidth = cfg.persons_border_width || 1;
     const borderColor = cfg.persons_border_color || "rgba(255,255,255,0.3)";
     const borderColorAway = cfg.persons_border_color_away || "rgba(255,100,100,0.5)";
     const grayscaleAway = cfg.persons_grayscale_away || false;
     const useEntityPicture = cfg.persons_use_entity_picture !== false;
 
-    let containerStyle;
-    if (personsAlign === "right") {
-      containerStyle = `left:auto;right:${personsX}px;top:${personsY}px;gap:${personsSpacing}px;`;
-    } else if (personsAlign === "center") {
-      containerStyle = `left:50%;top:${personsY}px;transform:translateX(-50%);gap:${personsSpacing}px;`;
-    } else {
-      containerStyle = `left:${personsX}px;top:${personsY}px;gap:${personsSpacing}px;`;
+    // Sort persons if dynamic ordering is enabled
+    let sortedPersons = [...cfg.persons_entities];
+    if (dynamicOrder) {
+      sortedPersons.sort((a, b) => {
+        const entityIdA = typeof a === 'string' ? a : a.entity;
+        const entityIdB = typeof b === 'string' ? b : b.entity;
+        const entityA = this.hass?.states[entityIdA];
+        const entityB = this.hass?.states[entityIdB];
+        
+        if (!entityA || !entityB) return 0;
+        
+        const isHomeA = entityA.state === "home";
+        const isHomeB = entityB.state === "home";
+        
+        // Home entities come first
+        if (isHomeA && !isHomeB) return -1;
+        if (!isHomeA && isHomeB) return 1;
+        
+        // Within same group, maintain original order
+        return 0;
+      });
     }
 
-    const totalPersons = cfg.persons_entities.length;
+    let containerStyle;
+    if (personsAlign === "right") {
+      containerStyle = `left:auto;right:${personsX}px;top:${personsY}px;`;
+    } else if (personsAlign === "center") {
+      containerStyle = `left:50%;top:${personsY}px;transform:translateX(-50%);`;
+    } else {
+      containerStyle = `left:${personsX}px;top:${personsY}px;`;
+    }
+
+    const totalPersons = sortedPersons.length;
 
     return html`
       <div class="persons-container" style="${containerStyle}">
-        ${cfg.persons_entities.map((personConfig, index) => {
+        ${sortedPersons.map((personConfig, index) => {
           const entityId = typeof personConfig === 'string' ? personConfig : personConfig.entity;
           const entity = this.hass?.states[entityId];
           if (!entity) return html``;
@@ -1874,7 +1899,10 @@ class HkiHeaderCard extends LitElement {
           // descending: earlier avatars on top (4, 3, 2, 1...)
           const zIndex = stackOrder === "ascending" ? index + 1 : totalPersons - index;
 
-          const avatarStyle = `width:${personsSize}px;height:${personsSize}px;border-width:${borderWidth}px;border-color:${currentBorderColor};${grayscaleFilter}z-index:${zIndex};`;
+          // Apply spacing as margin-left on all but first avatar
+          const marginLeft = index > 0 ? `margin-left:${personsSpacing}px;` : "";
+
+          const avatarStyle = `width:${personsSize}px;height:${personsSize}px;border-width:${borderWidth}px;border-color:${currentBorderColor};${grayscaleFilter}z-index:${zIndex};${marginLeft}`;
 
           // Touch event tracking for hold action
           let touchTimer = null;
@@ -2184,7 +2212,7 @@ class HkiHeaderCardEditor extends LitElement {
     "weather_show_temperature", "weather_show_humidity", "weather_show_wind",
     "weather_show_pressure", "weather_colored_icons", "info_pill",
     "datetime_show_time", "datetime_show_date", "datetime_show_day", "top_bar_enabled",
-    "blend_enabled", "persons_enabled", "persons_use_entity_picture", "persons_grayscale_away",
+    "blend_enabled", "persons_enabled", "persons_use_entity_picture", "persons_grayscale_away", "persons_dynamic_order",
     "top_bar_left_use_global", "top_bar_left_pill", "top_bar_left_overflow", "top_bar_left_show_icon", "top_bar_left_show_condition", "top_bar_left_show_temperature", "top_bar_left_show_humidity", "top_bar_left_show_wind", "top_bar_left_show_pressure", "top_bar_left_weather_colored_icons", "top_bar_left_show_day", "top_bar_left_show_date", "top_bar_left_show_time",
     "top_bar_center_use_global", "top_bar_center_pill", "top_bar_center_overflow", "top_bar_center_show_icon", "top_bar_center_show_condition", "top_bar_center_show_temperature", "top_bar_center_show_humidity", "top_bar_center_show_wind", "top_bar_center_show_pressure", "top_bar_center_weather_colored_icons", "top_bar_center_show_day", "top_bar_center_show_date", "top_bar_center_show_time",
     "top_bar_right_use_global", "top_bar_right_pill", "top_bar_right_overflow", "top_bar_right_show_icon", "top_bar_right_show_condition", "top_bar_right_show_temperature", "top_bar_right_show_humidity", "top_bar_right_show_wind", "top_bar_right_show_pressure", "top_bar_right_weather_colored_icons", "top_bar_right_show_day", "top_bar_right_show_date", "top_bar_right_show_time"
@@ -2978,6 +3006,10 @@ class HkiHeaderCardEditor extends LitElement {
                 <mwc-list-item value="ascending">Ascending (last on top)</mwc-list-item>
                 <mwc-list-item value="descending">Descending (first on top)</mwc-list-item>
               </ha-select>
+
+              <ha-formfield label="Dynamic order (home persons first)">
+                <ha-switch .checked=${!!this._config.persons_dynamic_order} data-field="persons_dynamic_order" @change=${this._changed}></ha-switch>
+              </ha-formfield>
 
               <div class="section">Position</div>
               <div class="inline-fields-2">
