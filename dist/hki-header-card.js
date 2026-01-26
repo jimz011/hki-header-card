@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v2.0.2 ',
+  '%c HKI-HEADER-CARD %c v2.0.3 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -1785,12 +1785,12 @@ class HkiHeaderCard extends LitElement {
         }
         break;
       case "more-info": {
-        const entity = finalAction.entity || this._config.weather_entity;
+        const entity = finalAction.entity;
         if (entity) this.dispatchEvent(new CustomEvent("hass-more-info", { bubbles: true, composed: true, detail: { entityId: entity } }));
         break;
       }
       case "toggle": {
-        const toggleEntity = finalAction.entity || this._config.weather_entity;
+        const toggleEntity = finalAction.entity;
         if (toggleEntity) this.hass.callService("homeassistant", "toggle", { entity_id: toggleEntity });
         break;
       }
@@ -2006,9 +2006,9 @@ class HkiHeaderCard extends LitElement {
     `;
   }
 
-  _handleSlotTapAction(action, slotName) {
+  _handleSlotTapAction(action, slotName, entityId = null) {
     if (!action || action.action === "none") return;
-    this._handleAction(action);
+    this._handleAction(action, entityId);
   }
 
   _renderWeatherSlot(slotName, slotStyle) {
@@ -2081,7 +2081,7 @@ class HkiHeaderCard extends LitElement {
       if (holdAction && holdAction.action !== "none") {
         holdTimer = setTimeout(() => {
           holdActive = true;
-          this._handleSlotTapAction(holdAction, slotName);
+          this._handleSlotTapAction(holdAction, slotName, entityId);
         }, 500);
       }
     };
@@ -2092,7 +2092,7 @@ class HkiHeaderCard extends LitElement {
         holdTimer = null;
       }
       if (!holdActive && tapAction) {
-        this._handleSlotTapAction(tapAction, slotName);
+        this._handleSlotTapAction(tapAction, slotName, entityId);
       }
       holdActive = false;
     };
@@ -2117,7 +2117,7 @@ class HkiHeaderCard extends LitElement {
         @dblclick=${(e) => {
           e.preventDefault();
           cancelHold();
-          this._handleSlotTapAction(doubleTapAction, slotName);
+          this._handleSlotTapAction(doubleTapAction, slotName, entityId);
         }}
         @contextmenu=${(e) => e.preventDefault()}
       >
