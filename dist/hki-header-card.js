@@ -2138,6 +2138,18 @@ class HkiHeaderCardEditor extends LitElement {
 
     let value = this._val(ev);
 
+    // Special handling for persons_entities array field
+    if (field === "persons_entities") {
+      // Value is already an array from the custom handler, use it directly
+      if (Array.isArray(value)) {
+        this._config = { ...this._config, [field]: value };
+        const strippedConfig = this._stripDefaults(this._config);
+        this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: strippedConfig } }));
+        this.requestUpdate();
+        return;
+      }
+    }
+
     // Card border radius: allow users to enter just a number (interpreted as px at render time)
     // while still allowing any valid CSS value (e.g., 12px, 0, 50%, var(--x)).
     // IMPORTANT: do NOT auto-append "px" or coerce to Number here, because @input fires per-keystroke
@@ -2618,9 +2630,18 @@ class HkiHeaderCardEditor extends LitElement {
                 .value=${(this._config.persons_entities || []).join(', ')}
                 data-field="persons_entities"
                 @input=${(e) => {
+                  e.stopPropagation();
                   const value = e.target.value || '';
                   const entities = value.split(',').map(s => s.trim()).filter(Boolean);
-                  this._changed({target: {dataset: {field: 'persons_entities'}, value: entities}});
+                  // Create proper event object with stopPropagation method
+                  const syntheticEvent = {
+                    stopPropagation: () => {},
+                    target: {
+                      dataset: { field: 'persons_entities' },
+                      value: entities
+                    }
+                  };
+                  this._changed(syntheticEvent);
                 }}
               ></ha-textfield>
 
