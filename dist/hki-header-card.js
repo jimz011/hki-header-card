@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.3.6 ',
+  '%c HKI-HEADER-CARD %c v1.3.7 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -1414,10 +1414,8 @@ class HkiHeaderCard extends LitElement {
     
     const pillClass = slotStyle.pill ? "info-pill" : "";
     
-    // Adjust padding for button pill to maintain consistent height:
-    // - With label: 5px (icon + text height)
-    // - Without label: 11px (compensates for missing label)
-    const buttonPaddingY = slotStyle.pill ? (label ? 5 : 11) : slotStyle.pillPaddingY;
+    // Button always uses 5px padding (always has icon)
+    const buttonPaddingY = slotStyle.pill ? 5 : slotStyle.pillPaddingY;
     const buttonPillStyle = slotStyle.pill ? `--hki-info-pill-background:${slotStyle.pillBg};--hki-info-pill-padding-x:${slotStyle.pillPaddingX}px;--hki-info-pill-padding-y:${buttonPaddingY}px;--hki-info-pill-radius:${slotStyle.pillRadius}px;--hki-info-pill-blur:${slotStyle.pillBlur}px;--hki-info-pill-border-style:${slotStyle.pillBorderStyle};--hki-info-pill-border-width:${slotStyle.pillBorderWidth}px;--hki-info-pill-border-color:${slotStyle.pillBorderColor}` : "";
     const combinedStyle = `${slotStyle.inlineStyle} ${buttonPillStyle}`;
     
