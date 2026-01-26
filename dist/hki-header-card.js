@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v2.0.0 ',
+  '%c HKI-HEADER-CARD %c v2.0.1 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -125,8 +125,11 @@ const DEFAULTS = Object.freeze({
   persons_hide_away: false,
   persons_use_entity_picture: true,
   persons_border_width: 1,
+  persons_border_style: "solid",
+  persons_border_radius: "50%",
   persons_border_color: "rgba(255,255,255,0.3)",
   persons_border_color_away: "rgba(255,0,0,0.5)",
+  persons_box_shadow: "0 2px 8px rgba(0, 0, 0, 0.4)",
   persons_grayscale_away: true,
   
   font_family: "inherit",
@@ -358,8 +361,11 @@ function migrateToNestedFormat(oldConfig) {
     if (oldConfig.persons_hide_away !== undefined) newConfig.persons.hide_away = oldConfig.persons_hide_away;
     if (oldConfig.persons_use_entity_picture !== undefined) newConfig.persons.use_entity_picture = oldConfig.persons_use_entity_picture;
     if (oldConfig.persons_border_width !== undefined) newConfig.persons.border_width = oldConfig.persons_border_width;
+    if (oldConfig.persons_border_style !== undefined) newConfig.persons.border_style = oldConfig.persons_border_style;
+    if (oldConfig.persons_border_radius !== undefined) newConfig.persons.border_radius = oldConfig.persons_border_radius;
     if (oldConfig.persons_border_color !== undefined) newConfig.persons.border_color = oldConfig.persons_border_color;
     if (oldConfig.persons_border_color_away !== undefined) newConfig.persons.border_color_away = oldConfig.persons_border_color_away;
+    if (oldConfig.persons_box_shadow !== undefined) newConfig.persons.box_shadow = oldConfig.persons_box_shadow;
     if (oldConfig.persons_grayscale_away !== undefined) newConfig.persons.grayscale_away = oldConfig.persons_grayscale_away;
     if (oldConfig.persons_entities !== undefined) newConfig.persons.entities = oldConfig.persons_entities || [];
   }
@@ -499,8 +505,11 @@ function flattenNestedFormat(nested) {
     if (nested.persons.hide_away !== undefined) flat.persons_hide_away = nested.persons.hide_away;
     if (nested.persons.use_entity_picture !== undefined) flat.persons_use_entity_picture = nested.persons.use_entity_picture;
     if (nested.persons.border_width !== undefined) flat.persons_border_width = nested.persons.border_width;
+    if (nested.persons.border_style !== undefined) flat.persons_border_style = nested.persons.border_style;
+    if (nested.persons.border_radius !== undefined) flat.persons_border_radius = nested.persons.border_radius;
     if (nested.persons.border_color !== undefined) flat.persons_border_color = nested.persons.border_color;
     if (nested.persons.border_color_away !== undefined) flat.persons_border_color_away = nested.persons.border_color_away;
+    if (nested.persons.box_shadow !== undefined) flat.persons_box_shadow = nested.persons.box_shadow;
     if (nested.persons.grayscale_away !== undefined) flat.persons_grayscale_away = nested.persons.grayscale_away;
     if (nested.persons.entities !== undefined) flat.persons_entities = nested.persons.entities || [];
   }
@@ -1291,8 +1300,11 @@ class HkiHeaderCard extends LitElement {
     m.persons_hide_away = !!m.persons_hide_away;
     m.persons_use_entity_picture = m.persons_use_entity_picture !== false;
     m.persons_border_width = clamp(+m.persons_border_width || 1, 0, 10);
+    m.persons_border_style = m.persons_border_style || "solid";
+    m.persons_border_radius = m.persons_border_radius || "50%";
     m.persons_border_color = m.persons_border_color || "rgba(255,255,255,0.3)";
     m.persons_border_color_away = m.persons_border_color_away || "rgba(255,100,100,0.5)";
+    m.persons_box_shadow = m.persons_box_shadow !== undefined ? m.persons_box_shadow : "0 2px 8px rgba(0, 0, 0, 0.4)";
     m.persons_grayscale_away = !!m.persons_grayscale_away;
 
 
@@ -2294,8 +2306,11 @@ class HkiHeaderCard extends LitElement {
     const dynamicOrder = cfg.persons_dynamic_order || false;
     const hideAway = cfg.persons_hide_away || false;
     const borderWidth = cfg.persons_border_width || 1;
+    const borderStyle = cfg.persons_border_style || "solid";
+    const borderRadius = cfg.persons_border_radius || "50%";
     const borderColor = cfg.persons_border_color || "rgba(255,255,255,0.3)";
     const borderColorAway = cfg.persons_border_color_away || "rgba(255,100,100,0.5)";
+    const boxShadow = cfg.persons_box_shadow !== undefined ? cfg.persons_box_shadow : "0 2px 8px rgba(0, 0, 0, 0.4)";
     const grayscaleAway = cfg.persons_grayscale_away || false;
     const useEntityPicture = cfg.persons_use_entity_picture !== false;
 
@@ -2379,7 +2394,7 @@ class HkiHeaderCard extends LitElement {
           const marginLeft = index > 0 ? `margin-left:${personsSpacing}px;` : "";
 
           // Avatar container style (no filter here - border should always have color)
-          const avatarStyle = `width:${personsSize}px;height:${personsSize}px;border-width:${borderWidth}px;border-color:${currentBorderColor};z-index:${zIndex};${marginLeft}`;
+          const avatarStyle = `width:${personsSize}px;height:${personsSize}px;border-width:${borderWidth}px;border-style:${borderStyle};border-radius:${borderRadius};border-color:${currentBorderColor};box-shadow:${boxShadow};z-index:${zIndex};${marginLeft}`;
           
           // Apply grayscale filter to image/icon only, not the container
           const contentFilter = (!isHome && grayscaleAway) ? "filter:grayscale(100%);" : "";
@@ -2702,7 +2717,7 @@ class HkiHeaderCardEditor extends LitElement {
 
   constructor() {
     super();
-    this._config = {};
+    this._config = {}; // Will be populated by setConfig
     // Cache for domain selection when ha-service-picker isn't available
     this._paDomainCache = {};
   }
@@ -2741,6 +2756,16 @@ class HkiHeaderCardEditor extends LitElement {
   }
 
   setConfig(config) {
+    // Ensure we have a valid config object  
+    if (!config || typeof config !== 'object') {
+      config = { type: "custom:hki-header-card" };
+    }
+    
+    // Ensure type field exists
+    if (!config.type) {
+      config = { ...config, type: "custom:hki-header-card" };
+    }
+    
     // Detect format and convert if needed
     let workingConfig = config;
     
@@ -2748,11 +2773,20 @@ class HkiHeaderCardEditor extends LitElement {
     if (isOldFormat(config)) {
       const nested = migrateToNestedFormat(config);
       workingConfig = flattenNestedFormat(nested); // Flatten back for internal use
-    } else if (config.top_bar_left && typeof config.top_bar_left === 'object') {
+    } else if (
+      // Detect nested format by checking for any nested objects
+      (config.top_bar_left && typeof config.top_bar_left === 'object') ||
+      (config.top_bar_center && typeof config.top_bar_center === 'object') ||
+      (config.top_bar_right && typeof config.top_bar_right === 'object') ||
+      (config.top_bar && typeof config.top_bar === 'object') ||
+      (config.info && typeof config.info === 'object') ||
+      (config.persons && typeof config.persons === 'object')
+    ) {
       // New nested format - flatten for internal use
       workingConfig = flattenNestedFormat(config);
     }
     
+    // Merge with defaults - this ensures all fields have values
     this._config = { ...DEFAULTS, ...workingConfig };
     this.requestUpdate();
   }
@@ -2791,8 +2825,25 @@ class HkiHeaderCardEditor extends LitElement {
   }
 
   _stripDefaults(config) {
-    // Create a clean config object with only changed values
-    const stripped = { type: config.type }; // Always keep type
+    // Create a clean config object with essential fields always present
+    const stripped = { 
+      type: config.type,
+      title: config.title !== undefined ? config.title : "Header",
+      subtitle: config.subtitle !== undefined ? config.subtitle : ""
+    };
+    
+    // Always include these essential fields even if they match defaults
+    // This ensures Home Assistant recognizes this as a valid header card
+    const alwaysInclude = [
+      'height_vh', 'min_height', 'max_height', 'background',
+      'persons_enabled', 'top_bar_enabled'
+    ];
+    
+    alwaysInclude.forEach(key => {
+      if (config[key] !== undefined) {
+        stripped[key] = config[key];
+      }
+    });
     
     // List of deprecated config keys to remove
     const deprecatedKeys = [
@@ -2804,7 +2855,8 @@ class HkiHeaderCardEditor extends LitElement {
     ];
     
     for (const [key, value] of Object.entries(config)) {
-      if (key === 'type') continue; // Already added
+      if (key === 'type' || key === 'title' || key === 'subtitle') continue; // Already added
+      if (alwaysInclude.includes(key)) continue; // Already added
       
       // Skip deprecated keys
       if (deprecatedKeys.includes(key)) continue;
@@ -3016,8 +3068,9 @@ class HkiHeaderCardEditor extends LitElement {
     // Nest persons
     const personsKeys = ['persons_enabled', 'persons_align', 'persons_offset_x', 'persons_offset_y',
                          'persons_size', 'persons_spacing', 'persons_stack_order', 'persons_dynamic_order',
-                         'persons_hide_away', 'persons_use_entity_picture', 'persons_border_width', 'persons_border_color',
-                         'persons_border_color_away', 'persons_grayscale_away', 'persons_entities'];
+                         'persons_hide_away', 'persons_use_entity_picture', 'persons_border_width', 'persons_border_style',
+                         'persons_border_radius', 'persons_border_color', 'persons_border_color_away', 'persons_box_shadow',
+                         'persons_grayscale_away', 'persons_entities'];
     const hasPersonsConfig = personsKeys.some(k => flat[k] !== undefined);
     if (hasPersonsConfig) {
       nested.persons = {};
@@ -3032,8 +3085,11 @@ class HkiHeaderCardEditor extends LitElement {
       if (flat.persons_hide_away !== undefined) nested.persons.hide_away = flat.persons_hide_away;
       if (flat.persons_use_entity_picture !== undefined) nested.persons.use_entity_picture = flat.persons_use_entity_picture;
       if (flat.persons_border_width !== undefined) nested.persons.border_width = flat.persons_border_width;
+      if (flat.persons_border_style !== undefined) nested.persons.border_style = flat.persons_border_style;
+      if (flat.persons_border_radius !== undefined) nested.persons.border_radius = flat.persons_border_radius;
       if (flat.persons_border_color !== undefined) nested.persons.border_color = flat.persons_border_color;
       if (flat.persons_border_color_away !== undefined) nested.persons.border_color_away = flat.persons_border_color_away;
+      if (flat.persons_box_shadow !== undefined) nested.persons.box_shadow = flat.persons_box_shadow;
       if (flat.persons_grayscale_away !== undefined) nested.persons.grayscale_away = flat.persons_grayscale_away;
       if (flat.persons_entities) nested.persons.entities = flat.persons_entities;
     }
@@ -3614,7 +3670,8 @@ class HkiHeaderCardEditor extends LitElement {
   }
 
   render() {
-    if (!this._config) return html``;
+    // Don't render until setConfig has been called and config has been merged with DEFAULTS
+    if (!this._config || !this._config.type) return html``;
 
     const showCustomFont = this._config.font_family === "custom";
 
@@ -3676,7 +3733,7 @@ class HkiHeaderCardEditor extends LitElement {
           <summary>Persons</summary>
           <div class="box-content">
             <ha-formfield label="Enable persons">
-              <ha-switch .checked=${this._config.persons_enabled} data-field="persons_enabled" @change=${this._changed}></ha-switch>
+              <ha-switch .checked=${!!this._config.persons_enabled} data-field="persons_enabled" @change=${this._changed}></ha-switch>
             </ha-formfield>
 
             ${this._config.persons_enabled ? html`
@@ -3783,10 +3840,17 @@ class HkiHeaderCardEditor extends LitElement {
 
               <div class="inline-fields-2">
                 <ha-textfield label="Border width (px)" type="number" .value=${String(this._config.persons_border_width || 1)} data-field="persons_border_width" @input=${this._changed}></ha-textfield>
+                <ha-textfield label="Border style" .value=${this._config.persons_border_style || "solid"} data-field="persons_border_style" @input=${this._changed}></ha-textfield>
+              </div>
+
+              <div class="inline-fields-2">
+                <ha-textfield label="Border radius" helper="e.g. 50% or 8px" .value=${this._config.persons_border_radius || "50%"} data-field="persons_border_radius" @input=${this._changed}></ha-textfield>
                 <ha-textfield label="Border color" .value=${this._config.persons_border_color || "rgba(255,255,255,0.3)"} data-field="persons_border_color" @input=${this._changed}></ha-textfield>
               </div>
 
               <ha-textfield label="Border color (away)" .value=${this._config.persons_border_color_away || "rgba(255,100,100,0.5)"} data-field="persons_border_color_away" @input=${this._changed}></ha-textfield>
+
+              <ha-textfield label="Box shadow" helper="Leave empty for no shadow" .value=${this._config.persons_box_shadow !== undefined ? this._config.persons_box_shadow : "0 2px 8px rgba(0, 0, 0, 0.4)"} data-field="persons_box_shadow" @input=${this._changed}></ha-textfield>
 
               <ha-formfield label="Use entity picture (if available)">
                 <ha-switch .checked=${this._config.persons_use_entity_picture !== false} data-field="persons_use_entity_picture" @change=${this._changed}></ha-switch>
