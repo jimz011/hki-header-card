@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v2.0.1 ',
+  '%c HKI-HEADER-CARD %c v2.0.2 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -428,6 +428,9 @@ function flattenNestedFormat(nested) {
     
     const prefix = `top_bar_${slot}_`;
     flat[`top_bar_${slot}`] = slotConfig.type || "none";
+    
+    // Only process additional properties if slot type is not "none"
+    if (slotConfig.type === "none") return;
     
     // Common properties
     if (slotConfig.offset_x !== undefined) flat[prefix + "offset_x"] = slotConfig.offset_x;
@@ -2836,7 +2839,8 @@ class HkiHeaderCardEditor extends LitElement {
     // This ensures Home Assistant recognizes this as a valid header card
     const alwaysInclude = [
       'height_vh', 'min_height', 'max_height', 'background',
-      'persons_enabled', 'top_bar_enabled'
+      'persons_enabled',
+      'top_bar_enabled', 'top_bar_left', 'top_bar_center', 'top_bar_right'
     ];
     
     alwaysInclude.forEach(key => {
@@ -2890,7 +2894,8 @@ class HkiHeaderCardEditor extends LitElement {
           return cleanedPerson;
         }).filter(Boolean);
         
-        if (cleanedPersons.length > 0) {
+        // Always include persons_entities, even if empty, when persons are enabled
+        if (cleanedPersons.length > 0 || config.persons_enabled) {
           stripped[key] = cleanedPersons;
         }
         continue;
@@ -2975,10 +2980,15 @@ class HkiHeaderCardEditor extends LitElement {
       if (flat.info_pill_border_color !== undefined) nested.info.pill_border_color = flat.info_pill_border_color;
     }
     
-    // Nest slots
+    // Nest slots - always include them even if "none" for clarity
     ['left', 'center', 'right'].forEach(slot => {
       const slotType = flat[`top_bar_${slot}`];
-      if (!slotType || slotType === "none") return;
+      
+      // If slot is "none" or undefined, just set type: "none"
+      if (!slotType || slotType === "none") {
+        nested[`top_bar_${slot}`] = { type: "none" };
+        return;
+      }
       
       const prefix = `top_bar_${slot}_`;
       const slotConfig = { type: slotType };
