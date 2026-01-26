@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v2.0.3 ',
+  '%c HKI-HEADER-CARD %c v2.0.4 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -126,7 +126,7 @@ const DEFAULTS = Object.freeze({
   persons_use_entity_picture: true,
   persons_border_width: 1,
   persons_border_style: "solid",
-  persons_border_radius: "50%",
+  persons_border_radius: 50,
   persons_border_color: "rgba(255,255,255,0.3)",
   persons_border_color_away: "rgba(255,0,0,0.5)",
   persons_box_shadow: "0 2px 8px rgba(0, 0, 0, 0.4)",
@@ -1304,7 +1304,7 @@ class HkiHeaderCard extends LitElement {
     m.persons_use_entity_picture = m.persons_use_entity_picture !== false;
     m.persons_border_width = clamp(+m.persons_border_width || 1, 0, 10);
     m.persons_border_style = m.persons_border_style || "solid";
-    m.persons_border_radius = m.persons_border_radius || "50%";
+    m.persons_border_radius = m.persons_border_radius !== undefined ? m.persons_border_radius : 50;
     m.persons_border_color = m.persons_border_color || "rgba(255,255,255,0.3)";
     m.persons_border_color_away = m.persons_border_color_away || "rgba(255,100,100,0.5)";
     m.persons_box_shadow = m.persons_box_shadow !== undefined ? m.persons_box_shadow : "0 2px 8px rgba(0, 0, 0, 0.4)";
@@ -2310,7 +2310,18 @@ class HkiHeaderCard extends LitElement {
     const hideAway = cfg.persons_hide_away || false;
     const borderWidth = cfg.persons_border_width || 1;
     const borderStyle = cfg.persons_border_style || "solid";
-    const borderRadius = cfg.persons_border_radius || "50%";
+    
+    // Parse border radius to handle integer values as pixels
+    const parseRadius = (v) => {
+      if (v === undefined || v === null || v === "") return "50%";
+      if (typeof v === "number" && Number.isFinite(v)) return `${v}px`;
+      const s = String(v).trim();
+      // If user enters a plain number (incl. negative/decimal), interpret as px.
+      // Otherwise pass through as any valid CSS length/value (%, em, var(), etc.)
+      return /^-?\d+(?:\.\d+)?$/.test(s) ? `${s}px` : s;
+    };
+    
+    const borderRadius = parseRadius(cfg.persons_border_radius);
     const borderColor = cfg.persons_border_color || "rgba(255,255,255,0.3)";
     const borderColorAway = cfg.persons_border_color_away || "rgba(255,100,100,0.5)";
     const boxShadow = cfg.persons_box_shadow !== undefined ? cfg.persons_box_shadow : "0 2px 8px rgba(0, 0, 0, 0.4)";
@@ -3210,7 +3221,8 @@ class HkiHeaderCardEditor extends LitElement {
     // while still allowing any valid CSS value (e.g., 12px, 0, 50%, var(--x)).
     // IMPORTANT: do NOT auto-append "px" or coerce to Number here, because @input fires per-keystroke
     // and coercion can interfere with typing (e.g., "12." or "-" while editing).
-    if (field === "card_border_radius" || field === "card_border_radius_top" || field === "card_border_radius_bottom") {
+    // Same applies to persons_border_radius.
+    if (field === "card_border_radius" || field === "card_border_radius_top" || field === "card_border_radius_bottom" || field === "persons_border_radius") {
       const s = (value ?? "").toString().trim();
       value = s; // store raw string; conversion happens when building CSS
     }
@@ -3854,7 +3866,7 @@ class HkiHeaderCardEditor extends LitElement {
               </div>
 
               <div class="inline-fields-2">
-                <ha-textfield label="Border radius" helper="e.g. 50% or 8px" .value=${this._config.persons_border_radius || "50%"} data-field="persons_border_radius" @input=${this._changed}></ha-textfield>
+                <ha-textfield label="Border radius (px)" helper="Integer for pixels, or CSS value" .value=${String(this._config.persons_border_radius !== undefined ? this._config.persons_border_radius : 50)} data-field="persons_border_radius" @input=${this._changed}></ha-textfield>
                 <ha-textfield label="Border color" .value=${this._config.persons_border_color || "rgba(255,255,255,0.3)"} data-field="persons_border_color" @input=${this._changed}></ha-textfield>
               </div>
 
