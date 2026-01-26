@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.4.0 ',
+  '%c HKI-HEADER-CARD %c v2.0.0 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -198,6 +198,309 @@ function normalizeWeightKey(input, fallbackKey) {
   }
   return fallbackKey;
 }
+
+// Migration helper: Detect if config is in old flat format
+function isOldFormat(config) {
+  // Check for old flat keys
+  const oldKeys = [
+    'top_bar_left_weather_entity', 'top_bar_right_weather_entity', 'top_bar_center_weather_entity',
+    'top_bar_left_show_icon', 'persons_enabled', 'persons_entities'
+  ];
+  return oldKeys.some(key => key in config);
+}
+
+// Migrate old flat format to new nested format
+function migrateToNestedFormat(oldConfig) {
+  const newConfig = { type: oldConfig.type || "custom:hki-header-card" };
+  
+  // Copy simple top-level properties
+  const simpleProps = [
+    'title', 'subtitle', 'text_align', 'title_color', 'subtitle_color',
+    'background', 'background_color', 'background_position', 'background_repeat',
+    'background_size', 'background_blend_mode', 'height_vh', 'min_height', 'max_height',
+    'blend_color', 'blend_stop', 'blend_enabled',
+    'card_border_radius', 'card_border_radius_top', 'card_border_radius_bottom',
+    'card_box_shadow', 'card_border_style', 'card_border_width', 'card_border_color',
+    'fixed', 'fixed_top', 'inset_top', 'inset_left', 'inset_right', 'inset_bottom',
+    'title_offset_x', 'title_offset_y', 'subtitle_offset_x', 'subtitle_offset_y',
+    'badges_offset_pinned', 'badges_offset_unpinned', 'badges_gap', 'badges_fixed',
+    'font_family', 'font_family_custom', 'font_style', 'title_size_px', 'subtitle_size_px',
+    'title_weight', 'subtitle_weight', 'mobile_breakpoint'
+  ];
+  
+  simpleProps.forEach(prop => {
+    if (oldConfig[prop] !== undefined) {
+      newConfig[prop] = oldConfig[prop];
+    }
+  });
+  
+  // Migrate top_bar global settings
+  newConfig.top_bar = {
+    enabled: oldConfig.top_bar_enabled !== undefined ? oldConfig.top_bar_enabled : true,
+    offset_y: oldConfig.top_bar_offset_y !== undefined ? oldConfig.top_bar_offset_y : 15,
+    padding_x: oldConfig.top_bar_padding_x !== undefined ? oldConfig.top_bar_padding_x : 0
+  };
+  
+  // Migrate global info styling
+  newConfig.info = {
+    size_px: oldConfig.info_size_px,
+    weight: oldConfig.info_weight,
+    color: oldConfig.info_color,
+    pill: oldConfig.info_pill,
+    pill_background: oldConfig.info_pill_background,
+    pill_padding_x: oldConfig.info_pill_padding_x,
+    pill_padding_y: oldConfig.info_pill_padding_y,
+    pill_radius: oldConfig.info_pill_radius,
+    pill_blur: oldConfig.info_pill_blur,
+    pill_border_style: oldConfig.info_pill_border_style,
+    pill_border_width: oldConfig.info_pill_border_width,
+    pill_border_color: oldConfig.info_pill_border_color
+  };
+  
+  // Migrate each slot (left, center, right)
+  ['left', 'center', 'right'].forEach(slot => {
+    const slotType = oldConfig[`top_bar_${slot}`] || "none";
+    if (slotType === "none") return;
+    
+    const prefix = `top_bar_${slot}_`;
+    const slotConfig = { type: slotType };
+    
+    // Common slot properties
+    if (oldConfig[prefix + "offset_x"] !== undefined) slotConfig.offset_x = oldConfig[prefix + "offset_x"];
+    if (oldConfig[prefix + "offset_y"] !== undefined) slotConfig.offset_y = oldConfig[prefix + "offset_y"];
+    if (oldConfig[prefix + "offset_x_mobile"] !== undefined) slotConfig.offset_x_mobile = oldConfig[prefix + "offset_x_mobile"];
+    if (oldConfig[prefix + "offset_y_mobile"] !== undefined) slotConfig.offset_y_mobile = oldConfig[prefix + "offset_y_mobile"];
+    if (oldConfig[prefix + "overflow"] !== undefined) slotConfig.overflow = oldConfig[prefix + "overflow"];
+    
+    // Styling (only if not using global)
+    if (oldConfig[prefix + "use_global"] === false) {
+      slotConfig.styling = {
+        size_px: oldConfig[prefix + "size_px"],
+        weight: oldConfig[prefix + "weight"],
+        color: oldConfig[prefix + "color"],
+        pill: oldConfig[prefix + "pill"],
+        pill_background: oldConfig[prefix + "pill_background"],
+        pill_padding_x: oldConfig[prefix + "pill_padding_x"],
+        pill_padding_y: oldConfig[prefix + "pill_padding_y"],
+        pill_radius: oldConfig[prefix + "pill_radius"],
+        pill_blur: oldConfig[prefix + "pill_blur"],
+        pill_border_style: oldConfig[prefix + "pill_border_style"],
+        pill_border_width: oldConfig[prefix + "pill_border_width"],
+        pill_border_color: oldConfig[prefix + "pill_border_color"]
+      };
+    }
+    
+    // Type-specific configurations
+    if (slotType === "weather") {
+      slotConfig.weather = {
+        entity: oldConfig[prefix + "weather_entity"],
+        show_icon: oldConfig[prefix + "show_icon"],
+        show_condition: oldConfig[prefix + "show_condition"],
+        show_temperature: oldConfig[prefix + "show_temperature"],
+        show_humidity: oldConfig[prefix + "show_humidity"],
+        show_wind: oldConfig[prefix + "show_wind"],
+        show_pressure: oldConfig[prefix + "show_pressure"],
+        colored_icons: oldConfig[prefix + "weather_colored_icons"],
+        icon_color_mode: oldConfig[prefix + "weather_icon_color_mode"],
+        icon_color: oldConfig[prefix + "weather_icon_color"],
+        animate_icon: oldConfig[prefix + "animate_icon"],
+        icon_pack_path: oldConfig[prefix + "icon_pack_path"]
+      };
+    } else if (slotType === "datetime") {
+      slotConfig.datetime = {
+        show_day: oldConfig[prefix + "show_day"],
+        show_date: oldConfig[prefix + "show_date"],
+        show_time: oldConfig[prefix + "show_time"],
+        time_format: oldConfig[prefix + "time_format"],
+        date_format: oldConfig[prefix + "date_format"],
+        separator: oldConfig[prefix + "separator"],
+        icon: oldConfig[prefix + "icon"],
+        animate_icon: oldConfig[prefix + "animate_icon"]
+      };
+    } else if (slotType === "button") {
+      slotConfig.button = {
+        icon: oldConfig[prefix + "icon"],
+        label: oldConfig[prefix + "label"]
+      };
+    } else if (slotType === "custom") {
+      slotConfig.custom = {
+        card: oldConfig[prefix + "card"]
+      };
+    }
+    
+    // Actions
+    slotConfig.actions = {
+      tap_action: oldConfig[prefix + "tap_action"],
+      hold_action: oldConfig[prefix + "hold_action"],
+      double_tap_action: oldConfig[prefix + "double_tap_action"]
+    };
+    
+    newConfig[`top_bar_${slot}`] = slotConfig;
+  });
+  
+  // Migrate persons
+  if (oldConfig.persons_enabled || oldConfig.persons_entities) {
+    newConfig.persons = {
+      enabled: oldConfig.persons_enabled || false,
+      align: oldConfig.persons_align,
+      offset_x: oldConfig.persons_offset_x,
+      offset_y: oldConfig.persons_offset_y,
+      size: oldConfig.persons_size,
+      spacing: oldConfig.persons_spacing,
+      stack_order: oldConfig.persons_stack_order,
+      dynamic_order: oldConfig.persons_dynamic_order,
+      use_entity_picture: oldConfig.persons_use_entity_picture,
+      border_width: oldConfig.persons_border_width,
+      border_color: oldConfig.persons_border_color,
+      border_color_away: oldConfig.persons_border_color_away,
+      grayscale_away: oldConfig.persons_grayscale_away,
+      entities: oldConfig.persons_entities || []
+    };
+  }
+  
+  return newConfig;
+}
+
+// Flatten nested format to flat format for internal use
+function flattenNestedFormat(nested) {
+  const flat = { type: nested.type || "custom:hki-header-card" };
+  
+  // Copy simple top-level properties
+  const simpleProps = [
+    'title', 'subtitle', 'text_align', 'title_color', 'subtitle_color',
+    'background', 'background_color', 'background_position', 'background_repeat',
+    'background_size', 'background_blend_mode', 'height_vh', 'min_height', 'max_height',
+    'blend_color', 'blend_stop', 'blend_enabled',
+    'card_border_radius', 'card_border_radius_top', 'card_border_radius_bottom',
+    'card_box_shadow', 'card_border_style', 'card_border_width', 'card_border_color',
+    'fixed', 'fixed_top', 'inset_top', 'inset_left', 'inset_right', 'inset_bottom',
+    'title_offset_x', 'title_offset_y', 'subtitle_offset_x', 'subtitle_offset_y',
+    'badges_offset_pinned', 'badges_offset_unpinned', 'badges_gap', 'badges_fixed',
+    'font_family', 'font_family_custom', 'font_style', 'title_size_px', 'subtitle_size_px',
+    'title_weight', 'subtitle_weight', 'mobile_breakpoint'
+  ];
+  
+  simpleProps.forEach(prop => {
+    if (nested[prop] !== undefined) {
+      flat[prop] = nested[prop];
+    }
+  });
+  
+  // Flatten top_bar
+  if (nested.top_bar) {
+    flat.top_bar_enabled = nested.top_bar.enabled;
+    flat.top_bar_offset_y = nested.top_bar.offset_y;
+    flat.top_bar_padding_x = nested.top_bar.padding_x;
+  }
+  
+  // Flatten info
+  if (nested.info) {
+    flat.info_size_px = nested.info.size_px;
+    flat.info_weight = nested.info.weight;
+    flat.info_color = nested.info.color;
+    flat.info_pill = nested.info.pill;
+    flat.info_pill_background = nested.info.pill_background;
+    flat.info_pill_padding_x = nested.info.pill_padding_x;
+    flat.info_pill_padding_y = nested.info.pill_padding_y;
+    flat.info_pill_radius = nested.info.pill_radius;
+    flat.info_pill_blur = nested.info.pill_blur;
+    flat.info_pill_border_style = nested.info.pill_border_style;
+    flat.info_pill_border_width = nested.info.pill_border_width;
+    flat.info_pill_border_color = nested.info.pill_border_color;
+  }
+  
+  // Flatten slots
+  ['left', 'center', 'right'].forEach(slot => {
+    const slotConfig = nested[`top_bar_${slot}`];
+    if (!slotConfig) return;
+    
+    const prefix = `top_bar_${slot}_`;
+    flat[`top_bar_${slot}`] = slotConfig.type || "none";
+    
+    // Common properties
+    if (slotConfig.offset_x !== undefined) flat[prefix + "offset_x"] = slotConfig.offset_x;
+    if (slotConfig.offset_y !== undefined) flat[prefix + "offset_y"] = slotConfig.offset_y;
+    if (slotConfig.offset_x_mobile !== undefined) flat[prefix + "offset_x_mobile"] = slotConfig.offset_x_mobile;
+    if (slotConfig.offset_y_mobile !== undefined) flat[prefix + "offset_y_mobile"] = slotConfig.offset_y_mobile;
+    if (slotConfig.overflow !== undefined) flat[prefix + "overflow"] = slotConfig.overflow;
+    
+    // Styling
+    if (slotConfig.styling) {
+      flat[prefix + "use_global"] = false;
+      flat[prefix + "size_px"] = slotConfig.styling.size_px;
+      flat[prefix + "weight"] = slotConfig.styling.weight;
+      flat[prefix + "color"] = slotConfig.styling.color;
+      flat[prefix + "pill"] = slotConfig.styling.pill;
+      flat[prefix + "pill_background"] = slotConfig.styling.pill_background;
+      flat[prefix + "pill_padding_x"] = slotConfig.styling.pill_padding_x;
+      flat[prefix + "pill_padding_y"] = slotConfig.styling.pill_padding_y;
+      flat[prefix + "pill_radius"] = slotConfig.styling.pill_radius;
+      flat[prefix + "pill_blur"] = slotConfig.styling.pill_blur;
+      flat[prefix + "pill_border_style"] = slotConfig.styling.pill_border_style;
+      flat[prefix + "pill_border_width"] = slotConfig.styling.pill_border_width;
+      flat[prefix + "pill_border_color"] = slotConfig.styling.pill_border_color;
+    } else {
+      flat[prefix + "use_global"] = true;
+    }
+    
+    // Type-specific
+    if (slotConfig.weather) {
+      Object.entries(slotConfig.weather).forEach(([key, val]) => {
+        if (key === 'entity') {
+          flat[prefix + "weather_entity"] = val;
+        } else if (key.startsWith('icon_')) {
+          flat[prefix + "weather_" + key] = val;
+        } else {
+          flat[prefix + key] = val;
+        }
+      });
+    }
+    
+    if (slotConfig.datetime) {
+      Object.entries(slotConfig.datetime).forEach(([key, val]) => {
+        flat[prefix + key] = val;
+      });
+    }
+    
+    if (slotConfig.button) {
+      Object.entries(slotConfig.button).forEach(([key, val]) => {
+        flat[prefix + key] = val;
+      });
+    }
+    
+    if (slotConfig.custom) {
+      flat[prefix + "card"] = slotConfig.custom.card;
+    }
+    
+    // Actions
+    if (slotConfig.actions) {
+      if (slotConfig.actions.tap_action) flat[prefix + "tap_action"] = slotConfig.actions.tap_action;
+      if (slotConfig.actions.hold_action) flat[prefix + "hold_action"] = slotConfig.actions.hold_action;
+      if (slotConfig.actions.double_tap_action) flat[prefix + "double_tap_action"] = slotConfig.actions.double_tap_action;
+    }
+  });
+  
+  // Flatten persons
+  if (nested.persons) {
+    flat.persons_enabled = nested.persons.enabled;
+    flat.persons_align = nested.persons.align;
+    flat.persons_offset_x = nested.persons.offset_x;
+    flat.persons_offset_y = nested.persons.offset_y;
+    flat.persons_size = nested.persons.size;
+    flat.persons_spacing = nested.persons.spacing;
+    flat.persons_stack_order = nested.persons.stack_order;
+    flat.persons_dynamic_order = nested.persons.dynamic_order;
+    flat.persons_use_entity_picture = nested.persons.use_entity_picture;
+    flat.persons_border_width = nested.persons.border_width;
+    flat.persons_border_color = nested.persons.border_color;
+    flat.persons_border_color_away = nested.persons.border_color_away;
+    flat.persons_grayscale_away = nested.persons.grayscale_away;
+    flat.persons_entities = nested.persons.entities || [];
+  }
+  
+  return flat;
+}
+
 
 // Simplified hash - djb2
 function hashStr(s) {
@@ -908,7 +1211,20 @@ class HkiHeaderCard extends LitElement {
   setConfig(config) {
     if (!config) throw new Error("Invalid configuration");
 
-    const m = { ...DEFAULTS, ...config };
+    // Detect format and convert if needed
+    let workingConfig = config;
+    
+    // If config uses old flat format, migrate to nested first
+    if (isOldFormat(config)) {
+      console.log('[HKI Header Card] Detected old flat format, migrating to nested format...');
+      const nested = migrateToNestedFormat(config);
+      workingConfig = flattenNestedFormat(nested); // Flatten back for internal use
+    } else if (config.top_bar_left && typeof config.top_bar_left === 'object') {
+      // New nested format - flatten for internal use
+      workingConfig = flattenNestedFormat(config);
+    }
+
+    const m = { ...DEFAULTS, ...workingConfig };
 
     // Numeric clamping
     m.height_vh = clamp(+m.height_vh, 10, 100);
@@ -2325,7 +2641,19 @@ class HkiHeaderCardEditor extends LitElement {
   }
 
   setConfig(config) {
-    this._config = { ...DEFAULTS, ...config };
+    // Detect format and convert if needed
+    let workingConfig = config;
+    
+    // If config uses old flat format, migrate to nested first
+    if (isOldFormat(config)) {
+      const nested = migrateToNestedFormat(config);
+      workingConfig = flattenNestedFormat(nested); // Flatten back for internal use
+    } else if (config.top_bar_left && typeof config.top_bar_left === 'object') {
+      // New nested format - flatten for internal use
+      workingConfig = flattenNestedFormat(config);
+    }
+    
+    this._config = { ...DEFAULTS, ...workingConfig };
     this.requestUpdate();
   }
 
@@ -2437,7 +2765,179 @@ class HkiHeaderCardEditor extends LitElement {
       stripped[key] = value;
     }
     
-    return stripped;
+    // Convert stripped flat config to nested format for output
+    return this._convertToNestedOutput(stripped);
+  }
+
+  _convertToNestedOutput(flat) {
+    const nested = { type: flat.type };
+    
+    // Simple top-level properties stay as-is
+    const simpleProps = [
+      'title', 'subtitle', 'text_align', 'title_color', 'subtitle_color',
+      'background', 'background_color', 'background_position', 'background_repeat',
+      'background_size', 'background_blend_mode', 'height_vh', 'min_height', 'max_height',
+      'blend_color', 'blend_stop', 'blend_enabled',
+      'card_border_radius', 'card_border_radius_top', 'card_border_radius_bottom',
+      'card_box_shadow', 'card_border_style', 'card_border_width', 'card_border_color',
+      'fixed', 'fixed_top', 'inset_top', 'inset_left', 'inset_right', 'inset_bottom',
+      'title_offset_x', 'title_offset_y', 'subtitle_offset_x', 'subtitle_offset_y',
+      'badges_offset_pinned', 'badges_offset_unpinned', 'badges_gap', 'badges_fixed',
+      'font_family', 'font_family_custom', 'font_style', 'title_size_px', 'subtitle_size_px',
+      'title_weight', 'subtitle_weight', 'mobile_breakpoint'
+    ];
+    
+    simpleProps.forEach(prop => {
+      if (flat[prop] !== undefined) {
+        nested[prop] = flat[prop];
+      }
+    });
+    
+    // Nest top_bar if any settings exist
+    const hasTopBarConfig = flat.top_bar_enabled !== undefined || flat.top_bar_offset_y !== undefined || flat.top_bar_padding_x !== undefined;
+    if (hasTopBarConfig) {
+      nested.top_bar = {};
+      if (flat.top_bar_enabled !== undefined) nested.top_bar.enabled = flat.top_bar_enabled;
+      if (flat.top_bar_offset_y !== undefined) nested.top_bar.offset_y = flat.top_bar_offset_y;
+      if (flat.top_bar_padding_x !== undefined) nested.top_bar.padding_x = flat.top_bar_padding_x;
+    }
+    
+    // Nest info if any settings exist
+    const infoKeys = ['info_size_px', 'info_weight', 'info_color', 'info_pill', 'info_pill_background',
+                      'info_pill_padding_x', 'info_pill_padding_y', 'info_pill_radius', 'info_pill_blur',
+                      'info_pill_border_style', 'info_pill_border_width', 'info_pill_border_color'];
+    const hasInfoConfig = infoKeys.some(k => flat[k] !== undefined);
+    if (hasInfoConfig) {
+      nested.info = {};
+      if (flat.info_size_px !== undefined) nested.info.size_px = flat.info_size_px;
+      if (flat.info_weight !== undefined) nested.info.weight = flat.info_weight;
+      if (flat.info_color !== undefined) nested.info.color = flat.info_color;
+      if (flat.info_pill !== undefined) nested.info.pill = flat.info_pill;
+      if (flat.info_pill_background !== undefined) nested.info.pill_background = flat.info_pill_background;
+      if (flat.info_pill_padding_x !== undefined) nested.info.pill_padding_x = flat.info_pill_padding_x;
+      if (flat.info_pill_padding_y !== undefined) nested.info.pill_padding_y = flat.info_pill_padding_y;
+      if (flat.info_pill_radius !== undefined) nested.info.pill_radius = flat.info_pill_radius;
+      if (flat.info_pill_blur !== undefined) nested.info.pill_blur = flat.info_pill_blur;
+      if (flat.info_pill_border_style !== undefined) nested.info.pill_border_style = flat.info_pill_border_style;
+      if (flat.info_pill_border_width !== undefined) nested.info.pill_border_width = flat.info_pill_border_width;
+      if (flat.info_pill_border_color !== undefined) nested.info.pill_border_color = flat.info_pill_border_color;
+    }
+    
+    // Nest slots
+    ['left', 'center', 'right'].forEach(slot => {
+      const slotType = flat[`top_bar_${slot}`];
+      if (!slotType || slotType === "none") return;
+      
+      const prefix = `top_bar_${slot}_`;
+      const slotConfig = { type: slotType };
+      
+      // Common properties
+      if (flat[prefix + "offset_x"] !== undefined) slotConfig.offset_x = flat[prefix + "offset_x"];
+      if (flat[prefix + "offset_y"] !== undefined) slotConfig.offset_y = flat[prefix + "offset_y"];
+      if (flat[prefix + "offset_x_mobile"] !== undefined) slotConfig.offset_x_mobile = flat[prefix + "offset_x_mobile"];
+      if (flat[prefix + "offset_y_mobile"] !== undefined) slotConfig.offset_y_mobile = flat[prefix + "offset_y_mobile"];
+      if (flat[prefix + "overflow"] !== undefined) slotConfig.overflow = flat[prefix + "overflow"];
+      
+      // Styling (only if not using global)
+      if (flat[prefix + "use_global"] === false) {
+        slotConfig.styling = {};
+        const stylingKeys = ['size_px', 'weight', 'color', 'pill', 'pill_background', 'pill_padding_x',
+                            'pill_padding_y', 'pill_radius', 'pill_blur', 'pill_border_style',
+                            'pill_border_width', 'pill_border_color'];
+        stylingKeys.forEach(key => {
+          if (flat[prefix + key] !== undefined) {
+            slotConfig.styling[key] = flat[prefix + key];
+          }
+        });
+      }
+      
+      // Type-specific config
+      if (slotType === "weather") {
+        const weatherKeys = {
+          weather_entity: 'entity',
+          show_icon: 'show_icon',
+          show_condition: 'show_condition',
+          show_temperature: 'show_temperature',
+          show_humidity: 'show_humidity',
+          show_wind: 'show_wind',
+          show_pressure: 'show_pressure',
+          weather_colored_icons: 'colored_icons',
+          weather_icon_color_mode: 'icon_color_mode',
+          weather_icon_color: 'icon_color',
+          animate_icon: 'animate_icon',
+          icon_pack_path: 'icon_pack_path'
+        };
+        
+        const hasWeatherConfig = Object.keys(weatherKeys).some(k => flat[prefix + k] !== undefined);
+        if (hasWeatherConfig) {
+          slotConfig.weather = {};
+          Object.entries(weatherKeys).forEach(([flatKey, nestedKey]) => {
+            if (flat[prefix + flatKey] !== undefined) {
+              slotConfig.weather[nestedKey] = flat[prefix + flatKey];
+            }
+          });
+        }
+      } else if (slotType === "datetime") {
+        const dtKeys = ['show_day', 'show_date', 'show_time', 'time_format', 'date_format', 'separator', 'icon', 'animate_icon'];
+        const hasDateTimeConfig = dtKeys.some(k => flat[prefix + k] !== undefined);
+        if (hasDateTimeConfig) {
+          slotConfig.datetime = {};
+          dtKeys.forEach(key => {
+            if (flat[prefix + key] !== undefined) {
+              slotConfig.datetime[key] = flat[prefix + key];
+            }
+          });
+        }
+      } else if (slotType === "button") {
+        const hasButtonConfig = flat[prefix + "icon"] !== undefined || flat[prefix + "label"] !== undefined;
+        if (hasButtonConfig) {
+          slotConfig.button = {};
+          if (flat[prefix + "icon"] !== undefined) slotConfig.button.icon = flat[prefix + "icon"];
+          if (flat[prefix + "label"] !== undefined) slotConfig.button.label = flat[prefix + "label"];
+        }
+      } else if (slotType === "custom") {
+        if (flat[prefix + "card"] !== undefined) {
+          slotConfig.custom = { card: flat[prefix + "card"] };
+        }
+      }
+      
+      // Actions
+      const hasActions = flat[prefix + "tap_action"] || flat[prefix + "hold_action"] || flat[prefix + "double_tap_action"];
+      if (hasActions) {
+        slotConfig.actions = {};
+        if (flat[prefix + "tap_action"]) slotConfig.actions.tap_action = flat[prefix + "tap_action"];
+        if (flat[prefix + "hold_action"]) slotConfig.actions.hold_action = flat[prefix + "hold_action"];
+        if (flat[prefix + "double_tap_action"]) slotConfig.actions.double_tap_action = flat[prefix + "double_tap_action"];
+      }
+      
+      nested[`top_bar_${slot}`] = slotConfig;
+    });
+    
+    // Nest persons
+    const personsKeys = ['persons_enabled', 'persons_align', 'persons_offset_x', 'persons_offset_y',
+                         'persons_size', 'persons_spacing', 'persons_stack_order', 'persons_dynamic_order',
+                         'persons_use_entity_picture', 'persons_border_width', 'persons_border_color',
+                         'persons_border_color_away', 'persons_grayscale_away', 'persons_entities'];
+    const hasPersonsConfig = personsKeys.some(k => flat[k] !== undefined);
+    if (hasPersonsConfig) {
+      nested.persons = {};
+      if (flat.persons_enabled !== undefined) nested.persons.enabled = flat.persons_enabled;
+      if (flat.persons_align !== undefined) nested.persons.align = flat.persons_align;
+      if (flat.persons_offset_x !== undefined) nested.persons.offset_x = flat.persons_offset_x;
+      if (flat.persons_offset_y !== undefined) nested.persons.offset_y = flat.persons_offset_y;
+      if (flat.persons_size !== undefined) nested.persons.size = flat.persons_size;
+      if (flat.persons_spacing !== undefined) nested.persons.spacing = flat.persons_spacing;
+      if (flat.persons_stack_order !== undefined) nested.persons.stack_order = flat.persons_stack_order;
+      if (flat.persons_dynamic_order !== undefined) nested.persons.dynamic_order = flat.persons_dynamic_order;
+      if (flat.persons_use_entity_picture !== undefined) nested.persons.use_entity_picture = flat.persons_use_entity_picture;
+      if (flat.persons_border_width !== undefined) nested.persons.border_width = flat.persons_border_width;
+      if (flat.persons_border_color !== undefined) nested.persons.border_color = flat.persons_border_color;
+      if (flat.persons_border_color_away !== undefined) nested.persons.border_color_away = flat.persons_border_color_away;
+      if (flat.persons_grayscale_away !== undefined) nested.persons.grayscale_away = flat.persons_grayscale_away;
+      if (flat.persons_entities) nested.persons.entities = flat.persons_entities;
+    }
+    
+    return nested;
   }
 
   _renderEntityPicker(label, field, value, helper = "", domain = null) {
