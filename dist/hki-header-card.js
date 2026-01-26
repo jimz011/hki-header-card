@@ -2773,7 +2773,15 @@ class HkiHeaderCardEditor extends LitElement {
     if (isOldFormat(config)) {
       const nested = migrateToNestedFormat(config);
       workingConfig = flattenNestedFormat(nested); // Flatten back for internal use
-    } else if (config.top_bar_left && typeof config.top_bar_left === 'object') {
+    } else if (
+      // Detect nested format by checking for any nested objects
+      (config.top_bar_left && typeof config.top_bar_left === 'object') ||
+      (config.top_bar_center && typeof config.top_bar_center === 'object') ||
+      (config.top_bar_right && typeof config.top_bar_right === 'object') ||
+      (config.top_bar && typeof config.top_bar === 'object') ||
+      (config.info && typeof config.info === 'object') ||
+      (config.persons && typeof config.persons === 'object')
+    ) {
       // New nested format - flatten for internal use
       workingConfig = flattenNestedFormat(config);
     }
@@ -2817,12 +2825,25 @@ class HkiHeaderCardEditor extends LitElement {
   }
 
   _stripDefaults(config) {
-    // Create a clean config object with only changed values
+    // Create a clean config object with essential fields always present
     const stripped = { 
-      type: config.type, // Always keep type
-      title: config.title !== undefined ? config.title : "Header", // Always include title
-      subtitle: config.subtitle !== undefined ? config.subtitle : "" // Always include subtitle
+      type: config.type,
+      title: config.title !== undefined ? config.title : "Header",
+      subtitle: config.subtitle !== undefined ? config.subtitle : ""
     };
+    
+    // Always include these essential fields even if they match defaults
+    // This ensures Home Assistant recognizes this as a valid header card
+    const alwaysInclude = [
+      'height_vh', 'min_height', 'max_height', 'background',
+      'persons_enabled', 'top_bar_enabled'
+    ];
+    
+    alwaysInclude.forEach(key => {
+      if (config[key] !== undefined) {
+        stripped[key] = config[key];
+      }
+    });
     
     // List of deprecated config keys to remove
     const deprecatedKeys = [
@@ -2835,6 +2856,7 @@ class HkiHeaderCardEditor extends LitElement {
     
     for (const [key, value] of Object.entries(config)) {
       if (key === 'type' || key === 'title' || key === 'subtitle') continue; // Already added
+      if (alwaysInclude.includes(key)) continue; // Already added
       
       // Skip deprecated keys
       if (deprecatedKeys.includes(key)) continue;
@@ -3648,7 +3670,8 @@ class HkiHeaderCardEditor extends LitElement {
   }
 
   render() {
-    if (!this._config) return html``;
+    // Don't render until setConfig has been called and config has been merged with DEFAULTS
+    if (!this._config || !this._config.type) return html``;
 
     const showCustomFont = this._config.font_family === "custom";
 
