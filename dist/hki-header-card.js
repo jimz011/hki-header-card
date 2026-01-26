@@ -2912,6 +2912,11 @@ class HkiHeaderCardEditor extends LitElement {
             entity: person.entity || ""
           };
           
+          // Preserve grayscale_entity if present
+          if (person.grayscale_entity) {
+            cleanedPerson.grayscale_entity = person.grayscale_entity;
+          }
+          
           // Clean up actions for each person
           if (person.tap_action) {
             cleanedPerson.tap_action = this._cleanupActionConfig(person.tap_action);
@@ -3888,7 +3893,7 @@ class HkiHeaderCardEditor extends LitElement {
 
             ${this._config.persons_enabled ? html`
               <div class="section">Persons</div>
-              <p style="opacity: 0.7; font-size: 0.9em; margin: 8px 0;">Configure individual persons below</p>
+              <p style="opacity: 0.7; font-size: 0.9em; margin: 8px 0;">Configure individual persons below. ${this._config.persons_grayscale_away ? html`<span style="color: var(--primary-color);">Enable "Grayscale when away" in Options to show per-person state override.</span>` : html`Enable "Grayscale when away" in Options below to add per-person state control.`}</p>
               
               ${(this._config.persons_entities || []).map((personConfig, index) => {
                 const entityId = typeof personConfig === 'string' ? personConfig : personConfig.entity;
@@ -3938,8 +3943,8 @@ class HkiHeaderCardEditor extends LitElement {
                       <ha-entity-picker
                         .hass=${this.hass}
                         .value=${typeof personConfig !== 'string' ? (personConfig.grayscale_entity || "") : ""}
-                        .label=${"Home/Away based on entity (optional)"}
-                        helper="Use entity state: on = home (color), off = away (grayscale)"
+                        .label=${"State Override Entity (optional)"}
+                        helper="Override person state with this entity: ON = home/color, OFF = away/grayscale"
                         @value-changed=${(e) => {
                           const updated = [...this._config.persons_entities];
                           if (typeof updated[index] === 'string') {
@@ -4047,6 +4052,9 @@ class HkiHeaderCardEditor extends LitElement {
               <ha-formfield label="Grayscale when away">
                 <ha-switch .checked=${!!this._config.persons_grayscale_away} data-field="persons_grayscale_away" @change=${this._changed}></ha-switch>
               </ha-formfield>
+              ${this._config.persons_grayscale_away ? html`
+                <p style="opacity: 0.6; font-size: 0.85em; margin: 4px 0 8px 24px; font-style: italic;">Per-person state override available in Persons section above</p>
+              ` : ''}
             ` : ''}
           </div>
         </details>
