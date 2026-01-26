@@ -79,8 +79,8 @@ const DEFAULTS = Object.freeze({
   background_size: "cover",
   background_blend_mode: "normal",
   height_vh: 35,
-  min_height: 180,
-  max_height: 220,
+  min_height: 215,
+  max_height: 240,
   blend_color: "var(--primary-background-color)",
   blend_stop: 95,
   blend_enabled: true,
@@ -104,9 +104,9 @@ const DEFAULTS = Object.freeze({
   inset_right: 0,
   inset_bottom: 0,
   title_offset_x: 5,
-  title_offset_y: 32,
+  title_offset_y: 65,
   subtitle_offset_x: 5,
-  subtitle_offset_y: 32,
+  subtitle_offset_y: 70,
   badges_offset_pinned: 48,
   badges_offset_unpinned: 100,
   badges_gap: 0,
@@ -115,13 +115,13 @@ const DEFAULTS = Object.freeze({
   // Person Entities Display
   persons_enabled: false,
   persons_entities: [],
-  persons_align: "left",
+  persons_align: "right",
   persons_offset_x: 5,
-  persons_offset_y: 32,
-  persons_size: 48,
-  persons_spacing: -8,
-  persons_stack_order: "ascending",
-  persons_dynamic_order: false,
+  persons_offset_y: 63,
+  persons_size: 35,
+  persons_spacing: 0,
+  persons_stack_order: "descending",
+  persons_dynamic_order: true,
   persons_use_entity_picture: true,
   persons_border_width: 1,
   persons_border_color: "rgba(255,255,255,0.3)",
@@ -139,8 +139,8 @@ const DEFAULTS = Object.freeze({
 
   // Top Bar Layout
   top_bar_enabled: true,
-  top_bar_offset_y: 10,
-  top_bar_padding_x: 5,
+  top_bar_offset_y: 15,
+  top_bar_padding_x: 0,
   
   // Slot types: "none", "spacer", "weather", "datetime", "custom", "button"
   top_bar_left: "none",
@@ -156,7 +156,7 @@ const DEFAULTS = Object.freeze({
   info_size_px: 12,
   info_weight: "medium",
   info_color: "",
-  info_pill: false,
+  info_pill: true,
   info_pill_background: "rgba(0,0,0,0.25)",
   info_pill_padding_x: 12,
   info_pill_padding_y: 8,
@@ -1068,9 +1068,75 @@ class HkiHeaderCard extends LitElement {
     m.title_weight = normalizeWeightKey(m.title_weight ?? "bold", "bold");
     m.subtitle_weight = normalizeWeightKey(m.subtitle_weight ?? "medium", "medium");
 
+    // ========== CONFIG CLEANUP ==========
+    // Remove deprecated fields from older versions
+    // These fields have been replaced or moved to per-entity config
+    delete m.persons_gap;           // Replaced by persons_spacing
+    delete m.persons_overlap;       // Replaced by persons_spacing
+    delete m.persons_tap_action;    // Now per-person in persons_entities
+    delete m.persons_hold_action;   // Now per-person in persons_entities
+    delete m.persons_double_tap_action; // Now per-person in persons_entities
+
+    // Clean up all action configs to remove unused fields based on action type
+    // This prevents having leftover fields like navigation_path when action is "url"
+    const actionFields = Object.keys(m).filter(k => k.endsWith('_tap_action') || k.endsWith('_hold_action') || k.endsWith('_double_tap_action'));
+    actionFields.forEach(field => {
+      if (m[field] && typeof m[field] === 'object') {
+        m[field] = this._cleanupActionConfig(m[field]);
+      }
+    });
+
+    // Clean up persons_entities array to ensure proper structure and clean actions
+    if (Array.isArray(m.persons_entities)) {
+      m.persons_entities = m.persons_entities.map(person => {
+        if (typeof person === 'string') return person;
+        if (typeof person !== 'object' || !person) return null;
+        
+        const cleaned = { entity: person.entity || "" };
+        if (person.tap_action) cleaned.tap_action = this._cleanupActionConfig(person.tap_action);
+        if (person.hold_action) cleaned.hold_action = this._cleanupActionConfig(person.hold_action);
+        if (person.double_tap_action) cleaned.double_tap_action = this._cleanupActionConfig(person.double_tap_action);
+        
+        return cleaned;
+      }).filter(Boolean);
+    }
+
     this._config = m;
     this._scheduleTemplateSetup(0);
     this._debouncedBadgesZIndex();
+  }
+
+  _cleanupActionConfig(action) {
+    if (!action || typeof action !== 'object') return action;
+    
+    const actionType = action.action || "none";
+    const cleaned = { action: actionType };
+    
+    // Only keep fields relevant to the action type
+    switch (actionType) {
+      case "navigate":
+        if (action.navigation_path) cleaned.navigation_path = action.navigation_path;
+        break;
+      case "url":
+        if (action.url_path) cleaned.url_path = action.url_path;
+        break;
+      case "more-info":
+      case "toggle":
+        if (action.entity) cleaned.entity = action.entity;
+        break;
+      case "perform-action":
+        if (action.perform_action) cleaned.perform_action = action.perform_action;
+        if (action.data) cleaned.data = action.data;
+        if (action.target) cleaned.target = action.target;
+        break;
+      case "call-service":
+        // Legacy support
+        if (action.service) cleaned.service = action.service;
+        if (action.service_data) cleaned.service_data = action.service_data;
+        break;
+    }
+    
+    return cleaned;
   }
 
   _isTemplateString(s) {
@@ -2263,19 +2329,106 @@ class HkiHeaderCardEditor extends LitElement {
     this.requestUpdate();
   }
 
+  _cleanupActionConfig(action) {
+    if (!action || typeof action !== 'object') return action;
+    
+    const actionType = action.action || "none";
+    const cleaned = { action: actionType };
+    
+    // Only keep fields relevant to the action type
+    switch (actionType) {
+      case "navigate":
+        if (action.navigation_path) cleaned.navigation_path = action.navigation_path;
+        break;
+      case "url":
+        if (action.url_path) cleaned.url_path = action.url_path;
+        break;
+      case "more-info":
+      case "toggle":
+        if (action.entity) cleaned.entity = action.entity;
+        break;
+      case "perform-action":
+        if (action.perform_action) cleaned.perform_action = action.perform_action;
+        if (action.data) cleaned.data = action.data;
+        if (action.target) cleaned.target = action.target;
+        break;
+      case "call-service":
+        // Legacy support
+        if (action.service) cleaned.service = action.service;
+        if (action.service_data) cleaned.service_data = action.service_data;
+        break;
+    }
+    
+    return cleaned;
+  }
+
   _stripDefaults(config) {
     // Create a clean config object with only changed values
     const stripped = { type: config.type }; // Always keep type
     
+    // List of deprecated config keys to remove
+    const deprecatedKeys = [
+      'persons_gap',           // Replaced by persons_spacing
+      'persons_overlap',       // Replaced by persons_spacing
+      'persons_tap_action',    // Now per-person in persons_entities
+      'persons_hold_action',   // Now per-person in persons_entities
+      'persons_double_tap_action' // Now per-person in persons_entities
+    ];
+    
     for (const [key, value] of Object.entries(config)) {
       if (key === 'type') continue; // Already added
+      
+      // Skip deprecated keys
+      if (deprecatedKeys.includes(key)) continue;
       
       const defaultValue = DEFAULTS[key];
       
       // Skip if value matches default
       if (defaultValue === value) continue;
       
-      // Handle deep equality for objects (like tap_action)
+      // Special handling for persons_entities array
+      if (key === 'persons_entities' && Array.isArray(value)) {
+        const cleanedPersons = value.map(person => {
+          if (typeof person === 'string') return person;
+          if (typeof person !== 'object' || !person) return null;
+          
+          const cleanedPerson = {
+            entity: person.entity || ""
+          };
+          
+          // Clean up actions for each person
+          if (person.tap_action) {
+            cleanedPerson.tap_action = this._cleanupActionConfig(person.tap_action);
+          }
+          if (person.hold_action) {
+            cleanedPerson.hold_action = this._cleanupActionConfig(person.hold_action);
+          }
+          if (person.double_tap_action) {
+            cleanedPerson.double_tap_action = this._cleanupActionConfig(person.double_tap_action);
+          }
+          
+          return cleanedPerson;
+        }).filter(Boolean);
+        
+        if (cleanedPersons.length > 0) {
+          stripped[key] = cleanedPersons;
+        }
+        continue;
+      }
+      
+      // Clean up action configs (tap_action, hold_action, double_tap_action for slots)
+      if (key.endsWith('_tap_action') || key.endsWith('_hold_action') || key.endsWith('_double_tap_action')) {
+        if (typeof value === 'object' && value !== null) {
+          const cleaned = this._cleanupActionConfig(value);
+          const defaultAction = DEFAULTS[key] || { action: "none" };
+          if (JSON.stringify(cleaned) !== JSON.stringify(defaultAction)) {
+            stripped[key] = cleaned;
+          }
+        }
+        continue;
+      }
+      
+      // Handle deep equality for objects
       if (typeof value === 'object' && value !== null && typeof defaultValue === 'object' && defaultValue !== null) {
         if (JSON.stringify(value) === JSON.stringify(defaultValue)) continue;
       }
