@@ -131,6 +131,7 @@ const DEFAULTS = Object.freeze({
   persons_border_color_away: "rgba(255,0,0,0.5)",
   persons_box_shadow: "0 2px 8px rgba(0, 0, 0, 0.4)",
   persons_grayscale_away: true,
+  persons_grayscale_entity: "",
   
   font_family: "inherit",
   font_family_custom: "",
@@ -367,6 +368,7 @@ function migrateToNestedFormat(oldConfig) {
     if (oldConfig.persons_border_color_away !== undefined) newConfig.persons.border_color_away = oldConfig.persons_border_color_away;
     if (oldConfig.persons_box_shadow !== undefined) newConfig.persons.box_shadow = oldConfig.persons_box_shadow;
     if (oldConfig.persons_grayscale_away !== undefined) newConfig.persons.grayscale_away = oldConfig.persons_grayscale_away;
+    if (oldConfig.persons_grayscale_entity !== undefined) newConfig.persons.grayscale_entity = oldConfig.persons_grayscale_entity;
     if (oldConfig.persons_entities !== undefined) newConfig.persons.entities = oldConfig.persons_entities || [];
   }
   
@@ -514,6 +516,7 @@ function flattenNestedFormat(nested) {
     if (nested.persons.border_color_away !== undefined) flat.persons_border_color_away = nested.persons.border_color_away;
     if (nested.persons.box_shadow !== undefined) flat.persons_box_shadow = nested.persons.box_shadow;
     if (nested.persons.grayscale_away !== undefined) flat.persons_grayscale_away = nested.persons.grayscale_away;
+    if (nested.persons.grayscale_entity !== undefined) flat.persons_grayscale_entity = nested.persons.grayscale_entity;
     if (nested.persons.entities !== undefined) flat.persons_entities = nested.persons.entities || [];
   }
   
@@ -1745,7 +1748,15 @@ class HkiHeaderCard extends LitElement {
     if (!action || action.action === "none" || !this.hass) return;
 
     // If entityId is provided and action doesn't have entity, add it
-    const finalAction = entityId && !action.entity ? { ...action, entity: entityId } : action;
+    // For perform-action, add entity to target if not present
+    let finalAction = action;
+    if (entityId && !action.entity) {
+      finalAction = { ...action, entity: entityId };
+    }
+    if (entityId && action.action === "perform-action" && (!action.target || !action.target.entity_id)) {
+      const existingTarget = action.target || {};
+      finalAction = { ...finalAction, target: { ...existingTarget, entity_id: entityId } };
+    }
 
     switch (finalAction.action) {
       case "navigate":
@@ -2326,6 +2337,7 @@ class HkiHeaderCard extends LitElement {
     const borderColorAway = cfg.persons_border_color_away || "rgba(255,100,100,0.5)";
     const boxShadow = cfg.persons_box_shadow !== undefined ? cfg.persons_box_shadow : "0 2px 8px rgba(0, 0, 0, 0.4)";
     const grayscaleAway = cfg.persons_grayscale_away || false;
+    const grayscaleEntity = cfg.persons_grayscale_entity || "";
     const useEntityPicture = cfg.persons_use_entity_picture !== false;
 
     // Filter out away persons if hide_away is enabled
@@ -2386,7 +2398,17 @@ class HkiHeaderCard extends LitElement {
 
           const entityPicture = entity.attributes?.entity_picture;
           const icon = entity.attributes?.icon || "mdi:account";
-          const isHome = entity.state === "home";
+          
+          // Determine "home" state - use grayscale_entity if configured, otherwise use person state
+          let isHome;
+          if (grayscaleEntity && this.hass?.states[grayscaleEntity]) {
+            // Use the grayscale entity's state: "on" = home, "off" = away
+            const grayscaleEntityState = this.hass.states[grayscaleEntity];
+            isHome = grayscaleEntityState.state === "on";
+          } else {
+            // Use the person entity's state
+            isHome = entity.state === "home";
+          }
 
           // Get per-person actions (with fallback to defaults)
           const tapAction = personConfig.tap_action || { action: "more-info" };
@@ -3091,7 +3113,7 @@ class HkiHeaderCardEditor extends LitElement {
                          'persons_size', 'persons_spacing', 'persons_stack_order', 'persons_dynamic_order',
                          'persons_hide_away', 'persons_use_entity_picture', 'persons_border_width', 'persons_border_style',
                          'persons_border_radius', 'persons_border_color', 'persons_border_color_away', 'persons_box_shadow',
-                         'persons_grayscale_away', 'persons_entities'];
+                         'persons_grayscale_away', 'persons_grayscale_entity', 'persons_entities'];
     const hasPersonsConfig = personsKeys.some(k => flat[k] !== undefined);
     if (hasPersonsConfig) {
       nested.persons = {};
@@ -3112,6 +3134,7 @@ class HkiHeaderCardEditor extends LitElement {
       if (flat.persons_border_color_away !== undefined) nested.persons.border_color_away = flat.persons_border_color_away;
       if (flat.persons_box_shadow !== undefined) nested.persons.box_shadow = flat.persons_box_shadow;
       if (flat.persons_grayscale_away !== undefined) nested.persons.grayscale_away = flat.persons_grayscale_away;
+      if (flat.persons_grayscale_entity !== undefined) nested.persons.grayscale_entity = flat.persons_grayscale_entity;
       if (flat.persons_entities) nested.persons.entities = flat.persons_entities;
     }
     
@@ -3828,37 +3851,29 @@ class HkiHeaderCardEditor extends LitElement {
                 <ha-icon icon="mdi:plus"></ha-icon> Add Person
               </mwc-button>
 
-              <div class="section" style="margin-top: 16px;">Alignment</div>
+              <div class="section" style="margin-top: 16px;">Position</div>
+              <div class="inline-fields-2">
+                <ha-textfield label="Horizontal offset (px)" type="number" .value=${String(this._config.persons_offset_x || 5)} data-field="persons_offset_x" @input=${this._changed}></ha-textfield>
+                <ha-textfield label="Vertical offset (px)" type="number" .value=${String(this._config.persons_offset_y || 32)} data-field="persons_offset_y" @input=${this._changed}></ha-textfield>
+              </div>
+
+              <div class="section">Alignment</div>
               <ha-select label="Persons alignment" .value=${this._config.persons_align || "left"} data-field="persons_align" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
                 <mwc-list-item value="left">Left</mwc-list-item>
                 <mwc-list-item value="center">Center</mwc-list-item>
                 <mwc-list-item value="right">Right</mwc-list-item>
               </ha-select>
 
-              <ha-select label="Stack order" .value=${this._config.persons_stack_order || "ascending"} data-field="persons_stack_order" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
-                <mwc-list-item value="ascending">Ascending (last on top)</mwc-list-item>
-                <mwc-list-item value="descending">Descending (first on top)</mwc-list-item>
-              </ha-select>
-
-              <ha-formfield label="Dynamic order (home persons first)">
-                <ha-switch .checked=${!!this._config.persons_dynamic_order} data-field="persons_dynamic_order" @change=${this._changed}></ha-switch>
-              </ha-formfield>
-
-              <ha-formfield label="Hide away persons">
-                <ha-switch .checked=${!!this._config.persons_hide_away} data-field="persons_hide_away" @change=${this._changed}></ha-switch>
-              </ha-formfield>
-
-              <div class="section">Position</div>
-              <div class="inline-fields-2">
-                <ha-textfield label="Horizontal offset (px)" type="number" .value=${String(this._config.persons_offset_x || 5)} data-field="persons_offset_x" @input=${this._changed}></ha-textfield>
-                <ha-textfield label="Vertical offset (px)" type="number" .value=${String(this._config.persons_offset_y || 32)} data-field="persons_offset_y" @input=${this._changed}></ha-textfield>
-              </div>
-
               <div class="section">Appearance</div>
               <div class="inline-fields-2">
                 <ha-textfield label="Avatar size (px)" type="number" .value=${String(this._config.persons_size || 48)} data-field="persons_size" @input=${this._changed}></ha-textfield>
                 <ha-textfield label="Spacing (px)" helper="Negative = overlap" type="number" .value=${String(this._config.persons_spacing != null ? this._config.persons_spacing : -8)} data-field="persons_spacing" @input=${this._changed}></ha-textfield>
               </div>
+
+              <ha-select label="Stack order" helper="Only affects overlapping (negative spacing)" .value=${this._config.persons_stack_order || "ascending"} data-field="persons_stack_order" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+                <mwc-list-item value="ascending">Ascending (last on top)</mwc-list-item>
+                <mwc-list-item value="descending">Descending (first on top)</mwc-list-item>
+              </ha-select>
 
               <div class="inline-fields-2">
                 <ha-textfield label="Border width (px)" type="number" .value=${String(this._config.persons_border_width || 1)} data-field="persons_border_width" @input=${this._changed}></ha-textfield>
@@ -3874,13 +3889,39 @@ class HkiHeaderCardEditor extends LitElement {
 
               <ha-textfield label="Box shadow" helper="Leave empty for no shadow" .value=${this._config.persons_box_shadow !== undefined ? this._config.persons_box_shadow : "0 2px 8px rgba(0, 0, 0, 0.4)"} data-field="persons_box_shadow" @input=${this._changed}></ha-textfield>
 
+              <div class="section">Options</div>
               <ha-formfield label="Use entity picture (if available)">
                 <ha-switch .checked=${this._config.persons_use_entity_picture !== false} data-field="persons_use_entity_picture" @change=${this._changed}></ha-switch>
+              </ha-formfield>
+
+              <ha-formfield label="Dynamic order (home persons first)">
+                <ha-switch .checked=${!!this._config.persons_dynamic_order} data-field="persons_dynamic_order" @change=${this._changed}></ha-switch>
+              </ha-formfield>
+
+              <ha-formfield label="Hide away persons">
+                <ha-switch .checked=${!!this._config.persons_hide_away} data-field="persons_hide_away" @change=${this._changed}></ha-switch>
               </ha-formfield>
 
               <ha-formfield label="Grayscale when away">
                 <ha-switch .checked=${!!this._config.persons_grayscale_away} data-field="persons_grayscale_away" @change=${this._changed}></ha-switch>
               </ha-formfield>
+
+              ${this._config.persons_grayscale_away ? html`
+                <div style="margin-left: 24px; margin-top: 8px;">
+                  <ha-entity-picker
+                    .hass=${this.hass}
+                    .value=${this._config.persons_grayscale_entity || ""}
+                    .label=${"Grayscale based on entity (optional)"}
+                    helper="Use entity state instead of person state. On = home (color), Off = away (grayscale)"
+                    @value-changed=${(e) => {
+                      this._config = { ...this._config, persons_grayscale_entity: e.detail.value || "" };
+                      const strippedConfig = this._stripDefaults(this._config);
+                      this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: strippedConfig } }));
+                      this.requestUpdate();
+                    }}
+                  ></ha-entity-picker>
+                </div>
+              ` : ''}
             ` : ''}
           </div>
         </details>
