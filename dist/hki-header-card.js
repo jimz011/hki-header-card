@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v2.0.0 ',
+  '%c HKI-HEADER-CARD %c v2.0.1 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -2818,7 +2818,11 @@ class HkiHeaderCardEditor extends LitElement {
 
   _stripDefaults(config) {
     // Create a clean config object with only changed values
-    const stripped = { type: config.type }; // Always keep type
+    const stripped = { 
+      type: config.type, // Always keep type
+      title: config.title !== undefined ? config.title : "Header", // Always include title
+      subtitle: config.subtitle !== undefined ? config.subtitle : "" // Always include subtitle
+    };
     
     // List of deprecated config keys to remove
     const deprecatedKeys = [
@@ -2830,7 +2834,7 @@ class HkiHeaderCardEditor extends LitElement {
     ];
     
     for (const [key, value] of Object.entries(config)) {
-      if (key === 'type') continue; // Already added
+      if (key === 'type' || key === 'title' || key === 'subtitle') continue; // Already added
       
       // Skip deprecated keys
       if (deprecatedKeys.includes(key)) continue;
