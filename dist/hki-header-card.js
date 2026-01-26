@@ -2717,7 +2717,7 @@ class HkiHeaderCardEditor extends LitElement {
 
   constructor() {
     super();
-    this._config = {};
+    this._config = { ...DEFAULTS }; // Initialize with defaults to prevent undefined issues
     // Cache for domain selection when ha-service-picker isn't available
     this._paDomainCache = {};
   }
@@ -2775,14 +2775,6 @@ class HkiHeaderCardEditor extends LitElement {
     
     // Merge with defaults - this ensures all fields have values
     this._config = { ...DEFAULTS, ...workingConfig };
-    
-    // Force initial values for critical fields to prevent undefined issues
-    if (this._config.top_bar_enabled === undefined) this._config.top_bar_enabled = true;
-    if (this._config.persons_enabled === undefined) this._config.persons_enabled = false;
-    if (this._config.top_bar_left === undefined) this._config.top_bar_left = "none";
-    if (this._config.top_bar_center === undefined) this._config.top_bar_center = "none";
-    if (this._config.top_bar_right === undefined) this._config.top_bar_right = "weather";
-    
     this.requestUpdate();
   }
 
