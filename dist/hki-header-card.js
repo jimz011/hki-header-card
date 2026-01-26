@@ -119,16 +119,13 @@ const DEFAULTS = Object.freeze({
   persons_offset_x: 5,
   persons_offset_y: 32,
   persons_size: 48,
-  persons_gap: 8,
-  persons_overlap: 0,
+  persons_spacing: -8,
+  persons_stack_order: "ascending",
   persons_use_entity_picture: true,
   persons_border_width: 1,
   persons_border_color: "rgba(255,255,255,0.3)",
-  persons_border_color_away: "rgba(255,100,100,0.5)",
+  persons_border_color_away: "rgba(255,0,0,0.5)",
   persons_grayscale_away: true,
-  persons_tap_action: { action: "more-info" },
-  persons_hold_action: { action: "none" },
-  persons_double_tap_action: { action: "none" },
   
   font_family: "inherit",
   font_family_custom: "",
@@ -420,6 +417,9 @@ class HkiHeaderCard extends LitElement {
         justify-content: center;
         cursor: pointer;
         transition: transform 0.2s ease, box-shadow 0.2s ease;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
       }
 
       .person-avatar:hover {
@@ -449,6 +449,9 @@ class HkiHeaderCard extends LitElement {
         flex-shrink: 0;
         flex-grow: 0;
         line-height: 1;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
       }
 
       .info-clickable {
@@ -925,21 +928,45 @@ class HkiHeaderCard extends LitElement {
 
     // Person entities configuration
     m.persons_enabled = !!m.persons_enabled;
-    m.persons_entities = Array.isArray(m.persons_entities) ? m.persons_entities : [];
+    
+    // Handle backward compatibility and normalize persons_entities structure
+    if (Array.isArray(m.persons_entities)) {
+      m.persons_entities = m.persons_entities.map(item => {
+        // If it's already an object, ensure it has all required fields
+        if (typeof item === 'object' && item !== null) {
+          return {
+            entity: item.entity || "",
+            tap_action: item.tap_action || { action: "more-info" },
+            hold_action: item.hold_action || { action: "none" },
+            double_tap_action: item.double_tap_action || { action: "none" }
+          };
+        }
+        // If it's a string (old format), convert to object
+        if (typeof item === 'string') {
+          return {
+            entity: item,
+            tap_action: { action: "more-info" },
+            hold_action: { action: "none" },
+            double_tap_action: { action: "none" }
+          };
+        }
+        return null;
+      }).filter(Boolean);
+    } else {
+      m.persons_entities = [];
+    }
+    
     m.persons_align = ["left", "center", "right"].includes(m.persons_align) ? m.persons_align : "left";
     m.persons_offset_x = toNum(m.persons_offset_x, 5);
     m.persons_offset_y = toNum(m.persons_offset_y, 32);
     m.persons_size = clamp(+m.persons_size || 48, 24, 128);
-    m.persons_gap = clamp(+m.persons_gap || 8, 0, 32);
-    m.persons_overlap = clamp(+m.persons_overlap || 0, 0, 40);
+    m.persons_spacing = toNum(m.persons_spacing, -8);
+    m.persons_stack_order = ["ascending", "descending"].includes(m.persons_stack_order) ? m.persons_stack_order : "ascending";
     m.persons_use_entity_picture = m.persons_use_entity_picture !== false;
     m.persons_border_width = clamp(+m.persons_border_width || 1, 0, 10);
     m.persons_border_color = m.persons_border_color || "rgba(255,255,255,0.3)";
     m.persons_border_color_away = m.persons_border_color_away || "rgba(255,100,100,0.5)";
     m.persons_grayscale_away = !!m.persons_grayscale_away;
-    m.persons_tap_action = m.persons_tap_action || { action: "more-info" };
-    m.persons_hold_action = m.persons_hold_action || { action: "none" };
-    m.persons_double_tap_action = m.persons_double_tap_action || { action: "none" };
 
 
     // Background extra options
@@ -1506,12 +1533,65 @@ class HkiHeaderCard extends LitElement {
     const buttonPillStyle = slotStyle.pill ? `--hki-info-pill-background:${slotStyle.pillBg};--hki-info-pill-padding-x:${slotStyle.pillPaddingX}px;--hki-info-pill-padding-y:${buttonPaddingY}px;--hki-info-pill-radius:${slotStyle.pillRadius}px;--hki-info-pill-blur:${slotStyle.pillBlur}px;--hki-info-pill-border-style:${slotStyle.pillBorderStyle};--hki-info-pill-border-width:${slotStyle.pillBorderWidth}px;--hki-info-pill-border-color:${slotStyle.pillBorderColor}` : "";
     const combinedStyle = `${slotStyle.inlineStyle} ${buttonPillStyle}`;
     
+    let touchTimer = null;
+    let touchMoved = false;
+    let clickTimer = null;
+    let clickCount = 0;
+
+    const handleTouchStart = (e) => {
+      touchMoved = false;
+      touchTimer = setTimeout(() => {
+        if (!touchMoved) {
+          e.preventDefault();
+          this._handleSlotTapAction(holdAction, slotName);
+          touchTimer = null;
+        }
+      }, 500);
+    };
+
+    const handleTouchMove = () => {
+      touchMoved = true;
+      if (touchTimer) {
+        clearTimeout(touchTimer);
+        touchTimer = null;
+      }
+    };
+
+    const handleTouchEnd = (e) => {
+      if (touchTimer) {
+        clearTimeout(touchTimer);
+        touchTimer = null;
+      }
+      if (!touchMoved && holdAction.action === "none") {
+        this._handleSlotTapAction(tapAction, slotName);
+      }
+    };
+
+    const handleClick = (e) => {
+      e.preventDefault();
+      clickCount++;
+      if (clickCount === 1) {
+        clickTimer = setTimeout(() => {
+          if (clickCount === 1) {
+            this._handleSlotTapAction(tapAction, slotName);
+          }
+          clickCount = 0;
+        }, 250);
+      } else if (clickCount === 2) {
+        clearTimeout(clickTimer);
+        clickCount = 0;
+        this._handleSlotTapAction(doubleTapAction, slotName);
+      }
+    };
+    
     return html`
       <div 
         class="info-item ${pillClass}" 
         style="${combinedStyle}"
-        @click=${() => this._handleSlotTapAction(tapAction, slotName)}
-        @dblclick=${() => this._handleSlotTapAction(doubleTapAction, slotName)}
+        @click=${handleClick}
+        @touchstart=${handleTouchStart}
+        @touchmove=${handleTouchMove}
+        @touchend=${handleTouchEnd}
         @contextmenu=${(e) => {
           e.preventDefault();
           this._handleSlotTapAction(holdAction, slotName);
@@ -1745,36 +1825,40 @@ class HkiHeaderCard extends LitElement {
     const personsX = cfg.persons_offset_x || 5;
     const personsY = cfg.persons_offset_y || 32;
     const personsSize = cfg.persons_size || 48;
-    const personsGap = cfg.persons_gap || 8;
-    const personsOverlap = cfg.persons_overlap || 0;
+    const personsSpacing = cfg.persons_spacing != null ? cfg.persons_spacing : -8;
+    const stackOrder = cfg.persons_stack_order || "ascending";
     const borderWidth = cfg.persons_border_width || 1;
     const borderColor = cfg.persons_border_color || "rgba(255,255,255,0.3)";
     const borderColorAway = cfg.persons_border_color_away || "rgba(255,100,100,0.5)";
     const grayscaleAway = cfg.persons_grayscale_away || false;
     const useEntityPicture = cfg.persons_use_entity_picture !== false;
-    
-    const tapAction = cfg.persons_tap_action || { action: "more-info" };
-    const holdAction = cfg.persons_hold_action || { action: "none" };
-    const doubleTapAction = cfg.persons_double_tap_action || { action: "none" };
 
     let containerStyle;
     if (personsAlign === "right") {
-      containerStyle = `left:auto;right:${personsX}px;top:${personsY}px;gap:${personsGap - personsOverlap}px;`;
+      containerStyle = `left:auto;right:${personsX}px;top:${personsY}px;gap:${personsSpacing}px;`;
     } else if (personsAlign === "center") {
-      containerStyle = `left:50%;top:${personsY}px;transform:translateX(-50%);gap:${personsGap - personsOverlap}px;`;
+      containerStyle = `left:50%;top:${personsY}px;transform:translateX(-50%);gap:${personsSpacing}px;`;
     } else {
-      containerStyle = `left:${personsX}px;top:${personsY}px;gap:${personsGap - personsOverlap}px;`;
+      containerStyle = `left:${personsX}px;top:${personsY}px;gap:${personsSpacing}px;`;
     }
+
+    const totalPersons = cfg.persons_entities.length;
 
     return html`
       <div class="persons-container" style="${containerStyle}">
-        ${cfg.persons_entities.map((entityId, index) => {
+        ${cfg.persons_entities.map((personConfig, index) => {
+          const entityId = typeof personConfig === 'string' ? personConfig : personConfig.entity;
           const entity = this.hass?.states[entityId];
           if (!entity) return html``;
 
           const entityPicture = entity.attributes?.entity_picture;
           const icon = entity.attributes?.icon || "mdi:account";
           const isHome = entity.state === "home";
+
+          // Get per-person actions (with fallback to defaults)
+          const tapAction = personConfig.tap_action || { action: "more-info" };
+          const holdAction = personConfig.hold_action || { action: "none" };
+          const doubleTapAction = personConfig.double_tap_action || { action: "none" };
 
           // Use entity picture if available and enabled, otherwise use icon
           const showPicture = useEntityPicture && entityPicture;
@@ -1785,17 +1869,55 @@ class HkiHeaderCard extends LitElement {
           // Apply grayscale filter if away and option enabled
           const grayscaleFilter = (!isHome && grayscaleAway) ? "filter:grayscale(100%);" : "";
           
-          // Add margin-left for overlap on all but first avatar
-          const overlapMargin = index > 0 && personsOverlap > 0 ? `margin-left:-${personsOverlap}px;` : "";
+          // Calculate z-index based on stack order
+          // ascending: later avatars on top (1, 2, 3, 4...)
+          // descending: earlier avatars on top (4, 3, 2, 1...)
+          const zIndex = stackOrder === "ascending" ? index + 1 : totalPersons - index;
 
-          const avatarStyle = `width:${personsSize}px;height:${personsSize}px;border-width:${borderWidth}px;border-color:${currentBorderColor};${grayscaleFilter}${overlapMargin}`;
+          const avatarStyle = `width:${personsSize}px;height:${personsSize}px;border-width:${borderWidth}px;border-color:${currentBorderColor};${grayscaleFilter}z-index:${zIndex};`;
+
+          // Touch event tracking for hold action
+          let touchTimer = null;
+          let touchMoved = false;
+
+          const handleTouchStart = (e) => {
+            touchMoved = false;
+            touchTimer = setTimeout(() => {
+              if (!touchMoved) {
+                e.preventDefault();
+                this._handleAction(holdAction, entityId);
+              }
+            }, 500);
+          };
+
+          const handleTouchMove = () => {
+            touchMoved = true;
+            if (touchTimer) clearTimeout(touchTimer);
+          };
+
+          const handleTouchEnd = (e) => {
+            if (touchTimer) clearTimeout(touchTimer);
+            if (!touchMoved && holdAction.action === "none") {
+              // If no hold action, execute tap action
+              this._handleAction(tapAction, entityId);
+            }
+          };
 
           return html`
             <div 
               class="person-avatar" 
               style="${avatarStyle}"
-              @click=${() => this._handleAction(tapAction, entityId)}
-              @dblclick=${() => this._handleAction(doubleTapAction, entityId)}
+              @click=${(e) => {
+                e.preventDefault();
+                this._handleAction(tapAction, entityId);
+              }}
+              @dblclick=${(e) => {
+                e.preventDefault();
+                this._handleAction(doubleTapAction, entityId);
+              }}
+              @touchstart=${handleTouchStart}
+              @touchmove=${handleTouchMove}
+              @touchend=${handleTouchEnd}
               @contextmenu=${(e) => {
                 e.preventDefault();
                 this._handleAction(holdAction, entityId);
@@ -2047,7 +2169,7 @@ class HkiHeaderCardEditor extends LitElement {
     "top_bar_right_pill_padding_x", "top_bar_right_pill_padding_y", "top_bar_right_pill_radius", "top_bar_right_pill_blur",
     "info_pill_border_width", "top_bar_left_pill_border_width", "top_bar_center_pill_border_width", "top_bar_right_pill_border_width",
     "card_border_width",
-    "persons_offset_x", "persons_offset_y", "persons_size", "persons_gap", "persons_overlap", "persons_border_width"
+    "persons_offset_x", "persons_offset_y", "persons_size", "persons_spacing", "persons_border_width"
   ]);
 
   static _nullableNumericFields = new Set([
@@ -2646,6 +2768,60 @@ class HkiHeaderCardEditor extends LitElement {
     `;
   }
 
+  _renderPersonActionEditors(personIndex) {
+    const personConfig = this._config.persons_entities[personIndex];
+    
+    const renderPersonAction = (label, actionType) => {
+      const action = personConfig[actionType] || { action: actionType === "tap_action" ? "more-info" : "none" };
+      const actionValue = action.action || "none";
+
+      const setAction = (nextAction) => {
+        const updated = [...this._config.persons_entities];
+        updated[personIndex] = { ...updated[personIndex], [actionType]: nextAction };
+        this._config = { ...this._config, persons_entities: updated };
+        const strippedConfig = this._stripDefaults(this._config);
+        this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: strippedConfig } }));
+        this.requestUpdate();
+      };
+
+      const patchAction = (patch) => {
+        const current = personConfig[actionType] || { action: "none" };
+        setAction({ ...current, ...patch });
+      };
+
+      return html`
+        <div style="margin-top: 8px;">
+          <p style="font-weight: 500; margin-bottom: 4px; font-size: 0.9em;">${label}</p>
+          <ha-select label="Action" .value=${actionValue} @selected=${(e) => setAction({ action: e.target.value })} @closed=${(e) => e.stopPropagation()}>
+            <mwc-list-item value="none">None</mwc-list-item>
+            <mwc-list-item value="navigate">Navigate</mwc-list-item>
+            <mwc-list-item value="back">Back</mwc-list-item>
+            <mwc-list-item value="menu">Toggle Menu</mwc-list-item>
+            <mwc-list-item value="url">Open URL</mwc-list-item>
+            <mwc-list-item value="more-info">More Info</mwc-list-item>
+            <mwc-list-item value="toggle">Toggle Entity</mwc-list-item>
+            <mwc-list-item value="perform-action">Perform Action</mwc-list-item>
+          </ha-select>
+          ${actionValue === "navigate" ? html`
+            ${this._renderNavigationPathPicker("Navigation path", action.navigation_path || "", (v) => patchAction({ navigation_path: v }))}
+          ` : ''}
+          ${actionValue === "url" ? html`
+            <ha-textfield label="URL" .value=${action.url_path || ""} @input=${(e) => patchAction({ url_path: e.target.value })}></ha-textfield>
+          ` : ''}
+          ${actionValue === "more-info" || actionValue === "toggle" ? html`
+            <ha-entity-picker .hass=${this.hass} .value=${action.entity || personConfig.entity || ""} @value-changed=${(e) => patchAction({ entity: e.detail.value })}></ha-entity-picker>
+          ` : ''}
+        </div>
+      `;
+    };
+
+    return html`
+      ${renderPersonAction("Tap action", "tap_action")}
+      ${renderPersonAction("Hold action", "hold_action")}
+      ${renderPersonAction("Double tap action", "double_tap_action")}
+    `;
+  }
+
   _renderActionEditor(label, field) {
     return html`
       <div style="margin-top: 8px;">
@@ -2722,33 +2898,85 @@ class HkiHeaderCardEditor extends LitElement {
             </ha-formfield>
 
             ${this._config.persons_enabled ? html`
-              <div class="section">Person entities list</div>
-              <p style="opacity: 0.7; font-size: 0.9em; margin: 8px 0;">Enter person entity IDs separated by commas (e.g., person.john, person.jane)</p>
-              <ha-textfield
-                label="Person Entities"
-                .value=${(this._config.persons_entities || []).join(', ')}
-                data-field="persons_entities"
-                @input=${(e) => {
-                  e.stopPropagation();
-                  const value = e.target.value || '';
-                  const entities = value.split(',').map(s => s.trim()).filter(Boolean);
-                  // Create proper event object with stopPropagation method
-                  const syntheticEvent = {
-                    stopPropagation: () => {},
-                    target: {
-                      dataset: { field: 'persons_entities' },
-                      value: entities
-                    }
-                  };
-                  this._changed(syntheticEvent);
-                }}
-              ></ha-textfield>
+              <div class="section">Person entities</div>
+              <p style="opacity: 0.7; font-size: 0.9em; margin: 8px 0;">Configure individual persons below</p>
+              
+              ${(this._config.persons_entities || []).map((personConfig, index) => {
+                const entityId = typeof personConfig === 'string' ? personConfig : personConfig.entity;
+                return html`
+                  <div style="border: 1px solid var(--divider-color); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                      <strong>Person ${index + 1}</strong>
+                      <mwc-icon-button 
+                        @click=${() => {
+                          const updated = [...this._config.persons_entities];
+                          updated.splice(index, 1);
+                          this._config = { ...this._config, persons_entities: updated };
+                          const strippedConfig = this._stripDefaults(this._config);
+                          this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: strippedConfig } }));
+                          this.requestUpdate();
+                        }}
+                      >
+                        <ha-icon icon="mdi:delete"></ha-icon>
+                      </mwc-icon-button>
+                    </div>
+                    
+                    <ha-entity-picker
+                      .hass=${this.hass}
+                      .value=${entityId}
+                      .label=${"Person Entity"}
+                      .includeDomains=${["person"]}
+                      @value-changed=${(e) => {
+                        const updated = [...this._config.persons_entities];
+                        if (typeof updated[index] === 'string') {
+                          updated[index] = {
+                            entity: e.detail.value,
+                            tap_action: { action: "more-info" },
+                            hold_action: { action: "none" },
+                            double_tap_action: { action: "none" }
+                          };
+                        } else {
+                          updated[index] = { ...updated[index], entity: e.detail.value };
+                        }
+                        this._config = { ...this._config, persons_entities: updated };
+                        const strippedConfig = this._stripDefaults(this._config);
+                        this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: strippedConfig } }));
+                        this.requestUpdate();
+                      }}
+                    ></ha-entity-picker>
 
-              <div class="section">Alignment</div>
+                    ${this._renderPersonActionEditors(index)}
+                  </div>
+                `;
+              })}
+
+              <mwc-button 
+                @click=${() => {
+                  const updated = [...(this._config.persons_entities || []), {
+                    entity: "",
+                    tap_action: { action: "more-info" },
+                    hold_action: { action: "none" },
+                    double_tap_action: { action: "none" }
+                  }];
+                  this._config = { ...this._config, persons_entities: updated };
+                  const strippedConfig = this._stripDefaults(this._config);
+                  this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: strippedConfig } }));
+                  this.requestUpdate();
+                }}
+              >
+                <ha-icon icon="mdi:plus"></ha-icon> Add Person
+              </mwc-button>
+
+              <div class="section" style="margin-top: 16px;">Alignment</div>
               <ha-select label="Persons alignment" .value=${this._config.persons_align || "left"} data-field="persons_align" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
                 <mwc-list-item value="left">Left</mwc-list-item>
                 <mwc-list-item value="center">Center</mwc-list-item>
                 <mwc-list-item value="right">Right</mwc-list-item>
+              </ha-select>
+
+              <ha-select label="Stack order" .value=${this._config.persons_stack_order || "ascending"} data-field="persons_stack_order" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+                <mwc-list-item value="ascending">Ascending (last on top)</mwc-list-item>
+                <mwc-list-item value="descending">Descending (first on top)</mwc-list-item>
               </ha-select>
 
               <div class="section">Position</div>
@@ -2760,19 +2988,15 @@ class HkiHeaderCardEditor extends LitElement {
               <div class="section">Appearance</div>
               <div class="inline-fields-2">
                 <ha-textfield label="Avatar size (px)" type="number" .value=${String(this._config.persons_size || 48)} data-field="persons_size" @input=${this._changed}></ha-textfield>
-                <ha-textfield label="Gap between avatars (px)" type="number" .value=${String(this._config.persons_gap || 8)} data-field="persons_gap" @input=${this._changed}></ha-textfield>
+                <ha-textfield label="Spacing (px)" helper="Negative = overlap" type="number" .value=${String(this._config.persons_spacing != null ? this._config.persons_spacing : -8)} data-field="persons_spacing" @input=${this._changed}></ha-textfield>
               </div>
-
-              <ha-textfield label="Avatar overlap (px)" helper="Negative margin to overlap avatars" type="number" .value=${String(this._config.persons_overlap || 0)} data-field="persons_overlap" @input=${this._changed}></ha-textfield>
 
               <div class="inline-fields-2">
                 <ha-textfield label="Border width (px)" type="number" .value=${String(this._config.persons_border_width || 1)} data-field="persons_border_width" @input=${this._changed}></ha-textfield>
                 <ha-textfield label="Border color" .value=${this._config.persons_border_color || "rgba(255,255,255,0.3)"} data-field="persons_border_color" @input=${this._changed}></ha-textfield>
               </div>
 
-              <div class="inline-fields-2">
-                <ha-textfield label="Border color (away)" .value=${this._config.persons_border_color_away || "rgba(255,100,100,0.5)"} data-field="persons_border_color_away" @input=${this._changed}></ha-textfield>
-              </div>
+              <ha-textfield label="Border color (away)" .value=${this._config.persons_border_color_away || "rgba(255,100,100,0.5)"} data-field="persons_border_color_away" @input=${this._changed}></ha-textfield>
 
               <ha-formfield label="Use entity picture (if available)">
                 <ha-switch .checked=${this._config.persons_use_entity_picture !== false} data-field="persons_use_entity_picture" @change=${this._changed}></ha-switch>
@@ -2781,11 +3005,6 @@ class HkiHeaderCardEditor extends LitElement {
               <ha-formfield label="Grayscale when away">
                 <ha-switch .checked=${!!this._config.persons_grayscale_away} data-field="persons_grayscale_away" @change=${this._changed}></ha-switch>
               </ha-formfield>
-
-              <div class="section">Actions</div>
-              ${this._renderActionEditor("Tap action", "persons_tap_action")}
-              ${this._renderActionEditor("Hold action", "persons_hold_action")}
-              ${this._renderActionEditor("Double tap action", "persons_double_tap_action")}
             ` : ''}
           </div>
         </details>
