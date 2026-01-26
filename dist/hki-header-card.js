@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.3.7 ',
+  '%c HKI-HEADER-CARD %c v1.4.0 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -111,6 +111,18 @@ const DEFAULTS = Object.freeze({
   badges_offset_unpinned: 100,
   badges_gap: 0,
   badges_fixed: false,
+  
+  // Person Entities Display
+  persons_enabled: false,
+  persons_entities: [],
+  persons_offset_x: 5,
+  persons_offset_y: 32,
+  persons_size: 48,
+  persons_gap: 8,
+  persons_use_entity_picture: true,
+  persons_border_width: 2,
+  persons_border_color: "rgba(255,255,255,0.3)",
+  
   font_family: "inherit",
   font_family_custom: "",
   font_style: "normal",
@@ -376,6 +388,41 @@ class HkiHeaderCard extends LitElement {
       .header-spacer {
         width: 100%;
         display: block;
+      }
+
+      /* PERSON AVATARS */
+      .persons-container {
+        position: absolute;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        z-index: 2;
+      }
+
+      .person-avatar {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        overflow: hidden;
+        border: 2px solid rgba(255,255,255,0.3);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+        flex-shrink: 0;
+        background: var(--primary-background-color);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .person-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+
+      .person-avatar ha-icon {
+        --mdc-icon-size: 28px;
+        color: var(--primary-text-color);
       }
 
       /* INFO ITEM (Flex Child for Top Bar) */
@@ -861,6 +908,18 @@ class HkiHeaderCard extends LitElement {
     m.badges_offset_unpinned = toNum(m.badges_offset_unpinned, 100);
     m.badges_gap = toNum(m.badges_gap, 0);
     m.mobile_breakpoint = toNum(m.mobile_breakpoint, 768);
+
+    // Person entities configuration
+    m.persons_enabled = !!m.persons_enabled;
+    m.persons_entities = Array.isArray(m.persons_entities) ? m.persons_entities : [];
+    m.persons_offset_x = toNum(m.persons_offset_x, 5);
+    m.persons_offset_y = toNum(m.persons_offset_y, 32);
+    m.persons_size = clamp(+m.persons_size || 48, 24, 128);
+    m.persons_gap = clamp(+m.persons_gap || 8, 0, 32);
+    m.persons_use_entity_picture = m.persons_use_entity_picture !== false;
+    m.persons_border_width = clamp(+m.persons_border_width || 2, 0, 10);
+    m.persons_border_color = m.persons_border_color || "rgba(255,255,255,0.3)";
+
 
     // Background extra options
     m.background_blend_mode = m.background_blend_mode || "normal";
@@ -1617,6 +1676,56 @@ class HkiHeaderCard extends LitElement {
       `;
   }
 
+  _renderPersons() {
+    const cfg = this._config;
+    if (!cfg.persons_enabled || !cfg.persons_entities || cfg.persons_entities.length === 0) {
+      return html``;
+    }
+
+    const personsX = cfg.persons_offset_x || 5;
+    const personsY = cfg.persons_offset_y || 32;
+    const personsSize = cfg.persons_size || 48;
+    const personsGap = cfg.persons_gap || 8;
+    const borderWidth = cfg.persons_border_width || 2;
+    const borderColor = cfg.persons_border_color || "rgba(255,255,255,0.3)";
+    const useEntityPicture = cfg.persons_use_entity_picture !== false;
+
+    let containerStyle;
+    if (cfg.text_align === "right") {
+      containerStyle = `left:auto;right:${personsX}px;top:${personsY}px;gap:${personsGap}px;`;
+    } else if (cfg.text_align === "center") {
+      containerStyle = `left:50%;top:${personsY}px;transform:translateX(-50%);gap:${personsGap}px;`;
+    } else {
+      containerStyle = `left:${personsX}px;top:${personsY}px;gap:${personsGap}px;`;
+    }
+
+    const avatarStyle = `width:${personsSize}px;height:${personsSize}px;border-width:${borderWidth}px;border-color:${borderColor};`;
+
+    return html`
+      <div class="persons-container" style="${containerStyle}">
+        ${cfg.persons_entities.map(entityId => {
+          const entity = this.hass?.states[entityId];
+          if (!entity) return html``;
+
+          const entityPicture = entity.attributes?.entity_picture;
+          const icon = entity.attributes?.icon || "mdi:account";
+
+          // Use entity picture if available and enabled, otherwise use icon
+          const showPicture = useEntityPicture && entityPicture;
+
+          return html`
+            <div class="person-avatar" style="${avatarStyle}">
+              ${showPicture 
+                ? html`<img src="${entityPicture}" alt="${entity.attributes?.friendly_name || entityId}" />`
+                : html`<ha-icon .icon="${icon}"></ha-icon>`
+              }
+            </div>
+          `;
+        })}
+      </div>
+    `;
+  }
+
   _renderInfoDisplay() {
     return html``;
   }
@@ -1786,6 +1895,7 @@ class HkiHeaderCard extends LitElement {
             <div class="title" style=${titleInline} role="heading" aria-level="1">${titleText}</div>
             ${subtitleVisible ? html`<div class="subtitle" style="${subtitleInline}${subtitleTransform}">${subtitleText}</div>` : html``}
           </div>
+          ${this._renderPersons()}
           ${this._renderInfoDisplay()}
         </div>
       </ha-card>
@@ -2487,6 +2597,52 @@ class HkiHeaderCardEditor extends LitElement {
             </div>
             
             <ha-textfield label="Mobile Breakpoint (px)" type="number" .value=${String(this._config.mobile_breakpoint || 768)} data-field="mobile_breakpoint" @input=${this._changed}></ha-textfield>
+          </div>
+        </details>
+
+        <details class="box-section">
+          <summary>Person Entities</summary>
+          <div class="box-content">
+            <ha-formfield label="Enable person entities">
+              <ha-switch .checked=${this._config.persons_enabled} data-field="persons_enabled" @change=${this._changed}></ha-switch>
+            </ha-formfield>
+
+            ${this._config.persons_enabled ? html`
+              <div class="section">Person entities list</div>
+              <p style="opacity: 0.7; font-size: 0.9em; margin: 8px 0;">Enter person entity IDs (one per line)</p>
+              <ha-textarea
+                label="Person Entities"
+                .value=${(this._config.persons_entities || []).join('\n')}
+                data-field="persons_entities"
+                @input=${(e) => {
+                  const value = e.target.value || '';
+                  const entities = value.split('\n').map(s => s.trim()).filter(Boolean);
+                  this._changed({target: {dataset: {field: 'persons_entities'}, value: entities}});
+                }}
+                rows="4"
+              ></ha-textarea>
+
+              <div class="section">Position</div>
+              <div class="inline-fields-2">
+                <ha-textfield label="Horizontal offset (px)" type="number" .value=${String(this._config.persons_offset_x || 5)} data-field="persons_offset_x" @input=${this._changed}></ha-textfield>
+                <ha-textfield label="Vertical offset (px)" type="number" .value=${String(this._config.persons_offset_y || 32)} data-field="persons_offset_y" @input=${this._changed}></ha-textfield>
+              </div>
+
+              <div class="section">Appearance</div>
+              <div class="inline-fields-2">
+                <ha-textfield label="Avatar size (px)" type="number" .value=${String(this._config.persons_size || 48)} data-field="persons_size" @input=${this._changed}></ha-textfield>
+                <ha-textfield label="Gap between avatars (px)" type="number" .value=${String(this._config.persons_gap || 8)} data-field="persons_gap" @input=${this._changed}></ha-textfield>
+              </div>
+
+              <div class="inline-fields-2">
+                <ha-textfield label="Border width (px)" type="number" .value=${String(this._config.persons_border_width || 2)} data-field="persons_border_width" @input=${this._changed}></ha-textfield>
+                <ha-textfield label="Border color" .value=${this._config.persons_border_color || "rgba(255,255,255,0.3)"} data-field="persons_border_color" @input=${this._changed}></ha-textfield>
+              </div>
+
+              <ha-formfield label="Use entity picture (if available)">
+                <ha-switch .checked=${this._config.persons_use_entity_picture !== false} data-field="persons_use_entity_picture" @change=${this._changed}></ha-switch>
+              </ha-formfield>
+            ` : ''}
           </div>
         </details>
 
