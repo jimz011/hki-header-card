@@ -236,27 +236,32 @@ function migrateToNestedFormat(oldConfig) {
   });
   
   // Migrate top_bar global settings
-  newConfig.top_bar = {
-    enabled: oldConfig.top_bar_enabled !== undefined ? oldConfig.top_bar_enabled : true,
-    offset_y: oldConfig.top_bar_offset_y !== undefined ? oldConfig.top_bar_offset_y : 15,
-    padding_x: oldConfig.top_bar_padding_x !== undefined ? oldConfig.top_bar_padding_x : 0
-  };
+  if (oldConfig.top_bar_enabled !== undefined || oldConfig.top_bar_offset_y !== undefined || oldConfig.top_bar_padding_x !== undefined) {
+    newConfig.top_bar = {};
+    if (oldConfig.top_bar_enabled !== undefined) newConfig.top_bar.enabled = oldConfig.top_bar_enabled;
+    if (oldConfig.top_bar_offset_y !== undefined) newConfig.top_bar.offset_y = oldConfig.top_bar_offset_y;
+    if (oldConfig.top_bar_padding_x !== undefined) newConfig.top_bar.padding_x = oldConfig.top_bar_padding_x;
+  }
   
   // Migrate global info styling
-  newConfig.info = {
-    size_px: oldConfig.info_size_px,
-    weight: oldConfig.info_weight,
-    color: oldConfig.info_color,
-    pill: oldConfig.info_pill,
-    pill_background: oldConfig.info_pill_background,
-    pill_padding_x: oldConfig.info_pill_padding_x,
-    pill_padding_y: oldConfig.info_pill_padding_y,
-    pill_radius: oldConfig.info_pill_radius,
-    pill_blur: oldConfig.info_pill_blur,
-    pill_border_style: oldConfig.info_pill_border_style,
-    pill_border_width: oldConfig.info_pill_border_width,
-    pill_border_color: oldConfig.info_pill_border_color
-  };
+  const infoKeys = ['info_size_px', 'info_weight', 'info_color', 'info_pill', 'info_pill_background',
+                    'info_pill_padding_x', 'info_pill_padding_y', 'info_pill_radius', 'info_pill_blur',
+                    'info_pill_border_style', 'info_pill_border_width', 'info_pill_border_color'];
+  if (infoKeys.some(k => oldConfig[k] !== undefined)) {
+    newConfig.info = {};
+    if (oldConfig.info_size_px !== undefined) newConfig.info.size_px = oldConfig.info_size_px;
+    if (oldConfig.info_weight !== undefined) newConfig.info.weight = oldConfig.info_weight;
+    if (oldConfig.info_color !== undefined) newConfig.info.color = oldConfig.info_color;
+    if (oldConfig.info_pill !== undefined) newConfig.info.pill = oldConfig.info_pill;
+    if (oldConfig.info_pill_background !== undefined) newConfig.info.pill_background = oldConfig.info_pill_background;
+    if (oldConfig.info_pill_padding_x !== undefined) newConfig.info.pill_padding_x = oldConfig.info_pill_padding_x;
+    if (oldConfig.info_pill_padding_y !== undefined) newConfig.info.pill_padding_y = oldConfig.info_pill_padding_y;
+    if (oldConfig.info_pill_radius !== undefined) newConfig.info.pill_radius = oldConfig.info_pill_radius;
+    if (oldConfig.info_pill_blur !== undefined) newConfig.info.pill_blur = oldConfig.info_pill_blur;
+    if (oldConfig.info_pill_border_style !== undefined) newConfig.info.pill_border_style = oldConfig.info_pill_border_style;
+    if (oldConfig.info_pill_border_width !== undefined) newConfig.info.pill_border_width = oldConfig.info_pill_border_width;
+    if (oldConfig.info_pill_border_color !== undefined) newConfig.info.pill_border_color = oldConfig.info_pill_border_color;
+  }
   
   // Migrate each slot (left, center, right)
   ['left', 'center', 'right'].forEach(slot => {
@@ -341,23 +346,22 @@ function migrateToNestedFormat(oldConfig) {
   
   // Migrate persons
   if (oldConfig.persons_enabled || oldConfig.persons_entities) {
-    newConfig.persons = {
-      enabled: oldConfig.persons_enabled || false,
-      align: oldConfig.persons_align,
-      offset_x: oldConfig.persons_offset_x,
-      offset_y: oldConfig.persons_offset_y,
-      size: oldConfig.persons_size,
-      spacing: oldConfig.persons_spacing,
-      stack_order: oldConfig.persons_stack_order,
-      dynamic_order: oldConfig.persons_dynamic_order,
-      hide_away: oldConfig.persons_hide_away,
-      use_entity_picture: oldConfig.persons_use_entity_picture,
-      border_width: oldConfig.persons_border_width,
-      border_color: oldConfig.persons_border_color,
-      border_color_away: oldConfig.persons_border_color_away,
-      grayscale_away: oldConfig.persons_grayscale_away,
-      entities: oldConfig.persons_entities || []
-    };
+    newConfig.persons = {};
+    if (oldConfig.persons_enabled !== undefined) newConfig.persons.enabled = oldConfig.persons_enabled;
+    if (oldConfig.persons_align !== undefined) newConfig.persons.align = oldConfig.persons_align;
+    if (oldConfig.persons_offset_x !== undefined) newConfig.persons.offset_x = oldConfig.persons_offset_x;
+    if (oldConfig.persons_offset_y !== undefined) newConfig.persons.offset_y = oldConfig.persons_offset_y;
+    if (oldConfig.persons_size !== undefined) newConfig.persons.size = oldConfig.persons_size;
+    if (oldConfig.persons_spacing !== undefined) newConfig.persons.spacing = oldConfig.persons_spacing;
+    if (oldConfig.persons_stack_order !== undefined) newConfig.persons.stack_order = oldConfig.persons_stack_order;
+    if (oldConfig.persons_dynamic_order !== undefined) newConfig.persons.dynamic_order = oldConfig.persons_dynamic_order;
+    if (oldConfig.persons_hide_away !== undefined) newConfig.persons.hide_away = oldConfig.persons_hide_away;
+    if (oldConfig.persons_use_entity_picture !== undefined) newConfig.persons.use_entity_picture = oldConfig.persons_use_entity_picture;
+    if (oldConfig.persons_border_width !== undefined) newConfig.persons.border_width = oldConfig.persons_border_width;
+    if (oldConfig.persons_border_color !== undefined) newConfig.persons.border_color = oldConfig.persons_border_color;
+    if (oldConfig.persons_border_color_away !== undefined) newConfig.persons.border_color_away = oldConfig.persons_border_color_away;
+    if (oldConfig.persons_grayscale_away !== undefined) newConfig.persons.grayscale_away = oldConfig.persons_grayscale_away;
+    if (oldConfig.persons_entities !== undefined) newConfig.persons.entities = oldConfig.persons_entities || [];
   }
   
   return newConfig;
@@ -390,25 +394,25 @@ function flattenNestedFormat(nested) {
   
   // Flatten top_bar
   if (nested.top_bar) {
-    flat.top_bar_enabled = nested.top_bar.enabled;
-    flat.top_bar_offset_y = nested.top_bar.offset_y;
-    flat.top_bar_padding_x = nested.top_bar.padding_x;
+    if (nested.top_bar.enabled !== undefined) flat.top_bar_enabled = nested.top_bar.enabled;
+    if (nested.top_bar.offset_y !== undefined) flat.top_bar_offset_y = nested.top_bar.offset_y;
+    if (nested.top_bar.padding_x !== undefined) flat.top_bar_padding_x = nested.top_bar.padding_x;
   }
   
   // Flatten info
   if (nested.info) {
-    flat.info_size_px = nested.info.size_px;
-    flat.info_weight = nested.info.weight;
-    flat.info_color = nested.info.color;
-    flat.info_pill = nested.info.pill;
-    flat.info_pill_background = nested.info.pill_background;
-    flat.info_pill_padding_x = nested.info.pill_padding_x;
-    flat.info_pill_padding_y = nested.info.pill_padding_y;
-    flat.info_pill_radius = nested.info.pill_radius;
-    flat.info_pill_blur = nested.info.pill_blur;
-    flat.info_pill_border_style = nested.info.pill_border_style;
-    flat.info_pill_border_width = nested.info.pill_border_width;
-    flat.info_pill_border_color = nested.info.pill_border_color;
+    if (nested.info.size_px !== undefined) flat.info_size_px = nested.info.size_px;
+    if (nested.info.weight !== undefined) flat.info_weight = nested.info.weight;
+    if (nested.info.color !== undefined) flat.info_color = nested.info.color;
+    if (nested.info.pill !== undefined) flat.info_pill = nested.info.pill;
+    if (nested.info.pill_background !== undefined) flat.info_pill_background = nested.info.pill_background;
+    if (nested.info.pill_padding_x !== undefined) flat.info_pill_padding_x = nested.info.pill_padding_x;
+    if (nested.info.pill_padding_y !== undefined) flat.info_pill_padding_y = nested.info.pill_padding_y;
+    if (nested.info.pill_radius !== undefined) flat.info_pill_radius = nested.info.pill_radius;
+    if (nested.info.pill_blur !== undefined) flat.info_pill_blur = nested.info.pill_blur;
+    if (nested.info.pill_border_style !== undefined) flat.info_pill_border_style = nested.info.pill_border_style;
+    if (nested.info.pill_border_width !== undefined) flat.info_pill_border_width = nested.info.pill_border_width;
+    if (nested.info.pill_border_color !== undefined) flat.info_pill_border_color = nested.info.pill_border_color;
   }
   
   // Flatten slots
@@ -484,21 +488,21 @@ function flattenNestedFormat(nested) {
   
   // Flatten persons
   if (nested.persons) {
-    flat.persons_enabled = nested.persons.enabled;
-    flat.persons_align = nested.persons.align;
-    flat.persons_offset_x = nested.persons.offset_x;
-    flat.persons_offset_y = nested.persons.offset_y;
-    flat.persons_size = nested.persons.size;
-    flat.persons_spacing = nested.persons.spacing;
-    flat.persons_stack_order = nested.persons.stack_order;
-    flat.persons_dynamic_order = nested.persons.dynamic_order;
-    flat.persons_hide_away = nested.persons.hide_away;
-    flat.persons_use_entity_picture = nested.persons.use_entity_picture;
-    flat.persons_border_width = nested.persons.border_width;
-    flat.persons_border_color = nested.persons.border_color;
-    flat.persons_border_color_away = nested.persons.border_color_away;
-    flat.persons_grayscale_away = nested.persons.grayscale_away;
-    flat.persons_entities = nested.persons.entities || [];
+    if (nested.persons.enabled !== undefined) flat.persons_enabled = nested.persons.enabled;
+    if (nested.persons.align !== undefined) flat.persons_align = nested.persons.align;
+    if (nested.persons.offset_x !== undefined) flat.persons_offset_x = nested.persons.offset_x;
+    if (nested.persons.offset_y !== undefined) flat.persons_offset_y = nested.persons.offset_y;
+    if (nested.persons.size !== undefined) flat.persons_size = nested.persons.size;
+    if (nested.persons.spacing !== undefined) flat.persons_spacing = nested.persons.spacing;
+    if (nested.persons.stack_order !== undefined) flat.persons_stack_order = nested.persons.stack_order;
+    if (nested.persons.dynamic_order !== undefined) flat.persons_dynamic_order = nested.persons.dynamic_order;
+    if (nested.persons.hide_away !== undefined) flat.persons_hide_away = nested.persons.hide_away;
+    if (nested.persons.use_entity_picture !== undefined) flat.persons_use_entity_picture = nested.persons.use_entity_picture;
+    if (nested.persons.border_width !== undefined) flat.persons_border_width = nested.persons.border_width;
+    if (nested.persons.border_color !== undefined) flat.persons_border_color = nested.persons.border_color;
+    if (nested.persons.border_color_away !== undefined) flat.persons_border_color_away = nested.persons.border_color_away;
+    if (nested.persons.grayscale_away !== undefined) flat.persons_grayscale_away = nested.persons.grayscale_away;
+    if (nested.persons.entities !== undefined) flat.persons_entities = nested.persons.entities || [];
   }
   
   return flat;
