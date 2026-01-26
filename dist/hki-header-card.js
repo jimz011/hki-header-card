@@ -612,9 +612,6 @@ class HkiHeaderCard extends LitElement {
     this._currentTime = Date.now();
     this._customCards = { left: null, center: null, right: null };
 
-    // Hold action state tracking
-    this._holdState = new Map();
-
     // Handlers & observers
     this._resizeHandler = null;
     this._ro = null;
@@ -745,11 +742,13 @@ class HkiHeaderCard extends LitElement {
         height: 100%;
         object-fit: cover;
         display: block;
+        pointer-events: none;
       }
 
       .person-avatar ha-icon {
         --mdc-icon-size: 28px;
         color: var(--primary-text-color);
+        pointer-events: none;
       }
 
       /* INFO ITEM (Flex Child for Top Bar) */
@@ -1927,69 +1926,64 @@ class HkiHeaderCard extends LitElement {
     const buttonPillStyle = slotStyle.pill ? `--hki-info-pill-background:${slotStyle.pillBg};--hki-info-pill-padding-x:${slotStyle.pillPaddingX}px;--hki-info-pill-padding-y:${buttonPaddingY}px;--hki-info-pill-radius:${slotStyle.pillRadius}px;--hki-info-pill-blur:${slotStyle.pillBlur}px;--hki-info-pill-border-style:${slotStyle.pillBorderStyle};--hki-info-pill-border-width:${slotStyle.pillBorderWidth}px;--hki-info-pill-border-color:${slotStyle.pillBorderColor}` : "";
     const combinedStyle = `${slotStyle.inlineStyle} ${buttonPillStyle}`;
     
-    let touchTimer = null;
-    let touchMoved = false;
+    // Hold timer and state
+    let holdTimer = null;
+    let holdActive = false;
     let clickTimer = null;
     let clickCount = 0;
 
-    const handleTouchStart = (e) => {
-      touchMoved = false;
-      touchTimer = setTimeout(() => {
-        if (!touchMoved) {
-          e.preventDefault();
+    const startHold = () => {
+      holdActive = false;
+      if (holdAction && holdAction.action !== "none") {
+        holdTimer = setTimeout(() => {
+          holdActive = true;
           this._handleSlotTapAction(holdAction, slotName);
-          touchTimer = null;
-        }
-      }, 500);
-    };
-
-    const handleTouchMove = () => {
-      touchMoved = true;
-      if (touchTimer) {
-        clearTimeout(touchTimer);
-        touchTimer = null;
+        }, 500);
       }
     };
 
-    const handleTouchEnd = (e) => {
-      if (touchTimer) {
-        clearTimeout(touchTimer);
-        touchTimer = null;
+    const endHold = () => {
+      if (holdTimer) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
       }
-      if (!touchMoved && holdAction.action === "none") {
-        this._handleSlotTapAction(tapAction, slotName);
-      }
-    };
-
-    const handleClick = (e) => {
-      e.preventDefault();
-      clickCount++;
-      if (clickCount === 1) {
-        clickTimer = setTimeout(() => {
-          if (clickCount === 1) {
-            this._handleSlotTapAction(tapAction, slotName);
-          }
+      if (!holdActive && tapAction) {
+        // Use click debouncing for double-tap detection
+        clickCount++;
+        if (clickCount === 1) {
+          clickTimer = setTimeout(() => {
+            if (clickCount === 1) {
+              this._handleSlotTapAction(tapAction, slotName);
+            }
+            clickCount = 0;
+          }, 250);
+        } else if (clickCount === 2) {
+          clearTimeout(clickTimer);
           clickCount = 0;
-        }, 250);
-      } else if (clickCount === 2) {
-        clearTimeout(clickTimer);
-        clickCount = 0;
-        this._handleSlotTapAction(doubleTapAction, slotName);
+          this._handleSlotTapAction(doubleTapAction, slotName);
+        }
       }
+      holdActive = false;
+    };
+
+    const cancelHold = () => {
+      if (holdTimer) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+      }
+      holdActive = false;
     };
     
     return html`
       <div 
         class="info-item ${pillClass}" 
         style="${combinedStyle}"
-        @click=${handleClick}
-        @touchstart=${handleTouchStart}
-        @touchmove=${handleTouchMove}
-        @touchend=${handleTouchEnd}
-        @contextmenu=${(e) => {
-          e.preventDefault();
-          this._handleSlotTapAction(holdAction, slotName);
-        }}
+        @mousedown=${startHold}
+        @mouseup=${endHold}
+        @mouseleave=${cancelHold}
+        @touchstart=${startHold}
+        @touchend=${endHold}
+        @contextmenu=${(e) => e.preventDefault()}
       >
         <div class="info-icon" style="width:${slotStyle.iconSize}px;height:${slotStyle.iconSize}px;"><ha-icon .icon=${icon} style="width:100%;height:100%;--mdc-icon-size:${slotStyle.iconSize}px;"></ha-icon></div>
         ${label ? html`<span>${label}</span>` : ''}
@@ -2063,16 +2057,54 @@ class HkiHeaderCard extends LitElement {
     const holdAction = cfg[prefix + "hold_action"] || { action: "none" };
     const doubleTapAction = cfg[prefix + "double_tap_action"] || { action: "none" };
 
+    // Hold timer and state
+    let holdTimer = null;
+    let holdActive = false;
+
+    const startHold = () => {
+      holdActive = false;
+      if (holdAction && holdAction.action !== "none") {
+        holdTimer = setTimeout(() => {
+          holdActive = true;
+          this._handleSlotTapAction(holdAction, slotName);
+        }, 500);
+      }
+    };
+
+    const endHold = () => {
+      if (holdTimer) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+      }
+      if (!holdActive && tapAction) {
+        this._handleSlotTapAction(tapAction, slotName);
+      }
+      holdActive = false;
+    };
+
+    const cancelHold = () => {
+      if (holdTimer) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+      }
+      holdActive = false;
+    };
+
     return html`
       <div 
         class="info-item ${pillClass}" 
         style="${combinedStyle}"
-        @click=${() => this._handleSlotTapAction(tapAction, slotName)}
-        @dblclick=${() => this._handleSlotTapAction(doubleTapAction, slotName)}
-        @contextmenu=${(e) => {
+        @mousedown=${startHold}
+        @mouseup=${endHold}
+        @mouseleave=${cancelHold}
+        @touchstart=${startHold}
+        @touchend=${endHold}
+        @dblclick=${(e) => {
           e.preventDefault();
-          this._handleSlotTapAction(holdAction, slotName);
+          cancelHold();
+          this._handleSlotTapAction(doubleTapAction, slotName);
         }}
+        @contextmenu=${(e) => e.preventDefault()}
       >
         ${showIcon ? (useSvg 
             ? html`<img src="${svgUrl}" class="info-icon ${animClass}" style="width:${slotStyle.iconSize}px;height:${slotStyle.iconSize}px;" alt="${state}" />`
@@ -2128,16 +2160,54 @@ class HkiHeaderCard extends LitElement {
     const holdAction = cfg[prefix + "hold_action"] || { action: "none" };
     const doubleTapAction = cfg[prefix + "double_tap_action"] || { action: "none" };
 
+    // Hold timer and state
+    let holdTimer = null;
+    let holdActive = false;
+
+    const startHold = () => {
+      holdActive = false;
+      if (holdAction && holdAction.action !== "none") {
+        holdTimer = setTimeout(() => {
+          holdActive = true;
+          this._handleSlotTapAction(holdAction, slotName);
+        }, 500);
+      }
+    };
+
+    const endHold = () => {
+      if (holdTimer) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+      }
+      if (!holdActive && tapAction) {
+        this._handleSlotTapAction(tapAction, slotName);
+      }
+      holdActive = false;
+    };
+
+    const cancelHold = () => {
+      if (holdTimer) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+      }
+      holdActive = false;
+    };
+
     return html`
       <div 
         class="info-item ${pillClass}" 
         style="${combinedStyle}"
-        @click=${() => this._handleSlotTapAction(tapAction, slotName)}
-        @dblclick=${() => this._handleSlotTapAction(doubleTapAction, slotName)}
-        @contextmenu=${(e) => {
+        @mousedown=${startHold}
+        @mouseup=${endHold}
+        @mouseleave=${cancelHold}
+        @touchstart=${startHold}
+        @touchend=${endHold}
+        @dblclick=${(e) => {
           e.preventDefault();
-          this._handleSlotTapAction(holdAction, slotName);
+          cancelHold();
+          this._handleSlotTapAction(doubleTapAction, slotName);
         }}
+        @contextmenu=${(e) => e.preventDefault()}
       >
         ${icon ? html`
           <div class="info-icon ${animClass}" style="width:${slotStyle.iconSize}px;height:${slotStyle.iconSize}px;"><ha-icon .icon=${icon}
@@ -2314,20 +2384,51 @@ class HkiHeaderCard extends LitElement {
           // Apply grayscale filter to image/icon only, not the container
           const contentFilter = (!isHome && grayscaleAway) ? "filter:grayscale(100%);" : "";
 
+          // Hold timer and state (like button slot)
+          let holdTimer = null;
+          let holdActive = false;
+
+          const startHold = () => {
+            holdActive = false;
+            if (holdAction && holdAction.action !== "none") {
+              holdTimer = setTimeout(() => {
+                holdActive = true;
+                this._handleAction(holdAction, entityId);
+              }, 500);
+            }
+          };
+
+          const endHold = () => {
+            if (holdTimer) {
+              clearTimeout(holdTimer);
+              holdTimer = null;
+            }
+            if (!holdActive && tapAction) {
+              this._handleAction(tapAction, entityId);
+            }
+            holdActive = false;
+          };
+
+          const cancelHold = () => {
+            if (holdTimer) {
+              clearTimeout(holdTimer);
+              holdTimer = null;
+            }
+            holdActive = false;
+          };
+
           return html`
             <div 
               class="person-avatar" 
               style="${avatarStyle}"
-              data-entity-id="${entityId}"
-              @mousedown=${(e) => this._personMouseDown(e, entityId, holdAction)}
-              @mousemove=${(e) => this._personMouseMove(e, entityId)}
-              @mouseup=${(e) => this._personMouseUp(e, entityId, tapAction)}
-              @mouseleave=${(e) => this._personMouseLeave(e, entityId)}
-              @touchstart=${(e) => this._personTouchStart(e, entityId, holdAction)}
-              @touchmove=${(e) => this._personTouchMove(e, entityId)}
-              @touchend=${(e) => this._personTouchEnd(e, entityId, tapAction)}
+              @mousedown=${startHold}
+              @mouseup=${endHold}
+              @mouseleave=${cancelHold}
+              @touchstart=${startHold}
+              @touchend=${endHold}
               @dblclick=${(e) => {
                 e.preventDefault();
+                cancelHold();
                 this._handleAction(doubleTapAction, entityId);
               }}
               @contextmenu=${(e) => e.preventDefault()}
@@ -2341,110 +2442,6 @@ class HkiHeaderCard extends LitElement {
         })}
       </div>
     `;
-  }
-
-  // Person avatar hold action handlers
-  _personMouseDown(e, entityId, holdAction) {
-    if (!this._holdState.has(entityId)) {
-      this._holdState.set(entityId, {});
-    }
-    const state = this._holdState.get(entityId);
-    state.moved = false;
-    state.holdTriggered = false;
-    
-    if (holdAction && holdAction.action !== "none") {
-      state.holdTimer = setTimeout(() => {
-        if (!state.moved) {
-          state.holdTriggered = true;
-          this._handleAction(holdAction, entityId);
-        }
-      }, 500);
-    }
-  }
-
-  _personMouseMove(e, entityId) {
-    if (this._holdState.has(entityId)) {
-      const state = this._holdState.get(entityId);
-      state.moved = true;
-      if (state.holdTimer) {
-        clearTimeout(state.holdTimer);
-        state.holdTimer = null;
-      }
-    }
-  }
-
-  _personMouseUp(e, entityId, tapAction) {
-    if (this._holdState.has(entityId)) {
-      const state = this._holdState.get(entityId);
-      if (state.holdTimer) {
-        clearTimeout(state.holdTimer);
-        state.holdTimer = null;
-      }
-      // Fire tap action if hold didn't trigger and didn't move
-      if (!state.moved && !state.holdTriggered && tapAction) {
-        this._handleAction(tapAction, entityId);
-      }
-      // Clean up
-      this._holdState.delete(entityId);
-    }
-  }
-
-  _personMouseLeave(e, entityId) {
-    if (this._holdState.has(entityId)) {
-      const state = this._holdState.get(entityId);
-      if (state.holdTimer) {
-        clearTimeout(state.holdTimer);
-        state.holdTimer = null;
-      }
-      // Clean up
-      this._holdState.delete(entityId);
-    }
-  }
-
-  _personTouchStart(e, entityId, holdAction) {
-    if (!this._holdState.has(entityId)) {
-      this._holdState.set(entityId, {});
-    }
-    const state = this._holdState.get(entityId);
-    state.moved = false;
-    state.holdTriggered = false;
-    
-    if (holdAction && holdAction.action !== "none") {
-      state.holdTimer = setTimeout(() => {
-        if (!state.moved) {
-          state.holdTriggered = true;
-          e.preventDefault();
-          this._handleAction(holdAction, entityId);
-        }
-      }, 500);
-    }
-  }
-
-  _personTouchMove(e, entityId) {
-    if (this._holdState.has(entityId)) {
-      const state = this._holdState.get(entityId);
-      state.moved = true;
-      if (state.holdTimer) {
-        clearTimeout(state.holdTimer);
-        state.holdTimer = null;
-      }
-    }
-  }
-
-  _personTouchEnd(e, entityId, tapAction) {
-    if (this._holdState.has(entityId)) {
-      const state = this._holdState.get(entityId);
-      if (state.holdTimer) {
-        clearTimeout(state.holdTimer);
-        state.holdTimer = null;
-      }
-      // Fire tap action if hold didn't trigger and didn't move
-      if (!state.moved && !state.holdTriggered && tapAction) {
-        this._handleAction(tapAction, entityId);
-      }
-      // Clean up
-      this._holdState.delete(entityId);
-    }
   }
 
   _renderInfoDisplay() {
