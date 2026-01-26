@@ -132,6 +132,15 @@ const DEFAULTS = Object.freeze({
   persons_box_shadow: "0 2px 8px rgba(0, 0, 0, 0.4)",
   persons_grayscale_away: true,
   
+  // Dummy person configuration
+  dummy_person_enabled: false,
+  dummy_person_entity: "",
+  dummy_person_icon: "mdi:account",
+  dummy_person_use_picture: false,
+  dummy_person_tap_action: { action: "more-info" },
+  dummy_person_hold_action: { action: "none" },
+  dummy_person_double_tap_action: { action: "none" },
+  
   font_family: "inherit",
   font_family_custom: "",
   font_style: "normal",
@@ -515,6 +524,18 @@ function flattenNestedFormat(nested) {
     if (nested.persons.box_shadow !== undefined) flat.persons_box_shadow = nested.persons.box_shadow;
     if (nested.persons.grayscale_away !== undefined) flat.persons_grayscale_away = nested.persons.grayscale_away;
     if (nested.persons.entities !== undefined) flat.persons_entities = nested.persons.entities || [];
+    
+    // Flatten dummy person
+    if (nested.persons.dummy_person) {
+      const dp = nested.persons.dummy_person;
+      if (dp.enabled !== undefined) flat.dummy_person_enabled = dp.enabled;
+      if (dp.entity !== undefined) flat.dummy_person_entity = dp.entity;
+      if (dp.icon !== undefined) flat.dummy_person_icon = dp.icon;
+      if (dp.use_picture !== undefined) flat.dummy_person_use_picture = dp.use_picture;
+      if (dp.tap_action !== undefined) flat.dummy_person_tap_action = dp.tap_action;
+      if (dp.hold_action !== undefined) flat.dummy_person_hold_action = dp.hold_action;
+      if (dp.double_tap_action !== undefined) flat.dummy_person_double_tap_action = dp.double_tap_action;
+    }
   }
   
   return flat;
@@ -2304,7 +2325,15 @@ class HkiHeaderCard extends LitElement {
 
   _renderPersons() {
     const cfg = this._config;
-    if (!cfg.persons_enabled || !cfg.persons_entities || cfg.persons_entities.length === 0) {
+    if (!cfg.persons_enabled) {
+      return html``;
+    }
+    
+    // Check if we have any persons to show
+    const hasRealPersons = cfg.persons_entities && cfg.persons_entities.length > 0;
+    const hasDummyPerson = cfg.dummy_person_enabled && cfg.dummy_person_entity;
+    
+    if (!hasRealPersons && !hasDummyPerson) {
       return html``;
     }
 
@@ -2336,13 +2365,38 @@ class HkiHeaderCard extends LitElement {
     const grayscaleAway = cfg.persons_grayscale_away || false;
     const useEntityPicture = cfg.persons_use_entity_picture !== false;
 
+    // Build persons list - include real persons and dummy person
+    let allPersons = cfg.persons_entities ? [...cfg.persons_entities] : [];
+    
+    // Add dummy person if enabled
+    if (hasDummyPerson) {
+      allPersons.push({
+        entity: cfg.dummy_person_entity,
+        isDummy: true,
+        icon: cfg.dummy_person_icon || "mdi:account",
+        use_picture: cfg.dummy_person_use_picture || false,
+        tap_action: cfg.dummy_person_tap_action || { action: "more-info" },
+        hold_action: cfg.dummy_person_hold_action || { action: "none" },
+        double_tap_action: cfg.dummy_person_double_tap_action || { action: "none" }
+      });
+    }
+
     // Filter out away persons if hide_away is enabled
-    let filteredPersons = [...cfg.persons_entities];
+    let filteredPersons = allPersons;
     if (hideAway) {
-      filteredPersons = filteredPersons.filter(personConfig => {
+      filteredPersons = allPersons.filter(personConfig => {
         const entityId = typeof personConfig === 'string' ? personConfig : personConfig.entity;
         const entity = this.hass?.states[entityId];
-        return entity && entity.state === "home";
+        if (!entity) return false;
+        
+        // For dummy person, check if entity state is "on"
+        if (personConfig.isDummy) {
+          const state = String(entity.state).toLowerCase();
+          return state === "on" || state === "true";
+        }
+        
+        // For regular persons, check if state is "home"
+        return entity.state === "home";
       });
     }
 
@@ -2357,8 +2411,22 @@ class HkiHeaderCard extends LitElement {
         
         if (!entityA || !entityB) return 0;
         
-        const isHomeA = entityA.state === "home";
-        const isHomeB = entityB.state === "home";
+        // Determine "home" state for each
+        let isHomeA, isHomeB;
+        
+        if (a.isDummy) {
+          const stateA = String(entityA.state).toLowerCase();
+          isHomeA = stateA === "on" || stateA === "true";
+        } else {
+          isHomeA = entityA.state === "home";
+        }
+        
+        if (b.isDummy) {
+          const stateB = String(entityB.state).toLowerCase();
+          isHomeB = stateB === "on" || stateB === "true";
+        } else {
+          isHomeB = entityB.state === "home";
+        }
         
         // Home entities come first
         if (isHomeA && !isHomeB) return -1;
@@ -2395,31 +2463,15 @@ class HkiHeaderCard extends LitElement {
           const entityPicture = entity.attributes?.entity_picture;
           const icon = entity.attributes?.icon || "mdi:account";
           
-          // Debug: log personConfig structure
-          if (typeof personConfig !== 'string' && personConfig.grayscale_entity) {
-            console.log(`Person ${entityId} config:`, JSON.stringify(personConfig, null, 2));
-          }
-          
-          // Get per-person grayscale entity if configured
-          const grayscaleEntity = (typeof personConfig !== 'string' && personConfig.grayscale_entity) || "";
-          
-          // Determine "home" state - use grayscale_entity if configured, otherwise use person state
+          // Determine "home" state
           let isHome;
-          if (grayscaleEntity && this.hass?.states[grayscaleEntity]) {
-            // Use the grayscale entity's state: "on"/"true"/true = home, anything else = away
-            const grayscaleEntityState = this.hass.states[grayscaleEntity];
-            const state = String(grayscaleEntityState.state).toLowerCase();
-            isHome = state === "on" || state === "true" || state === "home";
-            
-            // Debug logging
-            console.log(`Person ${entityId}: grayscale_entity=${grayscaleEntity}, state=${state}, isHome=${isHome}, grayscaleAway=${grayscaleAway}`);
+          if (personConfig.isDummy) {
+            // For dummy person, check if control entity state is "on"
+            const state = String(entity.state).toLowerCase();
+            isHome = state === "on" || state === "true";
           } else {
-            // Use the person entity's state
+            // For regular persons, check if state is "home"
             isHome = entity.state === "home";
-            
-            if (grayscaleEntity) {
-              console.log(`Person ${entityId}: grayscale_entity=${grayscaleEntity} NOT FOUND in hass.states`);
-            }
           }
 
           // Get per-person actions (with fallback to defaults)
@@ -2427,8 +2479,17 @@ class HkiHeaderCard extends LitElement {
           const holdAction = personConfig.hold_action || { action: "none" };
           const doubleTapAction = personConfig.double_tap_action || { action: "none" };
 
-          // Use entity picture if available and enabled, otherwise use icon
-          const showPicture = useEntityPicture && entityPicture;
+          // Use entity picture if available and enabled
+          // For dummy person, respect its own use_picture setting
+          let showPicture;
+          if (personConfig.isDummy) {
+            showPicture = personConfig.use_picture && entityPicture;
+          } else {
+            showPicture = useEntityPicture && entityPicture;
+          }
+          
+          // For dummy person, use its configured icon if not showing picture
+          const displayIcon = personConfig.isDummy && !showPicture ? personConfig.icon : icon;
           
           // Determine border color based on state
           const currentBorderColor = isHome ? borderColor : borderColorAway;
@@ -2498,7 +2559,7 @@ class HkiHeaderCard extends LitElement {
             >
               ${showPicture 
                 ? html`<img src="${entityPicture}" alt="${entity.attributes?.friendly_name || entityId}" style="${contentFilter}" />`
-                : html`<ha-icon .icon="${icon}" style="${contentFilter}"></ha-icon>`
+                : html`<ha-icon .icon="${displayIcon}" style="${contentFilter}"></ha-icon>`
               }
             </div>
           `;
@@ -2925,11 +2986,6 @@ class HkiHeaderCardEditor extends LitElement {
             entity: person.entity || ""
           };
           
-          // Preserve grayscale_entity if present
-          if (person.grayscale_entity) {
-            cleanedPerson.grayscale_entity = person.grayscale_entity;
-          }
-          
           // Clean up actions for each person
           if (person.tap_action) {
             cleanedPerson.tap_action = this._cleanupActionConfig(person.tap_action);
@@ -3130,7 +3186,9 @@ class HkiHeaderCardEditor extends LitElement {
                          'persons_size', 'persons_spacing', 'persons_stack_order', 'persons_dynamic_order',
                          'persons_hide_away', 'persons_use_entity_picture', 'persons_border_width', 'persons_border_style',
                          'persons_border_radius', 'persons_border_color', 'persons_border_color_away', 'persons_box_shadow',
-                         'persons_grayscale_away', 'persons_entities'];
+                         'persons_grayscale_away', 'persons_entities',
+                         'dummy_person_enabled', 'dummy_person_entity', 'dummy_person_icon', 'dummy_person_use_picture',
+                         'dummy_person_tap_action', 'dummy_person_hold_action', 'dummy_person_double_tap_action'];
     const hasPersonsConfig = personsKeys.some(k => flat[k] !== undefined);
     if (hasPersonsConfig) {
       nested.persons = {};
@@ -3152,6 +3210,22 @@ class HkiHeaderCardEditor extends LitElement {
       if (flat.persons_box_shadow !== undefined) nested.persons.box_shadow = flat.persons_box_shadow;
       if (flat.persons_grayscale_away !== undefined) nested.persons.grayscale_away = flat.persons_grayscale_away;
       if (flat.persons_entities) nested.persons.entities = flat.persons_entities;
+      
+      // Add dummy person to nested format
+      const hasDummyPerson = flat.dummy_person_enabled !== undefined || flat.dummy_person_entity !== undefined ||
+                             flat.dummy_person_icon !== undefined || flat.dummy_person_use_picture !== undefined ||
+                             flat.dummy_person_tap_action !== undefined || flat.dummy_person_hold_action !== undefined ||
+                             flat.dummy_person_double_tap_action !== undefined;
+      if (hasDummyPerson) {
+        nested.persons.dummy_person = {};
+        if (flat.dummy_person_enabled !== undefined) nested.persons.dummy_person.enabled = flat.dummy_person_enabled;
+        if (flat.dummy_person_entity !== undefined) nested.persons.dummy_person.entity = flat.dummy_person_entity;
+        if (flat.dummy_person_icon !== undefined) nested.persons.dummy_person.icon = flat.dummy_person_icon;
+        if (flat.dummy_person_use_picture !== undefined) nested.persons.dummy_person.use_picture = flat.dummy_person_use_picture;
+        if (flat.dummy_person_tap_action !== undefined) nested.persons.dummy_person.tap_action = flat.dummy_person_tap_action;
+        if (flat.dummy_person_hold_action !== undefined) nested.persons.dummy_person.hold_action = flat.dummy_person_hold_action;
+        if (flat.dummy_person_double_tap_action !== undefined) nested.persons.dummy_person.double_tap_action = flat.dummy_person_double_tap_action;
+      }
     }
     
     return nested;
@@ -3828,6 +3902,163 @@ class HkiHeaderCardEditor extends LitElement {
     `;
   }
 
+  _renderDummyPersonActionEditors() {
+    const renderDummyAction = (label, actionType) => {
+      const action = this._config[`dummy_person_${actionType}`] || { action: actionType === "tap_action" ? "more-info" : "none" };
+      const actionValue = action.action || "none";
+
+      const setAction = (nextAction) => {
+        this._config = { ...this._config, [`dummy_person_${actionType}`]: nextAction };
+        const strippedConfig = this._stripDefaults(this._config);
+        this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: strippedConfig } }));
+        this.requestUpdate();
+      };
+
+      const patchAction = (patch) => {
+        const current = this._config[`dummy_person_${actionType}`] || { action: "none" };
+        setAction({ ...current, ...patch });
+      };
+
+      return html`
+        <div style="margin-top: 8px;">
+          <p style="font-weight: 500; margin-bottom: 4px; font-size: 0.9em;">${label}</p>
+          <ha-select label="Action" .value=${actionValue} @selected=${(e) => setAction({ action: e.target.value })} @closed=${(e) => e.stopPropagation()}>
+            <mwc-list-item value="none">None</mwc-list-item>
+            <mwc-list-item value="navigate">Navigate</mwc-list-item>
+            <mwc-list-item value="back">Back</mwc-list-item>
+            <mwc-list-item value="menu">Toggle Menu</mwc-list-item>
+            <mwc-list-item value="url">Open URL</mwc-list-item>
+            <mwc-list-item value="more-info">More Info</mwc-list-item>
+            <mwc-list-item value="toggle">Toggle Entity</mwc-list-item>
+            <mwc-list-item value="perform-action">Perform Action</mwc-list-item>
+          </ha-select>
+          ${actionValue === "navigate" ? html`
+            ${this._renderNavigationPathPicker("Navigation path", action.navigation_path || "", (v) => patchAction({ navigation_path: v }))}
+          ` : ''}
+          ${actionValue === "url" ? html`
+            <ha-textfield label="URL" .value=${action.url_path || ""} @input=${(e) => patchAction({ url_path: e.target.value })}></ha-textfield>
+          ` : ''}
+          ${actionValue === "more-info" || actionValue === "toggle" ? html`
+            <ha-entity-picker .hass=${this.hass} .value=${action.entity || this._config.dummy_person_entity || ""} @value-changed=${(e) => patchAction({ entity: e.detail.value })}></ha-entity-picker>
+          ` : ''}
+          ${actionValue === "perform-action" ? html`
+            ${customElements.get("ha-service-picker") ? html`
+              <ha-service-picker
+                .hass=${this.hass}
+                .label=${"Action (service)"}
+                .value=${action.perform_action || ""}
+                @value-changed=${(ev) => {
+                  ev.stopPropagation();
+                  const v = ev.detail?.value ?? ev.target?.value ?? "";
+                  patchAction({ perform_action: String(v || "") });
+                }}
+                @click=${(e) => e.stopPropagation()}
+              ></ha-service-picker>
+            ` : html`
+              ${(() => {
+                const key = `dummy_person_${actionType}`;
+                const full = String(action.perform_action || "");
+                const derivedDomain = full.includes(".") ? full.split(".")[0] : "";
+                const cachedDomain = this._paDomainCache?.[key] || "";
+                const domain = cachedDomain || derivedDomain;
+                const derivedService = (full.includes(".") && derivedDomain === domain)
+                  ? (full.split(".")[1] || "")
+                  : "";
+                const services = (domain && this.hass?.services?.[domain])
+                  ? Object.keys(this.hass.services[domain]).sort()
+                  : [];
+                return html`
+                  <div class="inline-fields-2">
+                    <ha-select
+                      label="Domain"
+                      .value=${domain || undefined}
+                      @selected=${(e) => {
+                        const nextDomain = e.target.value || "";
+                        this._paDomainCache[key] = nextDomain;
+                        patchAction({ perform_action: "" });
+                        this.requestUpdate();
+                      }}
+                      @closed=${(e) => e.stopPropagation()}
+                      @click=${(e) => e.stopPropagation()}
+                    >
+                      <mwc-list-item value=""></mwc-list-item>
+                      ${Object.keys(this.hass?.services || {}).sort().map((d) => html`<mwc-list-item .value=${d}>${d}</mwc-list-item>`)}
+                    </ha-select>
+
+                    <ha-select
+                      label="Service"
+                      .value=${derivedService || undefined}
+                      .disabled=${!domain}
+                      @selected=${(e) => {
+                        const service = e.target.value || "";
+                        const d = this._paDomainCache[key] || domain;
+                        patchAction({ perform_action: (d && service) ? `${d}.${service}` : "" });
+                      }}
+                      @closed=${(e) => e.stopPropagation()}
+                      @click=${(e) => e.stopPropagation()}
+                    >
+                      <mwc-list-item value=""></mwc-list-item>
+                      ${services.map((s) => html`<mwc-list-item .value=${s}>${s}</mwc-list-item>`)}
+                    </ha-select>
+                  </div>
+                `;
+              })()}
+            `}
+
+            <ha-selector
+              .hass=${this.hass}
+              .selector=${{ target: {} }}
+              .label=${"Target (optional)"}
+              .value=${action.target || null}
+              @value-changed=${(ev) => {
+                ev.stopPropagation();
+                const target = ev.detail?.value;
+                const currentTarget = action.target;
+                if (JSON.stringify(currentTarget) !== JSON.stringify(target)) {
+                  const updated = { ...action };
+                  if (target && Object.keys(target).length > 0) {
+                    updated.target = target;
+                  } else {
+                    delete updated.target;
+                  }
+                  setAction(updated);
+                }
+              }}
+              @click=${(e) => e.stopPropagation()}
+            ></ha-selector>
+
+            <ha-yaml-editor
+              .hass=${this.hass}
+              .label=${"Service Data (optional, YAML)"}
+              .value=${action.data || null}
+              @value-changed=${(ev) => {
+                ev.stopPropagation();
+                const data = ev.detail?.value;
+                const currentData = action.data;
+                if (JSON.stringify(currentData) !== JSON.stringify(data)) {
+                  const updated = { ...action };
+                  if (data && typeof data === "object" && Object.keys(data).length > 0) {
+                    updated.data = data;
+                  } else {
+                    delete updated.data;
+                  }
+                  setAction(updated);
+                }
+              }}
+              @click=${(e) => e.stopPropagation()}
+            ></ha-yaml-editor>
+          ` : ''}
+        </div>
+      `;
+    };
+
+    return html`
+      ${renderDummyAction("Tap action", "tap_action")}
+      ${renderDummyAction("Hold action", "hold_action")}
+      ${renderDummyAction("Double tap action", "double_tap_action")}
+    `;
+  }
+
   _renderActionEditor(label, field) {
     return html`
       <div style="margin-top: 8px;">
@@ -3906,7 +4137,7 @@ class HkiHeaderCardEditor extends LitElement {
 
             ${this._config.persons_enabled ? html`
               <div class="section">Persons</div>
-              <p style="opacity: 0.7; font-size: 0.9em; margin: 8px 0;">Configure individual persons below. ${this._config.persons_grayscale_away ? html`<span style="color: var(--primary-color);">Enable "Grayscale when away" in Options to show per-person state override.</span>` : html`Enable "Grayscale when away" in Options below to add per-person state control.`}</p>
+              <p style="opacity: 0.7; font-size: 0.9em; margin: 8px 0;">Configure individual persons below</p>
               
               ${(this._config.persons_entities || []).map((personConfig, index) => {
                 const entityId = typeof personConfig === 'string' ? personConfig : personConfig.entity;
@@ -3951,33 +4182,6 @@ class HkiHeaderCardEditor extends LitElement {
                         this.requestUpdate();
                       }}
                     ></ha-entity-picker>
-
-                    ${this._config.persons_grayscale_away ? html`
-                      <ha-entity-picker
-                        .hass=${this.hass}
-                        .value=${typeof personConfig !== 'string' ? (personConfig.grayscale_entity || "") : ""}
-                        .label=${"State Override Entity (optional)"}
-                        helper="Override person state with this entity: ON = home/color, OFF = away/grayscale"
-                        @value-changed=${(e) => {
-                          const updated = [...this._config.persons_entities];
-                          if (typeof updated[index] === 'string') {
-                            updated[index] = {
-                              entity: updated[index],
-                              grayscale_entity: e.detail.value || "",
-                              tap_action: { action: "more-info" },
-                              hold_action: { action: "none" },
-                              double_tap_action: { action: "none" }
-                            };
-                          } else {
-                            updated[index] = { ...updated[index], grayscale_entity: e.detail.value || "" };
-                          }
-                          this._config = { ...this._config, persons_entities: updated };
-                          const strippedConfig = this._stripDefaults(this._config);
-                          this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: strippedConfig } }));
-                          this.requestUpdate();
-                        }}
-                      ></ha-entity-picker>
-                    ` : ''}
 
                     ${this._renderPersonActionEditors(index)}
                   </div>
@@ -4065,8 +4269,41 @@ class HkiHeaderCardEditor extends LitElement {
               <ha-formfield label="Grayscale when away">
                 <ha-switch .checked=${!!this._config.persons_grayscale_away} data-field="persons_grayscale_away" @change=${this._changed}></ha-switch>
               </ha-formfield>
-              ${this._config.persons_grayscale_away ? html`
-                <p style="opacity: 0.6; font-size: 0.85em; margin: 4px 0 8px 24px; font-style: italic;">Per-person state override available in Persons section above</p>
+              
+              <div class="section" style="margin-top: 16px;">Dummy Person</div>
+              <p style="opacity: 0.7; font-size: 0.9em; margin: 8px 0;">Add a fake person controlled by any entity state</p>
+              
+              <ha-formfield label="Enable dummy person">
+                <ha-switch .checked=${!!this._config.dummy_person_enabled} data-field="dummy_person_enabled" @change=${this._changed}></ha-switch>
+              </ha-formfield>
+              
+              ${this._config.dummy_person_enabled ? html`
+                <ha-entity-picker
+                  .hass=${this.hass}
+                  .value=${this._config.dummy_person_entity || ""}
+                  .label=${"Control Entity"}
+                  helper="ON = home/color, OFF = away/grayscale"
+                  @value-changed=${(e) => {
+                    this._config = { ...this._config, dummy_person_entity: e.detail.value || "" };
+                    const strippedConfig = this._stripDefaults(this._config);
+                    this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: strippedConfig } }));
+                    this.requestUpdate();
+                  }}
+                ></ha-entity-picker>
+                
+                <ha-textfield 
+                  label="Icon" 
+                  .value=${this._config.dummy_person_icon || "mdi:account"} 
+                  data-field="dummy_person_icon" 
+                  @input=${this._changed}
+                  helper="MDI icon name (e.g., mdi:account)"
+                ></ha-textfield>
+                
+                <ha-formfield label="Use entity picture from control entity">
+                  <ha-switch .checked=${!!this._config.dummy_person_use_picture} data-field="dummy_person_use_picture" @change=${this._changed}></ha-switch>
+                </ha-formfield>
+                
+                ${this._renderDummyPersonActionEditors()}
               ` : ''}
             ` : ''}
           </div>
