@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v1.3.5 ',
+  '%c HKI-HEADER-CARD %c v2.0.0 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -79,8 +79,8 @@ const DEFAULTS = Object.freeze({
   background_size: "cover",
   background_blend_mode: "normal",
   height_vh: 35,
-  min_height: 180,
-  max_height: 220,
+  min_height: 215,
+  max_height: 240,
   blend_color: "var(--primary-background-color)",
   blend_stop: 95,
   blend_enabled: true,
@@ -104,13 +104,31 @@ const DEFAULTS = Object.freeze({
   inset_right: 0,
   inset_bottom: 0,
   title_offset_x: 5,
-  title_offset_y: 32,
+  title_offset_y: 65,
   subtitle_offset_x: 5,
-  subtitle_offset_y: 32,
+  subtitle_offset_y: 70,
   badges_offset_pinned: 48,
   badges_offset_unpinned: 100,
   badges_gap: 0,
   badges_fixed: false,
+  
+  // Person Entities Display
+  persons_enabled: false,
+  persons_entities: [],
+  persons_align: "right",
+  persons_offset_x: 5,
+  persons_offset_y: 63,
+  persons_size: 35,
+  persons_spacing: 0,
+  persons_stack_order: "descending",
+  persons_dynamic_order: true,
+  persons_hide_away: false,
+  persons_use_entity_picture: true,
+  persons_border_width: 1,
+  persons_border_color: "rgba(255,255,255,0.3)",
+  persons_border_color_away: "rgba(255,0,0,0.5)",
+  persons_grayscale_away: true,
+  
   font_family: "inherit",
   font_family_custom: "",
   font_style: "normal",
@@ -122,8 +140,8 @@ const DEFAULTS = Object.freeze({
 
   // Top Bar Layout
   top_bar_enabled: true,
-  top_bar_offset_y: 10,
-  top_bar_padding_x: 5,
+  top_bar_offset_y: 15,
+  top_bar_padding_x: 0,
   
   // Slot types: "none", "spacer", "weather", "datetime", "custom", "button"
   top_bar_left: "none",
@@ -139,10 +157,10 @@ const DEFAULTS = Object.freeze({
   info_size_px: 12,
   info_weight: "medium",
   info_color: "",
-  info_pill: false,
+  info_pill: true,
   info_pill_background: "rgba(0,0,0,0.25)",
-  info_pill_padding_x: 10,
-  info_pill_padding_y: 6,
+  info_pill_padding_x: 12,
+  info_pill_padding_y: 8,
   info_pill_radius: 999,
   info_pill_blur: 0,
   info_pill_border_style: "none",
@@ -181,6 +199,315 @@ function normalizeWeightKey(input, fallbackKey) {
   }
   return fallbackKey;
 }
+
+// Migration helper: Detect if config is in old flat format
+function isOldFormat(config) {
+  // Check for old flat keys
+  const oldKeys = [
+    'top_bar_left_weather_entity', 'top_bar_right_weather_entity', 'top_bar_center_weather_entity',
+    'top_bar_left_show_icon', 'persons_enabled', 'persons_entities'
+  ];
+  return oldKeys.some(key => key in config);
+}
+
+// Migrate old flat format to new nested format
+function migrateToNestedFormat(oldConfig) {
+  const newConfig = { type: oldConfig.type || "custom:hki-header-card" };
+  
+  // Copy simple top-level properties
+  const simpleProps = [
+    'title', 'subtitle', 'text_align', 'title_color', 'subtitle_color',
+    'background', 'background_color', 'background_position', 'background_repeat',
+    'background_size', 'background_blend_mode', 'height_vh', 'min_height', 'max_height',
+    'blend_color', 'blend_stop', 'blend_enabled',
+    'card_border_radius', 'card_border_radius_top', 'card_border_radius_bottom',
+    'card_box_shadow', 'card_border_style', 'card_border_width', 'card_border_color',
+    'fixed', 'fixed_top', 'inset_top', 'inset_left', 'inset_right', 'inset_bottom',
+    'title_offset_x', 'title_offset_y', 'subtitle_offset_x', 'subtitle_offset_y',
+    'badges_offset_pinned', 'badges_offset_unpinned', 'badges_gap', 'badges_fixed',
+    'font_family', 'font_family_custom', 'font_style', 'title_size_px', 'subtitle_size_px',
+    'title_weight', 'subtitle_weight', 'mobile_breakpoint'
+  ];
+  
+  simpleProps.forEach(prop => {
+    if (oldConfig[prop] !== undefined) {
+      newConfig[prop] = oldConfig[prop];
+    }
+  });
+  
+  // Migrate top_bar global settings
+  if (oldConfig.top_bar_enabled !== undefined || oldConfig.top_bar_offset_y !== undefined || oldConfig.top_bar_padding_x !== undefined) {
+    newConfig.top_bar = {};
+    if (oldConfig.top_bar_enabled !== undefined) newConfig.top_bar.enabled = oldConfig.top_bar_enabled;
+    if (oldConfig.top_bar_offset_y !== undefined) newConfig.top_bar.offset_y = oldConfig.top_bar_offset_y;
+    if (oldConfig.top_bar_padding_x !== undefined) newConfig.top_bar.padding_x = oldConfig.top_bar_padding_x;
+  }
+  
+  // Migrate global info styling
+  const infoKeys = ['info_size_px', 'info_weight', 'info_color', 'info_pill', 'info_pill_background',
+                    'info_pill_padding_x', 'info_pill_padding_y', 'info_pill_radius', 'info_pill_blur',
+                    'info_pill_border_style', 'info_pill_border_width', 'info_pill_border_color'];
+  if (infoKeys.some(k => oldConfig[k] !== undefined)) {
+    newConfig.info = {};
+    if (oldConfig.info_size_px !== undefined) newConfig.info.size_px = oldConfig.info_size_px;
+    if (oldConfig.info_weight !== undefined) newConfig.info.weight = oldConfig.info_weight;
+    if (oldConfig.info_color !== undefined) newConfig.info.color = oldConfig.info_color;
+    if (oldConfig.info_pill !== undefined) newConfig.info.pill = oldConfig.info_pill;
+    if (oldConfig.info_pill_background !== undefined) newConfig.info.pill_background = oldConfig.info_pill_background;
+    if (oldConfig.info_pill_padding_x !== undefined) newConfig.info.pill_padding_x = oldConfig.info_pill_padding_x;
+    if (oldConfig.info_pill_padding_y !== undefined) newConfig.info.pill_padding_y = oldConfig.info_pill_padding_y;
+    if (oldConfig.info_pill_radius !== undefined) newConfig.info.pill_radius = oldConfig.info_pill_radius;
+    if (oldConfig.info_pill_blur !== undefined) newConfig.info.pill_blur = oldConfig.info_pill_blur;
+    if (oldConfig.info_pill_border_style !== undefined) newConfig.info.pill_border_style = oldConfig.info_pill_border_style;
+    if (oldConfig.info_pill_border_width !== undefined) newConfig.info.pill_border_width = oldConfig.info_pill_border_width;
+    if (oldConfig.info_pill_border_color !== undefined) newConfig.info.pill_border_color = oldConfig.info_pill_border_color;
+  }
+  
+  // Migrate each slot (left, center, right)
+  ['left', 'center', 'right'].forEach(slot => {
+    const slotType = oldConfig[`top_bar_${slot}`] || "none";
+    if (slotType === "none") return;
+    
+    const prefix = `top_bar_${slot}_`;
+    const slotConfig = { type: slotType };
+    
+    // Common slot properties
+    if (oldConfig[prefix + "offset_x"] !== undefined) slotConfig.offset_x = oldConfig[prefix + "offset_x"];
+    if (oldConfig[prefix + "offset_y"] !== undefined) slotConfig.offset_y = oldConfig[prefix + "offset_y"];
+    if (oldConfig[prefix + "offset_x_mobile"] !== undefined) slotConfig.offset_x_mobile = oldConfig[prefix + "offset_x_mobile"];
+    if (oldConfig[prefix + "offset_y_mobile"] !== undefined) slotConfig.offset_y_mobile = oldConfig[prefix + "offset_y_mobile"];
+    if (oldConfig[prefix + "overflow"] !== undefined) slotConfig.overflow = oldConfig[prefix + "overflow"];
+    
+    // Styling (only if not using global)
+    if (oldConfig[prefix + "use_global"] === false) {
+      slotConfig.styling = {
+        size_px: oldConfig[prefix + "size_px"],
+        weight: oldConfig[prefix + "weight"],
+        color: oldConfig[prefix + "color"],
+        pill: oldConfig[prefix + "pill"],
+        pill_background: oldConfig[prefix + "pill_background"],
+        pill_padding_x: oldConfig[prefix + "pill_padding_x"],
+        pill_padding_y: oldConfig[prefix + "pill_padding_y"],
+        pill_radius: oldConfig[prefix + "pill_radius"],
+        pill_blur: oldConfig[prefix + "pill_blur"],
+        pill_border_style: oldConfig[prefix + "pill_border_style"],
+        pill_border_width: oldConfig[prefix + "pill_border_width"],
+        pill_border_color: oldConfig[prefix + "pill_border_color"]
+      };
+    }
+    
+    // Type-specific configurations
+    if (slotType === "weather") {
+      slotConfig.weather = {
+        entity: oldConfig[prefix + "weather_entity"],
+        show_icon: oldConfig[prefix + "show_icon"],
+        show_condition: oldConfig[prefix + "show_condition"],
+        show_temperature: oldConfig[prefix + "show_temperature"],
+        show_humidity: oldConfig[prefix + "show_humidity"],
+        show_wind: oldConfig[prefix + "show_wind"],
+        show_pressure: oldConfig[prefix + "show_pressure"],
+        colored_icons: oldConfig[prefix + "weather_colored_icons"],
+        icon_color_mode: oldConfig[prefix + "weather_icon_color_mode"],
+        icon_color: oldConfig[prefix + "weather_icon_color"],
+        animate_icon: oldConfig[prefix + "animate_icon"],
+        icon_pack_path: oldConfig[prefix + "icon_pack_path"]
+      };
+    } else if (slotType === "datetime") {
+      slotConfig.datetime = {
+        show_day: oldConfig[prefix + "show_day"],
+        show_date: oldConfig[prefix + "show_date"],
+        show_time: oldConfig[prefix + "show_time"],
+        time_format: oldConfig[prefix + "time_format"],
+        date_format: oldConfig[prefix + "date_format"],
+        separator: oldConfig[prefix + "separator"],
+        icon: oldConfig[prefix + "icon"],
+        animate_icon: oldConfig[prefix + "animate_icon"]
+      };
+    } else if (slotType === "button") {
+      slotConfig.button = {
+        icon: oldConfig[prefix + "icon"],
+        label: oldConfig[prefix + "label"]
+      };
+    } else if (slotType === "custom") {
+      slotConfig.custom = {
+        card: oldConfig[prefix + "card"]
+      };
+    }
+    
+    // Actions
+    slotConfig.actions = {
+      tap_action: oldConfig[prefix + "tap_action"],
+      hold_action: oldConfig[prefix + "hold_action"],
+      double_tap_action: oldConfig[prefix + "double_tap_action"]
+    };
+    
+    newConfig[`top_bar_${slot}`] = slotConfig;
+  });
+  
+  // Migrate persons
+  if (oldConfig.persons_enabled || oldConfig.persons_entities) {
+    newConfig.persons = {};
+    if (oldConfig.persons_enabled !== undefined) newConfig.persons.enabled = oldConfig.persons_enabled;
+    if (oldConfig.persons_align !== undefined) newConfig.persons.align = oldConfig.persons_align;
+    if (oldConfig.persons_offset_x !== undefined) newConfig.persons.offset_x = oldConfig.persons_offset_x;
+    if (oldConfig.persons_offset_y !== undefined) newConfig.persons.offset_y = oldConfig.persons_offset_y;
+    if (oldConfig.persons_size !== undefined) newConfig.persons.size = oldConfig.persons_size;
+    if (oldConfig.persons_spacing !== undefined) newConfig.persons.spacing = oldConfig.persons_spacing;
+    if (oldConfig.persons_stack_order !== undefined) newConfig.persons.stack_order = oldConfig.persons_stack_order;
+    if (oldConfig.persons_dynamic_order !== undefined) newConfig.persons.dynamic_order = oldConfig.persons_dynamic_order;
+    if (oldConfig.persons_hide_away !== undefined) newConfig.persons.hide_away = oldConfig.persons_hide_away;
+    if (oldConfig.persons_use_entity_picture !== undefined) newConfig.persons.use_entity_picture = oldConfig.persons_use_entity_picture;
+    if (oldConfig.persons_border_width !== undefined) newConfig.persons.border_width = oldConfig.persons_border_width;
+    if (oldConfig.persons_border_color !== undefined) newConfig.persons.border_color = oldConfig.persons_border_color;
+    if (oldConfig.persons_border_color_away !== undefined) newConfig.persons.border_color_away = oldConfig.persons_border_color_away;
+    if (oldConfig.persons_grayscale_away !== undefined) newConfig.persons.grayscale_away = oldConfig.persons_grayscale_away;
+    if (oldConfig.persons_entities !== undefined) newConfig.persons.entities = oldConfig.persons_entities || [];
+  }
+  
+  return newConfig;
+}
+
+// Flatten nested format to flat format for internal use
+function flattenNestedFormat(nested) {
+  const flat = { type: nested.type || "custom:hki-header-card" };
+  
+  // Copy simple top-level properties
+  const simpleProps = [
+    'title', 'subtitle', 'text_align', 'title_color', 'subtitle_color',
+    'background', 'background_color', 'background_position', 'background_repeat',
+    'background_size', 'background_blend_mode', 'height_vh', 'min_height', 'max_height',
+    'blend_color', 'blend_stop', 'blend_enabled',
+    'card_border_radius', 'card_border_radius_top', 'card_border_radius_bottom',
+    'card_box_shadow', 'card_border_style', 'card_border_width', 'card_border_color',
+    'fixed', 'fixed_top', 'inset_top', 'inset_left', 'inset_right', 'inset_bottom',
+    'title_offset_x', 'title_offset_y', 'subtitle_offset_x', 'subtitle_offset_y',
+    'badges_offset_pinned', 'badges_offset_unpinned', 'badges_gap', 'badges_fixed',
+    'font_family', 'font_family_custom', 'font_style', 'title_size_px', 'subtitle_size_px',
+    'title_weight', 'subtitle_weight', 'mobile_breakpoint'
+  ];
+  
+  simpleProps.forEach(prop => {
+    if (nested[prop] !== undefined) {
+      flat[prop] = nested[prop];
+    }
+  });
+  
+  // Flatten top_bar
+  if (nested.top_bar) {
+    if (nested.top_bar.enabled !== undefined) flat.top_bar_enabled = nested.top_bar.enabled;
+    if (nested.top_bar.offset_y !== undefined) flat.top_bar_offset_y = nested.top_bar.offset_y;
+    if (nested.top_bar.padding_x !== undefined) flat.top_bar_padding_x = nested.top_bar.padding_x;
+  }
+  
+  // Flatten info
+  if (nested.info) {
+    if (nested.info.size_px !== undefined) flat.info_size_px = nested.info.size_px;
+    if (nested.info.weight !== undefined) flat.info_weight = nested.info.weight;
+    if (nested.info.color !== undefined) flat.info_color = nested.info.color;
+    if (nested.info.pill !== undefined) flat.info_pill = nested.info.pill;
+    if (nested.info.pill_background !== undefined) flat.info_pill_background = nested.info.pill_background;
+    if (nested.info.pill_padding_x !== undefined) flat.info_pill_padding_x = nested.info.pill_padding_x;
+    if (nested.info.pill_padding_y !== undefined) flat.info_pill_padding_y = nested.info.pill_padding_y;
+    if (nested.info.pill_radius !== undefined) flat.info_pill_radius = nested.info.pill_radius;
+    if (nested.info.pill_blur !== undefined) flat.info_pill_blur = nested.info.pill_blur;
+    if (nested.info.pill_border_style !== undefined) flat.info_pill_border_style = nested.info.pill_border_style;
+    if (nested.info.pill_border_width !== undefined) flat.info_pill_border_width = nested.info.pill_border_width;
+    if (nested.info.pill_border_color !== undefined) flat.info_pill_border_color = nested.info.pill_border_color;
+  }
+  
+  // Flatten slots
+  ['left', 'center', 'right'].forEach(slot => {
+    const slotConfig = nested[`top_bar_${slot}`];
+    if (!slotConfig) return;
+    
+    const prefix = `top_bar_${slot}_`;
+    flat[`top_bar_${slot}`] = slotConfig.type || "none";
+    
+    // Common properties
+    if (slotConfig.offset_x !== undefined) flat[prefix + "offset_x"] = slotConfig.offset_x;
+    if (slotConfig.offset_y !== undefined) flat[prefix + "offset_y"] = slotConfig.offset_y;
+    if (slotConfig.offset_x_mobile !== undefined) flat[prefix + "offset_x_mobile"] = slotConfig.offset_x_mobile;
+    if (slotConfig.offset_y_mobile !== undefined) flat[prefix + "offset_y_mobile"] = slotConfig.offset_y_mobile;
+    if (slotConfig.overflow !== undefined) flat[prefix + "overflow"] = slotConfig.overflow;
+    
+    // Styling
+    if (slotConfig.styling) {
+      flat[prefix + "use_global"] = false;
+      flat[prefix + "size_px"] = slotConfig.styling.size_px;
+      flat[prefix + "weight"] = slotConfig.styling.weight;
+      flat[prefix + "color"] = slotConfig.styling.color;
+      flat[prefix + "pill"] = slotConfig.styling.pill;
+      flat[prefix + "pill_background"] = slotConfig.styling.pill_background;
+      flat[prefix + "pill_padding_x"] = slotConfig.styling.pill_padding_x;
+      flat[prefix + "pill_padding_y"] = slotConfig.styling.pill_padding_y;
+      flat[prefix + "pill_radius"] = slotConfig.styling.pill_radius;
+      flat[prefix + "pill_blur"] = slotConfig.styling.pill_blur;
+      flat[prefix + "pill_border_style"] = slotConfig.styling.pill_border_style;
+      flat[prefix + "pill_border_width"] = slotConfig.styling.pill_border_width;
+      flat[prefix + "pill_border_color"] = slotConfig.styling.pill_border_color;
+    } else {
+      flat[prefix + "use_global"] = true;
+    }
+    
+    // Type-specific
+    if (slotConfig.weather) {
+      Object.entries(slotConfig.weather).forEach(([key, val]) => {
+        if (key === 'entity') {
+          flat[prefix + "weather_entity"] = val;
+        } else if (key.startsWith('icon_')) {
+          flat[prefix + "weather_" + key] = val;
+        } else {
+          flat[prefix + key] = val;
+        }
+      });
+    }
+    
+    if (slotConfig.datetime) {
+      Object.entries(slotConfig.datetime).forEach(([key, val]) => {
+        flat[prefix + key] = val;
+      });
+    }
+    
+    if (slotConfig.button) {
+      Object.entries(slotConfig.button).forEach(([key, val]) => {
+        flat[prefix + key] = val;
+      });
+    }
+    
+    if (slotConfig.custom) {
+      flat[prefix + "card"] = slotConfig.custom.card;
+    }
+    
+    // Actions
+    if (slotConfig.actions) {
+      if (slotConfig.actions.tap_action) flat[prefix + "tap_action"] = slotConfig.actions.tap_action;
+      if (slotConfig.actions.hold_action) flat[prefix + "hold_action"] = slotConfig.actions.hold_action;
+      if (slotConfig.actions.double_tap_action) flat[prefix + "double_tap_action"] = slotConfig.actions.double_tap_action;
+    }
+  });
+  
+  // Flatten persons
+  if (nested.persons) {
+    if (nested.persons.enabled !== undefined) flat.persons_enabled = nested.persons.enabled;
+    if (nested.persons.align !== undefined) flat.persons_align = nested.persons.align;
+    if (nested.persons.offset_x !== undefined) flat.persons_offset_x = nested.persons.offset_x;
+    if (nested.persons.offset_y !== undefined) flat.persons_offset_y = nested.persons.offset_y;
+    if (nested.persons.size !== undefined) flat.persons_size = nested.persons.size;
+    if (nested.persons.spacing !== undefined) flat.persons_spacing = nested.persons.spacing;
+    if (nested.persons.stack_order !== undefined) flat.persons_stack_order = nested.persons.stack_order;
+    if (nested.persons.dynamic_order !== undefined) flat.persons_dynamic_order = nested.persons.dynamic_order;
+    if (nested.persons.hide_away !== undefined) flat.persons_hide_away = nested.persons.hide_away;
+    if (nested.persons.use_entity_picture !== undefined) flat.persons_use_entity_picture = nested.persons.use_entity_picture;
+    if (nested.persons.border_width !== undefined) flat.persons_border_width = nested.persons.border_width;
+    if (nested.persons.border_color !== undefined) flat.persons_border_color = nested.persons.border_color;
+    if (nested.persons.border_color_away !== undefined) flat.persons_border_color_away = nested.persons.border_color_away;
+    if (nested.persons.grayscale_away !== undefined) flat.persons_grayscale_away = nested.persons.grayscale_away;
+    if (nested.persons.entities !== undefined) flat.persons_entities = nested.persons.entities || [];
+  }
+  
+  return flat;
+}
+
 
 // Simplified hash - djb2
 function hashStr(s) {
@@ -378,6 +705,52 @@ class HkiHeaderCard extends LitElement {
         display: block;
       }
 
+      /* PERSON AVATARS */
+      .persons-container {
+        position: absolute;
+        display: flex;
+        align-items: center;
+        z-index: 2;
+      }
+
+      .person-avatar {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        overflow: hidden;
+        border: 2px solid rgba(255,255,255,0.3);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+        flex-shrink: 0;
+        background: var(--primary-background-color);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+      }
+
+      .person-avatar:hover {
+        transform: scale(1.05);
+        box-shadow: 0 3px 12px rgba(0, 0, 0, 0.6);
+      }
+
+      .person-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+        pointer-events: none;
+      }
+
+      .person-avatar ha-icon {
+        --mdc-icon-size: 28px;
+        color: var(--primary-text-color);
+        pointer-events: none;
+      }
+
       /* INFO ITEM (Flex Child for Top Bar) */
       .info-item {
         display: inline-flex;
@@ -387,6 +760,10 @@ class HkiHeaderCard extends LitElement {
         text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
         flex-shrink: 0;
         flex-grow: 0;
+        line-height: 1;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
       }
 
       .info-clickable {
@@ -396,11 +773,15 @@ class HkiHeaderCard extends LitElement {
       .info-clickable:hover { opacity: 0.8; }
 
       .info-icon {
-        --mdc-icon-size: var(--info-icon-size, 32px);
-        width: var(--info-icon-size, 32px);
-        height: var(--info-icon-size, 32px);
         color: var(--hki-header-text-color, #fff);
         filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        overflow: hidden;
+        line-height: 0;
+        box-sizing: border-box;
       }
 
       img.info-icon {
@@ -408,19 +789,57 @@ class HkiHeaderCard extends LitElement {
         display: block;
       }
 
-      .info-text { text-transform: capitalize; }
-      .info-temperature { font-weight: 500; }
+      ha-icon {
+        display: block;
+        line-height: 0;
+        box-sizing: border-box;
+        padding: 0;
+        margin: 0;
+      }
+      
+      .info-icon ha-icon {
+        width: 100%;
+        height: 100%;
+        max-width: 100%;
+        max-height: 100%;
+        min-width: 0;
+        min-height: 0;
+        overflow: hidden;
+        display: block;
+        line-height: 0;
+      }
+      
+      ha-icon svg {
+        display: block;
+        max-width: 100%;
+        max-height: 100%;
+        vertical-align: top;
+      }
+
+      .info-text { text-transform: capitalize; line-height: 1; display: inline-block; vertical-align: middle; }
+      .info-temperature { font-weight: 500; line-height: 1; display: inline-block; vertical-align: middle; }
+      .info-condition { line-height: 1; display: inline-block; vertical-align: middle; }
+      .info-humidity { line-height: 1; display: inline-block; vertical-align: middle; }
+      .info-wind { line-height: 1; display: inline-block; vertical-align: middle; }
+      .info-pressure { line-height: 1; display: inline-block; vertical-align: middle; }
 
       .info-pill {
         background: var(--hki-info-pill-background, rgba(0, 0, 0, 0.25));
         border-radius: var(--hki-info-pill-radius, 999px);
-        padding: var(--hki-info-pill-padding-y, 6px) var(--hki-info-pill-padding-x, 10px);
+        padding: var(--hki-info-pill-padding-y, 8px) var(--hki-info-pill-padding-x, 12px);
         backdrop-filter: blur(var(--hki-info-pill-blur, 0px));
         -webkit-backdrop-filter: blur(var(--hki-info-pill-blur, 0px));
         border-style: var(--hki-info-pill-border-style, none);
         border-width: var(--hki-info-pill-border-width, 0);
         border-color: var(--hki-info-pill-border-color, rgba(255,255,255,0.1));
         box-sizing: border-box;
+        overflow: hidden;
+      }
+
+      hki-notification-card {
+        display: block;
+        overflow: hidden;
+        border-radius: inherit;
       }
 
       /* TOP BAR LAYOUT */
@@ -801,7 +1220,20 @@ class HkiHeaderCard extends LitElement {
   setConfig(config) {
     if (!config) throw new Error("Invalid configuration");
 
-    const m = { ...DEFAULTS, ...config };
+    // Detect format and convert if needed
+    let workingConfig = config;
+    
+    // If config uses old flat format, migrate to nested first
+    if (isOldFormat(config)) {
+      console.log('[HKI Header Card] Detected old flat format, migrating to nested format...');
+      const nested = migrateToNestedFormat(config);
+      workingConfig = flattenNestedFormat(nested); // Flatten back for internal use
+    } else if (config.top_bar_left && typeof config.top_bar_left === 'object') {
+      // New nested format - flatten for internal use
+      workingConfig = flattenNestedFormat(config);
+    }
+
+    const m = { ...DEFAULTS, ...workingConfig };
 
     // Numeric clamping
     m.height_vh = clamp(+m.height_vh, 10, 100);
@@ -818,6 +1250,51 @@ class HkiHeaderCard extends LitElement {
     m.badges_offset_unpinned = toNum(m.badges_offset_unpinned, 100);
     m.badges_gap = toNum(m.badges_gap, 0);
     m.mobile_breakpoint = toNum(m.mobile_breakpoint, 768);
+
+    // Person entities configuration
+    m.persons_enabled = !!m.persons_enabled;
+    
+    // Handle backward compatibility and normalize persons_entities structure
+    if (Array.isArray(m.persons_entities)) {
+      m.persons_entities = m.persons_entities.map(item => {
+        // If it's already an object, ensure it has all required fields
+        if (typeof item === 'object' && item !== null) {
+          return {
+            entity: item.entity || "",
+            tap_action: item.tap_action || { action: "more-info" },
+            hold_action: item.hold_action || { action: "none" },
+            double_tap_action: item.double_tap_action || { action: "none" }
+          };
+        }
+        // If it's a string (old format), convert to object
+        if (typeof item === 'string') {
+          return {
+            entity: item,
+            tap_action: { action: "more-info" },
+            hold_action: { action: "none" },
+            double_tap_action: { action: "none" }
+          };
+        }
+        return null;
+      }).filter(Boolean);
+    } else {
+      m.persons_entities = [];
+    }
+    
+    m.persons_align = ["left", "center", "right"].includes(m.persons_align) ? m.persons_align : "left";
+    m.persons_offset_x = toNum(m.persons_offset_x, 5);
+    m.persons_offset_y = toNum(m.persons_offset_y, 32);
+    m.persons_size = clamp(+m.persons_size || 48, 24, 128);
+    m.persons_spacing = toNum(m.persons_spacing, -8);
+    m.persons_stack_order = ["ascending", "descending"].includes(m.persons_stack_order) ? m.persons_stack_order : "ascending";
+    m.persons_dynamic_order = !!m.persons_dynamic_order;
+    m.persons_hide_away = !!m.persons_hide_away;
+    m.persons_use_entity_picture = m.persons_use_entity_picture !== false;
+    m.persons_border_width = clamp(+m.persons_border_width || 1, 0, 10);
+    m.persons_border_color = m.persons_border_color || "rgba(255,255,255,0.3)";
+    m.persons_border_color_away = m.persons_border_color_away || "rgba(255,100,100,0.5)";
+    m.persons_grayscale_away = !!m.persons_grayscale_away;
+
 
     // Background extra options
     m.background_blend_mode = m.background_blend_mode || "normal";
@@ -857,6 +1334,8 @@ class HkiHeaderCard extends LitElement {
       m[prefix + "icon"] = m[prefix + "icon"] || "";
       m[prefix + "label"] = m[prefix + "label"] || "";
       m[prefix + "tap_action"] = m[prefix + "tap_action"] || { action: "none" };
+      m[prefix + "hold_action"] = m[prefix + "hold_action"] || { action: "none" };
+      m[prefix + "double_tap_action"] = m[prefix + "double_tap_action"] || { action: "none" };
       m[prefix + "size_px"] = m[prefix + "size_px"] != null ? clamp(+m[prefix + "size_px"], 8, 64) : null;
       m[prefix + "weight"] = m[prefix + "weight"] ? normalizeWeightKey(m[prefix + "weight"], "medium") : null;
       m[prefix + "color"] = m[prefix + "color"] || null;
@@ -881,8 +1360,8 @@ class HkiHeaderCard extends LitElement {
     m.info_size_px = clamp(+m.info_size_px || 12, 8, 64);
     m.info_weight = normalizeWeightKey(m.info_weight ?? "medium", "medium");
     m.info_pill = !!m.info_pill;
-    m.info_pill_padding_x = clamp(+m.info_pill_padding_x || 10, 0, 80);
-    m.info_pill_padding_y = clamp(+m.info_pill_padding_y || 6, 0, 80);
+    m.info_pill_padding_x = clamp(+m.info_pill_padding_x || 12, 0, 80);
+    m.info_pill_padding_y = clamp(+m.info_pill_padding_y || 8, 0, 80);
     m.info_pill_radius = clamp(+m.info_pill_radius || 999, 0, 999);
     m.info_pill_blur = clamp(+m.info_pill_blur || 0, 0, 40);
     m.info_pill_border_style = ["none", "solid", "dashed", "dotted"].includes(m.info_pill_border_style) ? m.info_pill_border_style : "none";
@@ -915,9 +1394,75 @@ class HkiHeaderCard extends LitElement {
     m.title_weight = normalizeWeightKey(m.title_weight ?? "bold", "bold");
     m.subtitle_weight = normalizeWeightKey(m.subtitle_weight ?? "medium", "medium");
 
+    // ========== CONFIG CLEANUP ==========
+    // Remove deprecated fields from older versions
+    // These fields have been replaced or moved to per-entity config
+    delete m.persons_gap;           // Replaced by persons_spacing
+    delete m.persons_overlap;       // Replaced by persons_spacing
+    delete m.persons_tap_action;    // Now per-person in persons_entities
+    delete m.persons_hold_action;   // Now per-person in persons_entities
+    delete m.persons_double_tap_action; // Now per-person in persons_entities
+
+    // Clean up all action configs to remove unused fields based on action type
+    // This prevents having leftover fields like navigation_path when action is "url"
+    const actionFields = Object.keys(m).filter(k => k.endsWith('_tap_action') || k.endsWith('_hold_action') || k.endsWith('_double_tap_action'));
+    actionFields.forEach(field => {
+      if (m[field] && typeof m[field] === 'object') {
+        m[field] = this._cleanupActionConfig(m[field]);
+      }
+    });
+
+    // Clean up persons_entities array to ensure proper structure and clean actions
+    if (Array.isArray(m.persons_entities)) {
+      m.persons_entities = m.persons_entities.map(person => {
+        if (typeof person === 'string') return person;
+        if (typeof person !== 'object' || !person) return null;
+        
+        const cleaned = { entity: person.entity || "" };
+        if (person.tap_action) cleaned.tap_action = this._cleanupActionConfig(person.tap_action);
+        if (person.hold_action) cleaned.hold_action = this._cleanupActionConfig(person.hold_action);
+        if (person.double_tap_action) cleaned.double_tap_action = this._cleanupActionConfig(person.double_tap_action);
+        
+        return cleaned;
+      }).filter(Boolean);
+    }
+
     this._config = m;
     this._scheduleTemplateSetup(0);
     this._debouncedBadgesZIndex();
+  }
+
+  _cleanupActionConfig(action) {
+    if (!action || typeof action !== 'object') return action;
+    
+    const actionType = action.action || "none";
+    const cleaned = { action: actionType };
+    
+    // Only keep fields relevant to the action type
+    switch (actionType) {
+      case "navigate":
+        if (action.navigation_path) cleaned.navigation_path = action.navigation_path;
+        break;
+      case "url":
+        if (action.url_path) cleaned.url_path = action.url_path;
+        break;
+      case "more-info":
+      case "toggle":
+        if (action.entity) cleaned.entity = action.entity;
+        break;
+      case "perform-action":
+        if (action.perform_action) cleaned.perform_action = action.perform_action;
+        if (action.data) cleaned.data = action.data;
+        if (action.target) cleaned.target = action.target;
+        break;
+      case "call-service":
+        // Legacy support
+        if (action.service) cleaned.service = action.service;
+        if (action.service_data) cleaned.service_data = action.service_data;
+        break;
+    }
+    
+    return cleaned;
   }
 
   _isTemplateString(s) {
@@ -1181,16 +1726,19 @@ class HkiHeaderCard extends LitElement {
     return out;
   }
 
-  _handleAction(action) {
+  _handleAction(action, entityId = null) {
     if (!action || action.action === "none" || !this.hass) return;
 
-    switch (action.action) {
+    // If entityId is provided and action doesn't have entity, add it
+    const finalAction = entityId && !action.entity ? { ...action, entity: entityId } : action;
+
+    switch (finalAction.action) {
       case "navigate":
-        if (action.navigation_path) {
-           if (action.navigation_path === "back") {
+        if (finalAction.navigation_path) {
+           if (finalAction.navigation_path === "back") {
              history.back();
            } else {
-             history.pushState(null, "", action.navigation_path);
+             history.pushState(null, "", finalAction.navigation_path);
              window.dispatchEvent(new CustomEvent("location-changed", { bubbles: true, composed: true, detail: { replace: false } }));
            }
         }
@@ -1202,32 +1750,32 @@ class HkiHeaderCard extends LitElement {
         this.dispatchEvent(new CustomEvent("hass-toggle-menu", { bubbles: true, composed: true }));
         break;
       case "url":
-        if (action.url_path) window.open(action.url_path, "_blank");
+        if (finalAction.url_path) window.open(finalAction.url_path, "_blank");
         break;
       case "perform-action":
-        if (action.perform_action) {
-          const [domain, service] = action.perform_action.split(".");
+        if (finalAction.perform_action) {
+          const [domain, service] = finalAction.perform_action.split(".");
           if (domain && service) {
-            const serviceData = action.data || {};
-            const target = action.target || {};
+            const serviceData = finalAction.data || {};
+            const target = finalAction.target || {};
             this.hass.callService(domain, service, serviceData, target);
           }
         }
         break;
       case "call-service":
         // Legacy support for old call-service action
-        if (action.service) {
-          const [domain, service] = action.service.split(".");
-          if (domain && service) this.hass.callService(domain, service, this._parseServiceData(action.service_data));
+        if (finalAction.service) {
+          const [domain, service] = finalAction.service.split(".");
+          if (domain && service) this.hass.callService(domain, service, this._parseServiceData(finalAction.service_data));
         }
         break;
       case "more-info": {
-        const entity = action.entity || this._config.weather_entity;
+        const entity = finalAction.entity || this._config.weather_entity;
         if (entity) this.dispatchEvent(new CustomEvent("hass-more-info", { bubbles: true, composed: true, detail: { entityId: entity } }));
         break;
       }
       case "toggle": {
-        const toggleEntity = action.entity || this._config.weather_entity;
+        const toggleEntity = finalAction.entity || this._config.weather_entity;
         if (toggleEntity) this.hass.callService("homeassistant", "toggle", { entity_id: toggleEntity });
         break;
       }
@@ -1331,6 +1879,11 @@ class HkiHeaderCard extends LitElement {
       pill, 
       sizePx, 
       color,
+      pillBg,
+      pillPaddingX,
+      pillPaddingY,
+      pillRadius,
+      pillBlur,
       pillBorderStyle,
       pillBorderWidth,
       pillBorderColor
@@ -1363,13 +1916,76 @@ class HkiHeaderCard extends LitElement {
     const icon = cfg[prefix + "icon"] || "mdi:gesture-tap";
     const label = cfg[prefix + "label"] || "";
     const tapAction = cfg[prefix + "tap_action"] || { action: "none" };
+    const holdAction = cfg[prefix + "hold_action"] || { action: "none" };
+    const doubleTapAction = cfg[prefix + "double_tap_action"] || { action: "none" };
     
     const pillClass = slotStyle.pill ? "info-pill" : "";
-    const combinedStyle = `${slotStyle.inlineStyle} ${slotStyle.pillStyle}`;
+    
+    // Button always uses 5px padding (always has icon)
+    const buttonPaddingY = slotStyle.pill ? 5 : slotStyle.pillPaddingY;
+    const buttonPillStyle = slotStyle.pill ? `--hki-info-pill-background:${slotStyle.pillBg};--hki-info-pill-padding-x:${slotStyle.pillPaddingX}px;--hki-info-pill-padding-y:${buttonPaddingY}px;--hki-info-pill-radius:${slotStyle.pillRadius}px;--hki-info-pill-blur:${slotStyle.pillBlur}px;--hki-info-pill-border-style:${slotStyle.pillBorderStyle};--hki-info-pill-border-width:${slotStyle.pillBorderWidth}px;--hki-info-pill-border-color:${slotStyle.pillBorderColor}` : "";
+    const combinedStyle = `${slotStyle.inlineStyle} ${buttonPillStyle}`;
+    
+    // Hold timer and state
+    let holdTimer = null;
+    let holdActive = false;
+    let clickTimer = null;
+    let clickCount = 0;
+
+    const startHold = () => {
+      holdActive = false;
+      if (holdAction && holdAction.action !== "none") {
+        holdTimer = setTimeout(() => {
+          holdActive = true;
+          this._handleSlotTapAction(holdAction, slotName);
+        }, 500);
+      }
+    };
+
+    const endHold = () => {
+      if (holdTimer) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+      }
+      if (!holdActive && tapAction) {
+        // Use click debouncing for double-tap detection
+        clickCount++;
+        if (clickCount === 1) {
+          clickTimer = setTimeout(() => {
+            if (clickCount === 1) {
+              this._handleSlotTapAction(tapAction, slotName);
+            }
+            clickCount = 0;
+          }, 250);
+        } else if (clickCount === 2) {
+          clearTimeout(clickTimer);
+          clickCount = 0;
+          this._handleSlotTapAction(doubleTapAction, slotName);
+        }
+      }
+      holdActive = false;
+    };
+
+    const cancelHold = () => {
+      if (holdTimer) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+      }
+      holdActive = false;
+    };
     
     return html`
-      <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${() => this._handleSlotTapAction(tapAction, slotName)}>
-        <ha-icon .icon=${icon} style="--mdc-icon-size:${slotStyle.iconSize}px;"></ha-icon>
+      <div 
+        class="info-item ${pillClass}" 
+        style="${combinedStyle}"
+        @mousedown=${startHold}
+        @mouseup=${endHold}
+        @mouseleave=${cancelHold}
+        @touchstart=${startHold}
+        @touchend=${endHold}
+        @contextmenu=${(e) => e.preventDefault()}
+      >
+        <div class="info-icon" style="width:${slotStyle.iconSize}px;height:${slotStyle.iconSize}px;"><ha-icon .icon=${icon} style="width:100%;height:100%;--mdc-icon-size:${slotStyle.iconSize}px;"></ha-icon></div>
         ${label ? html`<span>${label}</span>` : ''}
       </div>
     `;
@@ -1429,16 +2045,71 @@ class HkiHeaderCard extends LitElement {
     const svgUrl = useSvg ? `${iconPack}/${state}.svg` : "";
 
     const pillClass = slotStyle.pill ? "info-pill" : "";
-    const combinedStyle = `${slotStyle.inlineStyle} ${slotStyle.pillStyle}`;
+    
+    // Adjust padding for weather pill to maintain consistent height:
+    // - With icon: 5px (to match notification card with icon)
+    // - Without icon: 11px (compensates for missing icon height to match pill with icon)
+    const weatherPaddingY = slotStyle.pill ? (showIcon ? 5 : 11) : slotStyle.pillPaddingY;
+    const weatherPillStyle = slotStyle.pill ? `--hki-info-pill-background:${slotStyle.pillBg};--hki-info-pill-padding-x:${slotStyle.pillPaddingX}px;--hki-info-pill-padding-y:${weatherPaddingY}px;--hki-info-pill-radius:${slotStyle.pillRadius}px;--hki-info-pill-blur:${slotStyle.pillBlur}px;--hki-info-pill-border-style:${slotStyle.pillBorderStyle};--hki-info-pill-border-width:${slotStyle.pillBorderWidth}px;--hki-info-pill-border-color:${slotStyle.pillBorderColor}` : "";
+    const combinedStyle = `${slotStyle.inlineStyle} ${weatherPillStyle}`;
     
     const tapAction = cfg[prefix + "tap_action"] || cfg.info_tap_action || { action: "none" };
+    const holdAction = cfg[prefix + "hold_action"] || { action: "none" };
+    const doubleTapAction = cfg[prefix + "double_tap_action"] || { action: "none" };
+
+    // Hold timer and state
+    let holdTimer = null;
+    let holdActive = false;
+
+    const startHold = () => {
+      holdActive = false;
+      if (holdAction && holdAction.action !== "none") {
+        holdTimer = setTimeout(() => {
+          holdActive = true;
+          this._handleSlotTapAction(holdAction, slotName);
+        }, 500);
+      }
+    };
+
+    const endHold = () => {
+      if (holdTimer) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+      }
+      if (!holdActive && tapAction) {
+        this._handleSlotTapAction(tapAction, slotName);
+      }
+      holdActive = false;
+    };
+
+    const cancelHold = () => {
+      if (holdTimer) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+      }
+      holdActive = false;
+    };
 
     return html`
-      <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${() => this._handleSlotTapAction(tapAction, slotName)}>
+      <div 
+        class="info-item ${pillClass}" 
+        style="${combinedStyle}"
+        @mousedown=${startHold}
+        @mouseup=${endHold}
+        @mouseleave=${cancelHold}
+        @touchstart=${startHold}
+        @touchend=${endHold}
+        @dblclick=${(e) => {
+          e.preventDefault();
+          cancelHold();
+          this._handleSlotTapAction(doubleTapAction, slotName);
+        }}
+        @contextmenu=${(e) => e.preventDefault()}
+      >
         ${showIcon ? (useSvg 
             ? html`<img src="${svgUrl}" class="info-icon ${animClass}" style="width:${slotStyle.iconSize}px;height:${slotStyle.iconSize}px;" alt="${state}" />`
-            : html`<ha-icon class="info-weather-icon ${animClass}" .icon=${weatherIcon}
-                   style="--mdc-icon-size:${slotStyle.iconSize}px;color:${iconColor};"></ha-icon>`)
+            : html`<div class="info-icon" style="width:${slotStyle.iconSize}px;height:${slotStyle.iconSize}px;"><ha-icon class="${animClass}" .icon=${weatherIcon}
+                   style="width:100%;height:100%;--mdc-icon-size:${slotStyle.iconSize}px;color:${iconColor};"></ha-icon></div>`)
         : ""}
         ${showCondition ? html`<span class="info-condition">${conditionText}</span>` : ""}
         ${showTemp && temperature != null ? html`<span class="info-temperature">${Math.round(temperature)}${unit}</span>` : ""}
@@ -1474,18 +2145,73 @@ class HkiHeaderCard extends LitElement {
     const displayText = parts.join(sep);
 
     const pillClass = slotStyle.pill ? "info-pill" : "";
-    const combinedStyle = `${slotStyle.inlineStyle} ${slotStyle.pillStyle}`;
+    
+    // Adjust padding for datetime pill to maintain consistent height:
+    // - With icon: 5px (to match notification card with icon)
+    // - Without icon: 11px (compensates for missing icon height)
+    const datetimePaddingY = slotStyle.pill ? (icon ? 5 : 11) : slotStyle.pillPaddingY;
+    const datetimePillStyle = slotStyle.pill ? `--hki-info-pill-background:${slotStyle.pillBg};--hki-info-pill-padding-x:${slotStyle.pillPaddingX}px;--hki-info-pill-padding-y:${datetimePaddingY}px;--hki-info-pill-radius:${slotStyle.pillRadius}px;--hki-info-pill-blur:${slotStyle.pillBlur}px;--hki-info-pill-border-style:${slotStyle.pillBorderStyle};--hki-info-pill-border-width:${slotStyle.pillBorderWidth}px;--hki-info-pill-border-color:${slotStyle.pillBorderColor}` : "";
+    const combinedStyle = `${slotStyle.inlineStyle} ${datetimePillStyle}`;
     
     const animateIcon = cfg[prefix + "animate_icon"] || cfg.datetime_animate_icon;
     const animClass = animateIcon && animateIcon !== "none" ? `animate-${animateIcon}` : "";
     
     const tapAction = cfg[prefix + "tap_action"] || cfg.info_tap_action || { action: "none" };
+    const holdAction = cfg[prefix + "hold_action"] || { action: "none" };
+    const doubleTapAction = cfg[prefix + "double_tap_action"] || { action: "none" };
+
+    // Hold timer and state
+    let holdTimer = null;
+    let holdActive = false;
+
+    const startHold = () => {
+      holdActive = false;
+      if (holdAction && holdAction.action !== "none") {
+        holdTimer = setTimeout(() => {
+          holdActive = true;
+          this._handleSlotTapAction(holdAction, slotName);
+        }, 500);
+      }
+    };
+
+    const endHold = () => {
+      if (holdTimer) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+      }
+      if (!holdActive && tapAction) {
+        this._handleSlotTapAction(tapAction, slotName);
+      }
+      holdActive = false;
+    };
+
+    const cancelHold = () => {
+      if (holdTimer) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+      }
+      holdActive = false;
+    };
 
     return html`
-      <div class="info-item ${pillClass}" style="${combinedStyle}" @click=${() => this._handleSlotTapAction(tapAction, slotName)}>
+      <div 
+        class="info-item ${pillClass}" 
+        style="${combinedStyle}"
+        @mousedown=${startHold}
+        @mouseup=${endHold}
+        @mouseleave=${cancelHold}
+        @touchstart=${startHold}
+        @touchend=${endHold}
+        @dblclick=${(e) => {
+          e.preventDefault();
+          cancelHold();
+          this._handleSlotTapAction(doubleTapAction, slotName);
+        }}
+        @contextmenu=${(e) => e.preventDefault()}
+      >
         ${icon ? html`
-          <ha-icon class="${animClass}" .icon=${icon}
-                   style="--mdc-icon-size:${slotStyle.iconSize}px;"></ha-icon>
+          <div class="info-icon ${animClass}" style="width:${slotStyle.iconSize}px;height:${slotStyle.iconSize}px;"><ha-icon .icon=${icon}
+                   style="width:100%;height:100%;--mdc-icon-size:${slotStyle.iconSize}px;"></ha-icon></div>
         ` : ""}
         <span>${displayText}</span>
       </div>
@@ -1496,7 +2222,7 @@ class HkiHeaderCard extends LitElement {
     const cardEl = this._customCards[slotName];
     if (!cardEl) return html``;
     
-    const combinedStyle = `${slotStyle.inlineStyle} ${slotStyle.notifyVars}; min-width: 50px;`;
+    const combinedStyle = `${slotStyle.inlineStyle} ${slotStyle.notifyVars}; min-width: 50px; ${slotStyle.pill ? `overflow: hidden; border-radius: ${slotStyle.pillRadius}px;` : ''}`;
 
     return html`
       <div class="info-item" style="${combinedStyle}">
@@ -1551,6 +2277,171 @@ class HkiHeaderCard extends LitElement {
             <div class="slot slot-right ${rightEmpty ? 'slot-empty' : ''} ${rightOverflow ? 'slot-visible' : ''}" style="${rightStyle}">${this._renderSlotContent(cfg.top_bar_right, "right")}</div>
         </div>
       `;
+  }
+
+  _renderPersons() {
+    const cfg = this._config;
+    if (!cfg.persons_enabled || !cfg.persons_entities || cfg.persons_entities.length === 0) {
+      return html``;
+    }
+
+    const personsAlign = cfg.persons_align || "left";
+    const personsX = cfg.persons_offset_x || 5;
+    const personsY = cfg.persons_offset_y || 32;
+    const personsSize = cfg.persons_size || 48;
+    const personsSpacing = cfg.persons_spacing != null ? cfg.persons_spacing : -8;
+    const stackOrder = cfg.persons_stack_order || "ascending";
+    const dynamicOrder = cfg.persons_dynamic_order || false;
+    const hideAway = cfg.persons_hide_away || false;
+    const borderWidth = cfg.persons_border_width || 1;
+    const borderColor = cfg.persons_border_color || "rgba(255,255,255,0.3)";
+    const borderColorAway = cfg.persons_border_color_away || "rgba(255,100,100,0.5)";
+    const grayscaleAway = cfg.persons_grayscale_away || false;
+    const useEntityPicture = cfg.persons_use_entity_picture !== false;
+
+    // Filter out away persons if hide_away is enabled
+    let filteredPersons = [...cfg.persons_entities];
+    if (hideAway) {
+      filteredPersons = filteredPersons.filter(personConfig => {
+        const entityId = typeof personConfig === 'string' ? personConfig : personConfig.entity;
+        const entity = this.hass?.states[entityId];
+        return entity && entity.state === "home";
+      });
+    }
+
+    // Sort persons if dynamic ordering is enabled
+    let sortedPersons = filteredPersons;
+    if (dynamicOrder) {
+      sortedPersons = [...filteredPersons].sort((a, b) => {
+        const entityIdA = typeof a === 'string' ? a : a.entity;
+        const entityIdB = typeof b === 'string' ? b : b.entity;
+        const entityA = this.hass?.states[entityIdA];
+        const entityB = this.hass?.states[entityIdB];
+        
+        if (!entityA || !entityB) return 0;
+        
+        const isHomeA = entityA.state === "home";
+        const isHomeB = entityB.state === "home";
+        
+        // Home entities come first
+        if (isHomeA && !isHomeB) return -1;
+        if (!isHomeA && isHomeB) return 1;
+        
+        // Within same group, maintain original order
+        return 0;
+      });
+    }
+
+    // If no persons to show after filtering, return empty
+    if (sortedPersons.length === 0) {
+      return html``;
+    }
+
+    let containerStyle;
+    if (personsAlign === "right") {
+      containerStyle = `left:auto;right:${personsX}px;top:${personsY}px;`;
+    } else if (personsAlign === "center") {
+      containerStyle = `left:50%;top:${personsY}px;transform:translateX(-50%);`;
+    } else {
+      containerStyle = `left:${personsX}px;top:${personsY}px;`;
+    }
+
+    const totalPersons = sortedPersons.length;
+
+    return html`
+      <div class="persons-container" style="${containerStyle}">
+        ${sortedPersons.map((personConfig, index) => {
+          const entityId = typeof personConfig === 'string' ? personConfig : personConfig.entity;
+          const entity = this.hass?.states[entityId];
+          if (!entity) return html``;
+
+          const entityPicture = entity.attributes?.entity_picture;
+          const icon = entity.attributes?.icon || "mdi:account";
+          const isHome = entity.state === "home";
+
+          // Get per-person actions (with fallback to defaults)
+          const tapAction = personConfig.tap_action || { action: "more-info" };
+          const holdAction = personConfig.hold_action || { action: "none" };
+          const doubleTapAction = personConfig.double_tap_action || { action: "none" };
+
+          // Use entity picture if available and enabled, otherwise use icon
+          const showPicture = useEntityPicture && entityPicture;
+          
+          // Determine border color based on state
+          const currentBorderColor = isHome ? borderColor : borderColorAway;
+          
+          // Calculate z-index based on stack order
+          // ascending: later avatars on top (1, 2, 3, 4...)
+          // descending: earlier avatars on top (4, 3, 2, 1...)
+          const zIndex = stackOrder === "ascending" ? index + 1 : totalPersons - index;
+
+          // Apply spacing as margin-left on all but first avatar
+          const marginLeft = index > 0 ? `margin-left:${personsSpacing}px;` : "";
+
+          // Avatar container style (no filter here - border should always have color)
+          const avatarStyle = `width:${personsSize}px;height:${personsSize}px;border-width:${borderWidth}px;border-color:${currentBorderColor};z-index:${zIndex};${marginLeft}`;
+          
+          // Apply grayscale filter to image/icon only, not the container
+          const contentFilter = (!isHome && grayscaleAway) ? "filter:grayscale(100%);" : "";
+
+          // Hold timer and state (like button slot)
+          let holdTimer = null;
+          let holdActive = false;
+
+          const startHold = () => {
+            holdActive = false;
+            if (holdAction && holdAction.action !== "none") {
+              holdTimer = setTimeout(() => {
+                holdActive = true;
+                this._handleAction(holdAction, entityId);
+              }, 500);
+            }
+          };
+
+          const endHold = () => {
+            if (holdTimer) {
+              clearTimeout(holdTimer);
+              holdTimer = null;
+            }
+            if (!holdActive && tapAction) {
+              this._handleAction(tapAction, entityId);
+            }
+            holdActive = false;
+          };
+
+          const cancelHold = () => {
+            if (holdTimer) {
+              clearTimeout(holdTimer);
+              holdTimer = null;
+            }
+            holdActive = false;
+          };
+
+          return html`
+            <div 
+              class="person-avatar" 
+              style="${avatarStyle}"
+              @mousedown=${startHold}
+              @mouseup=${endHold}
+              @mouseleave=${cancelHold}
+              @touchstart=${startHold}
+              @touchend=${endHold}
+              @dblclick=${(e) => {
+                e.preventDefault();
+                cancelHold();
+                this._handleAction(doubleTapAction, entityId);
+              }}
+              @contextmenu=${(e) => e.preventDefault()}
+            >
+              ${showPicture 
+                ? html`<img src="${entityPicture}" alt="${entity.attributes?.friendly_name || entityId}" style="${contentFilter}" />`
+                : html`<ha-icon .icon="${icon}" style="${contentFilter}"></ha-icon>`
+              }
+            </div>
+          `;
+        })}
+      </div>
+    `;
   }
 
   _renderInfoDisplay() {
@@ -1722,6 +2613,7 @@ class HkiHeaderCard extends LitElement {
             <div class="title" style=${titleInline} role="heading" aria-level="1">${titleText}</div>
             ${subtitleVisible ? html`<div class="subtitle" style="${subtitleInline}${subtitleTransform}">${subtitleText}</div>` : html``}
           </div>
+          ${this._renderPersons()}
           ${this._renderInfoDisplay()}
         </div>
       </ha-card>
@@ -1786,7 +2678,8 @@ class HkiHeaderCardEditor extends LitElement {
     "top_bar_center_pill_padding_x", "top_bar_center_pill_padding_y", "top_bar_center_pill_radius", "top_bar_center_pill_blur",
     "top_bar_right_pill_padding_x", "top_bar_right_pill_padding_y", "top_bar_right_pill_radius", "top_bar_right_pill_blur",
     "info_pill_border_width", "top_bar_left_pill_border_width", "top_bar_center_pill_border_width", "top_bar_right_pill_border_width",
-    "card_border_width"
+    "card_border_width",
+    "persons_offset_x", "persons_offset_y", "persons_size", "persons_spacing", "persons_border_width"
   ]);
 
   static _nullableNumericFields = new Set([
@@ -1801,7 +2694,7 @@ class HkiHeaderCardEditor extends LitElement {
     "weather_show_temperature", "weather_show_humidity", "weather_show_wind",
     "weather_show_pressure", "weather_colored_icons", "info_pill",
     "datetime_show_time", "datetime_show_date", "datetime_show_day", "top_bar_enabled",
-    "blend_enabled",
+    "blend_enabled", "persons_enabled", "persons_use_entity_picture", "persons_grayscale_away", "persons_dynamic_order", "persons_hide_away",
     "top_bar_left_use_global", "top_bar_left_pill", "top_bar_left_overflow", "top_bar_left_show_icon", "top_bar_left_show_condition", "top_bar_left_show_temperature", "top_bar_left_show_humidity", "top_bar_left_show_wind", "top_bar_left_show_pressure", "top_bar_left_weather_colored_icons", "top_bar_left_show_day", "top_bar_left_show_date", "top_bar_left_show_time",
     "top_bar_center_use_global", "top_bar_center_pill", "top_bar_center_overflow", "top_bar_center_show_icon", "top_bar_center_show_condition", "top_bar_center_show_temperature", "top_bar_center_show_humidity", "top_bar_center_show_wind", "top_bar_center_show_pressure", "top_bar_center_weather_colored_icons", "top_bar_center_show_day", "top_bar_center_show_date", "top_bar_center_show_time",
     "top_bar_right_use_global", "top_bar_right_pill", "top_bar_right_overflow", "top_bar_right_show_icon", "top_bar_right_show_condition", "top_bar_right_show_temperature", "top_bar_right_show_humidity", "top_bar_right_show_wind", "top_bar_right_show_pressure", "top_bar_right_weather_colored_icons", "top_bar_right_show_day", "top_bar_right_show_date", "top_bar_right_show_time"
@@ -1848,22 +2741,122 @@ class HkiHeaderCardEditor extends LitElement {
   }
 
   setConfig(config) {
-    this._config = { ...DEFAULTS, ...config };
+    // Detect format and convert if needed
+    let workingConfig = config;
+    
+    // If config uses old flat format, migrate to nested first
+    if (isOldFormat(config)) {
+      const nested = migrateToNestedFormat(config);
+      workingConfig = flattenNestedFormat(nested); // Flatten back for internal use
+    } else if (config.top_bar_left && typeof config.top_bar_left === 'object') {
+      // New nested format - flatten for internal use
+      workingConfig = flattenNestedFormat(config);
+    }
+    
+    this._config = { ...DEFAULTS, ...workingConfig };
+    this.requestUpdate();
+  }
+
+  _cleanupActionConfig(action) {
+    if (!action || typeof action !== 'object') return action;
+    
+    const actionType = action.action || "none";
+    const cleaned = { action: actionType };
+    
+    // Only keep fields relevant to the action type
+    switch (actionType) {
+      case "navigate":
+        if (action.navigation_path) cleaned.navigation_path = action.navigation_path;
+        break;
+      case "url":
+        if (action.url_path) cleaned.url_path = action.url_path;
+        break;
+      case "more-info":
+      case "toggle":
+        if (action.entity) cleaned.entity = action.entity;
+        break;
+      case "perform-action":
+        if (action.perform_action) cleaned.perform_action = action.perform_action;
+        if (action.data) cleaned.data = action.data;
+        if (action.target) cleaned.target = action.target;
+        break;
+      case "call-service":
+        // Legacy support
+        if (action.service) cleaned.service = action.service;
+        if (action.service_data) cleaned.service_data = action.service_data;
+        break;
+    }
+    
+    return cleaned;
   }
 
   _stripDefaults(config) {
     // Create a clean config object with only changed values
     const stripped = { type: config.type }; // Always keep type
     
+    // List of deprecated config keys to remove
+    const deprecatedKeys = [
+      'persons_gap',           // Replaced by persons_spacing
+      'persons_overlap',       // Replaced by persons_spacing
+      'persons_tap_action',    // Now per-person in persons_entities
+      'persons_hold_action',   // Now per-person in persons_entities
+      'persons_double_tap_action' // Now per-person in persons_entities
+    ];
+    
     for (const [key, value] of Object.entries(config)) {
       if (key === 'type') continue; // Already added
+      
+      // Skip deprecated keys
+      if (deprecatedKeys.includes(key)) continue;
       
       const defaultValue = DEFAULTS[key];
       
       // Skip if value matches default
       if (defaultValue === value) continue;
       
-      // Handle deep equality for objects (like tap_action)
+      // Special handling for persons_entities array
+      if (key === 'persons_entities' && Array.isArray(value)) {
+        const cleanedPersons = value.map(person => {
+          if (typeof person === 'string') return person;
+          if (typeof person !== 'object' || !person) return null;
+          
+          const cleanedPerson = {
+            entity: person.entity || ""
+          };
+          
+          // Clean up actions for each person
+          if (person.tap_action) {
+            cleanedPerson.tap_action = this._cleanupActionConfig(person.tap_action);
+          }
+          if (person.hold_action) {
+            cleanedPerson.hold_action = this._cleanupActionConfig(person.hold_action);
+          }
+          if (person.double_tap_action) {
+            cleanedPerson.double_tap_action = this._cleanupActionConfig(person.double_tap_action);
+          }
+          
+          return cleanedPerson;
+        }).filter(Boolean);
+        
+        if (cleanedPersons.length > 0) {
+          stripped[key] = cleanedPersons;
+        }
+        continue;
+      }
+      
+      // Clean up action configs (tap_action, hold_action, double_tap_action for slots)
+      if (key.endsWith('_tap_action') || key.endsWith('_hold_action') || key.endsWith('_double_tap_action')) {
+        if (typeof value === 'object' && value !== null) {
+          const cleaned = this._cleanupActionConfig(value);
+          const defaultAction = DEFAULTS[key] || { action: "none" };
+          if (JSON.stringify(cleaned) !== JSON.stringify(defaultAction)) {
+            stripped[key] = cleaned;
+          }
+        }
+        continue;
+      }
+      
+      // Handle deep equality for objects
       if (typeof value === 'object' && value !== null && typeof defaultValue === 'object' && defaultValue !== null) {
         if (JSON.stringify(value) === JSON.stringify(defaultValue)) continue;
       }
@@ -1872,7 +2865,180 @@ class HkiHeaderCardEditor extends LitElement {
       stripped[key] = value;
     }
     
-    return stripped;
+    // Convert stripped flat config to nested format for output
+    return this._convertToNestedOutput(stripped);
+  }
+
+  _convertToNestedOutput(flat) {
+    const nested = { type: flat.type };
+    
+    // Simple top-level properties stay as-is
+    const simpleProps = [
+      'title', 'subtitle', 'text_align', 'title_color', 'subtitle_color',
+      'background', 'background_color', 'background_position', 'background_repeat',
+      'background_size', 'background_blend_mode', 'height_vh', 'min_height', 'max_height',
+      'blend_color', 'blend_stop', 'blend_enabled',
+      'card_border_radius', 'card_border_radius_top', 'card_border_radius_bottom',
+      'card_box_shadow', 'card_border_style', 'card_border_width', 'card_border_color',
+      'fixed', 'fixed_top', 'inset_top', 'inset_left', 'inset_right', 'inset_bottom',
+      'title_offset_x', 'title_offset_y', 'subtitle_offset_x', 'subtitle_offset_y',
+      'badges_offset_pinned', 'badges_offset_unpinned', 'badges_gap', 'badges_fixed',
+      'font_family', 'font_family_custom', 'font_style', 'title_size_px', 'subtitle_size_px',
+      'title_weight', 'subtitle_weight', 'mobile_breakpoint'
+    ];
+    
+    simpleProps.forEach(prop => {
+      if (flat[prop] !== undefined) {
+        nested[prop] = flat[prop];
+      }
+    });
+    
+    // Nest top_bar if any settings exist
+    const hasTopBarConfig = flat.top_bar_enabled !== undefined || flat.top_bar_offset_y !== undefined || flat.top_bar_padding_x !== undefined;
+    if (hasTopBarConfig) {
+      nested.top_bar = {};
+      if (flat.top_bar_enabled !== undefined) nested.top_bar.enabled = flat.top_bar_enabled;
+      if (flat.top_bar_offset_y !== undefined) nested.top_bar.offset_y = flat.top_bar_offset_y;
+      if (flat.top_bar_padding_x !== undefined) nested.top_bar.padding_x = flat.top_bar_padding_x;
+    }
+    
+    // Nest info if any settings exist
+    const infoKeys = ['info_size_px', 'info_weight', 'info_color', 'info_pill', 'info_pill_background',
+                      'info_pill_padding_x', 'info_pill_padding_y', 'info_pill_radius', 'info_pill_blur',
+                      'info_pill_border_style', 'info_pill_border_width', 'info_pill_border_color'];
+    const hasInfoConfig = infoKeys.some(k => flat[k] !== undefined);
+    if (hasInfoConfig) {
+      nested.info = {};
+      if (flat.info_size_px !== undefined) nested.info.size_px = flat.info_size_px;
+      if (flat.info_weight !== undefined) nested.info.weight = flat.info_weight;
+      if (flat.info_color !== undefined) nested.info.color = flat.info_color;
+      if (flat.info_pill !== undefined) nested.info.pill = flat.info_pill;
+      if (flat.info_pill_background !== undefined) nested.info.pill_background = flat.info_pill_background;
+      if (flat.info_pill_padding_x !== undefined) nested.info.pill_padding_x = flat.info_pill_padding_x;
+      if (flat.info_pill_padding_y !== undefined) nested.info.pill_padding_y = flat.info_pill_padding_y;
+      if (flat.info_pill_radius !== undefined) nested.info.pill_radius = flat.info_pill_radius;
+      if (flat.info_pill_blur !== undefined) nested.info.pill_blur = flat.info_pill_blur;
+      if (flat.info_pill_border_style !== undefined) nested.info.pill_border_style = flat.info_pill_border_style;
+      if (flat.info_pill_border_width !== undefined) nested.info.pill_border_width = flat.info_pill_border_width;
+      if (flat.info_pill_border_color !== undefined) nested.info.pill_border_color = flat.info_pill_border_color;
+    }
+    
+    // Nest slots
+    ['left', 'center', 'right'].forEach(slot => {
+      const slotType = flat[`top_bar_${slot}`];
+      if (!slotType || slotType === "none") return;
+      
+      const prefix = `top_bar_${slot}_`;
+      const slotConfig = { type: slotType };
+      
+      // Common properties
+      if (flat[prefix + "offset_x"] !== undefined) slotConfig.offset_x = flat[prefix + "offset_x"];
+      if (flat[prefix + "offset_y"] !== undefined) slotConfig.offset_y = flat[prefix + "offset_y"];
+      if (flat[prefix + "offset_x_mobile"] !== undefined) slotConfig.offset_x_mobile = flat[prefix + "offset_x_mobile"];
+      if (flat[prefix + "offset_y_mobile"] !== undefined) slotConfig.offset_y_mobile = flat[prefix + "offset_y_mobile"];
+      if (flat[prefix + "overflow"] !== undefined) slotConfig.overflow = flat[prefix + "overflow"];
+      
+      // Styling (only if not using global)
+      if (flat[prefix + "use_global"] === false) {
+        slotConfig.styling = {};
+        const stylingKeys = ['size_px', 'weight', 'color', 'pill', 'pill_background', 'pill_padding_x',
+                            'pill_padding_y', 'pill_radius', 'pill_blur', 'pill_border_style',
+                            'pill_border_width', 'pill_border_color'];
+        stylingKeys.forEach(key => {
+          if (flat[prefix + key] !== undefined) {
+            slotConfig.styling[key] = flat[prefix + key];
+          }
+        });
+      }
+      
+      // Type-specific config
+      if (slotType === "weather") {
+        const weatherKeys = {
+          weather_entity: 'entity',
+          show_icon: 'show_icon',
+          show_condition: 'show_condition',
+          show_temperature: 'show_temperature',
+          show_humidity: 'show_humidity',
+          show_wind: 'show_wind',
+          show_pressure: 'show_pressure',
+          weather_colored_icons: 'colored_icons',
+          weather_icon_color_mode: 'icon_color_mode',
+          weather_icon_color: 'icon_color',
+          animate_icon: 'animate_icon',
+          icon_pack_path: 'icon_pack_path'
+        };
+        
+        const hasWeatherConfig = Object.keys(weatherKeys).some(k => flat[prefix + k] !== undefined);
+        if (hasWeatherConfig) {
+          slotConfig.weather = {};
+          Object.entries(weatherKeys).forEach(([flatKey, nestedKey]) => {
+            if (flat[prefix + flatKey] !== undefined) {
+              slotConfig.weather[nestedKey] = flat[prefix + flatKey];
+            }
+          });
+        }
+      } else if (slotType === "datetime") {
+        const dtKeys = ['show_day', 'show_date', 'show_time', 'time_format', 'date_format', 'separator', 'icon', 'animate_icon'];
+        const hasDateTimeConfig = dtKeys.some(k => flat[prefix + k] !== undefined);
+        if (hasDateTimeConfig) {
+          slotConfig.datetime = {};
+          dtKeys.forEach(key => {
+            if (flat[prefix + key] !== undefined) {
+              slotConfig.datetime[key] = flat[prefix + key];
+            }
+          });
+        }
+      } else if (slotType === "button") {
+        const hasButtonConfig = flat[prefix + "icon"] !== undefined || flat[prefix + "label"] !== undefined;
+        if (hasButtonConfig) {
+          slotConfig.button = {};
+          if (flat[prefix + "icon"] !== undefined) slotConfig.button.icon = flat[prefix + "icon"];
+          if (flat[prefix + "label"] !== undefined) slotConfig.button.label = flat[prefix + "label"];
+        }
+      } else if (slotType === "custom") {
+        if (flat[prefix + "card"] !== undefined) {
+          slotConfig.custom = { card: flat[prefix + "card"] };
+        }
+      }
+      
+      // Actions
+      const hasActions = flat[prefix + "tap_action"] || flat[prefix + "hold_action"] || flat[prefix + "double_tap_action"];
+      if (hasActions) {
+        slotConfig.actions = {};
+        if (flat[prefix + "tap_action"]) slotConfig.actions.tap_action = flat[prefix + "tap_action"];
+        if (flat[prefix + "hold_action"]) slotConfig.actions.hold_action = flat[prefix + "hold_action"];
+        if (flat[prefix + "double_tap_action"]) slotConfig.actions.double_tap_action = flat[prefix + "double_tap_action"];
+      }
+      
+      nested[`top_bar_${slot}`] = slotConfig;
+    });
+    
+    // Nest persons
+    const personsKeys = ['persons_enabled', 'persons_align', 'persons_offset_x', 'persons_offset_y',
+                         'persons_size', 'persons_spacing', 'persons_stack_order', 'persons_dynamic_order',
+                         'persons_hide_away', 'persons_use_entity_picture', 'persons_border_width', 'persons_border_color',
+                         'persons_border_color_away', 'persons_grayscale_away', 'persons_entities'];
+    const hasPersonsConfig = personsKeys.some(k => flat[k] !== undefined);
+    if (hasPersonsConfig) {
+      nested.persons = {};
+      if (flat.persons_enabled !== undefined) nested.persons.enabled = flat.persons_enabled;
+      if (flat.persons_align !== undefined) nested.persons.align = flat.persons_align;
+      if (flat.persons_offset_x !== undefined) nested.persons.offset_x = flat.persons_offset_x;
+      if (flat.persons_offset_y !== undefined) nested.persons.offset_y = flat.persons_offset_y;
+      if (flat.persons_size !== undefined) nested.persons.size = flat.persons_size;
+      if (flat.persons_spacing !== undefined) nested.persons.spacing = flat.persons_spacing;
+      if (flat.persons_stack_order !== undefined) nested.persons.stack_order = flat.persons_stack_order;
+      if (flat.persons_dynamic_order !== undefined) nested.persons.dynamic_order = flat.persons_dynamic_order;
+      if (flat.persons_hide_away !== undefined) nested.persons.hide_away = flat.persons_hide_away;
+      if (flat.persons_use_entity_picture !== undefined) nested.persons.use_entity_picture = flat.persons_use_entity_picture;
+      if (flat.persons_border_width !== undefined) nested.persons.border_width = flat.persons_border_width;
+      if (flat.persons_border_color !== undefined) nested.persons.border_color = flat.persons_border_color;
+      if (flat.persons_border_color_away !== undefined) nested.persons.border_color_away = flat.persons_border_color_away;
+      if (flat.persons_grayscale_away !== undefined) nested.persons.grayscale_away = flat.persons_grayscale_away;
+      if (flat.persons_entities) nested.persons.entities = flat.persons_entities;
+    }
+    
+    return nested;
   }
 
   _renderEntityPicker(label, field, value, helper = "", domain = null) {
@@ -1962,6 +3128,18 @@ class HkiHeaderCardEditor extends LitElement {
 
     let value = this._val(ev);
 
+    // Special handling for persons_entities array field
+    if (field === "persons_entities") {
+      // Value is already an array from the custom handler, use it directly
+      if (Array.isArray(value)) {
+        this._config = { ...this._config, [field]: value };
+        const strippedConfig = this._stripDefaults(this._config);
+        this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: strippedConfig } }));
+        this.requestUpdate();
+        return;
+      }
+    }
+
     // Card border radius: allow users to enter just a number (interpreted as px at render time)
     // while still allowing any valid CSS value (e.g., 12px, 0, 50%, var(--x)).
     // IMPORTANT: do NOT auto-append "px" or coerce to Number here, because @input fires per-keystroke
@@ -2012,6 +3190,7 @@ class HkiHeaderCardEditor extends LitElement {
     this._config = next;
     const strippedConfig = this._stripDefaults(next);
     this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: strippedConfig } }));
+    this.requestUpdate();
   }
 
   _renderTemplateEditor(label, field, options = {}) {
@@ -2170,13 +3349,17 @@ class HkiHeaderCardEditor extends LitElement {
       ` : ''}
       
       ${type === "spacer" ? html`
-        <div class="section" style="margin-top: 12px;">Spacer Tap Action</div>
-        ${this._renderSlotActionEditor(prefix + "tap_action")}
+        <div class="section" style="margin-top: 12px;">Actions</div>
+        ${this._renderActionEditor("Tap action", prefix + "tap_action")}
+        ${this._renderActionEditor("Hold action", prefix + "hold_action")}
+        ${this._renderActionEditor("Double tap action", prefix + "double_tap_action")}
       ` : ''}
       
       ${(type === "weather" || type === "datetime" || type === "button") ? html`
-        <div class="section" style="margin-top: 12px;">Tap Action</div>
-        ${this._renderSlotActionEditor(prefix + "tap_action")}
+        <div class="section" style="margin-top: 12px;">Actions</div>
+        ${this._renderActionEditor("Tap action", prefix + "tap_action")}
+        ${this._renderActionEditor("Hold action", prefix + "hold_action")}
+        ${this._renderActionEditor("Double tap action", prefix + "double_tap_action")}
       ` : ''}
       
       ${type !== "none" && type !== "custom" && type !== "spacer" ? html`
@@ -2367,6 +3550,69 @@ class HkiHeaderCardEditor extends LitElement {
     `;
   }
 
+  _renderPersonActionEditors(personIndex) {
+    const personConfig = this._config.persons_entities[personIndex];
+    
+    const renderPersonAction = (label, actionType) => {
+      const action = personConfig[actionType] || { action: actionType === "tap_action" ? "more-info" : "none" };
+      const actionValue = action.action || "none";
+
+      const setAction = (nextAction) => {
+        const updated = [...this._config.persons_entities];
+        updated[personIndex] = { ...updated[personIndex], [actionType]: nextAction };
+        this._config = { ...this._config, persons_entities: updated };
+        const strippedConfig = this._stripDefaults(this._config);
+        this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: strippedConfig } }));
+        this.requestUpdate();
+      };
+
+      const patchAction = (patch) => {
+        const current = personConfig[actionType] || { action: "none" };
+        setAction({ ...current, ...patch });
+      };
+
+      return html`
+        <div style="margin-top: 8px;">
+          <p style="font-weight: 500; margin-bottom: 4px; font-size: 0.9em;">${label}</p>
+          <ha-select label="Action" .value=${actionValue} @selected=${(e) => setAction({ action: e.target.value })} @closed=${(e) => e.stopPropagation()}>
+            <mwc-list-item value="none">None</mwc-list-item>
+            <mwc-list-item value="navigate">Navigate</mwc-list-item>
+            <mwc-list-item value="back">Back</mwc-list-item>
+            <mwc-list-item value="menu">Toggle Menu</mwc-list-item>
+            <mwc-list-item value="url">Open URL</mwc-list-item>
+            <mwc-list-item value="more-info">More Info</mwc-list-item>
+            <mwc-list-item value="toggle">Toggle Entity</mwc-list-item>
+            <mwc-list-item value="perform-action">Perform Action</mwc-list-item>
+          </ha-select>
+          ${actionValue === "navigate" ? html`
+            ${this._renderNavigationPathPicker("Navigation path", action.navigation_path || "", (v) => patchAction({ navigation_path: v }))}
+          ` : ''}
+          ${actionValue === "url" ? html`
+            <ha-textfield label="URL" .value=${action.url_path || ""} @input=${(e) => patchAction({ url_path: e.target.value })}></ha-textfield>
+          ` : ''}
+          ${actionValue === "more-info" || actionValue === "toggle" ? html`
+            <ha-entity-picker .hass=${this.hass} .value=${action.entity || personConfig.entity || ""} @value-changed=${(e) => patchAction({ entity: e.detail.value })}></ha-entity-picker>
+          ` : ''}
+        </div>
+      `;
+    };
+
+    return html`
+      ${renderPersonAction("Tap action", "tap_action")}
+      ${renderPersonAction("Hold action", "hold_action")}
+      ${renderPersonAction("Double tap action", "double_tap_action")}
+    `;
+  }
+
+  _renderActionEditor(label, field) {
+    return html`
+      <div style="margin-top: 8px;">
+        <p style="font-weight: 500; margin-bottom: 4px;">${label}</p>
+        ${this._renderSlotActionEditor(field)}
+      </div>
+    `;
+  }
+
   render() {
     if (!this._config) return html``;
 
@@ -2423,6 +3669,133 @@ class HkiHeaderCardEditor extends LitElement {
             </div>
             
             <ha-textfield label="Mobile Breakpoint (px)" type="number" .value=${String(this._config.mobile_breakpoint || 768)} data-field="mobile_breakpoint" @input=${this._changed}></ha-textfield>
+          </div>
+        </details>
+
+        <details class="box-section">
+          <summary>Persons</summary>
+          <div class="box-content">
+            <ha-formfield label="Enable persons">
+              <ha-switch .checked=${this._config.persons_enabled} data-field="persons_enabled" @change=${this._changed}></ha-switch>
+            </ha-formfield>
+
+            ${this._config.persons_enabled ? html`
+              <div class="section">Persons</div>
+              <p style="opacity: 0.7; font-size: 0.9em; margin: 8px 0;">Configure individual persons below</p>
+              
+              ${(this._config.persons_entities || []).map((personConfig, index) => {
+                const entityId = typeof personConfig === 'string' ? personConfig : personConfig.entity;
+                return html`
+                  <div style="border: 1px solid var(--divider-color); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                      <strong>Person ${index + 1}</strong>
+                      <mwc-icon-button 
+                        @click=${() => {
+                          const updated = [...this._config.persons_entities];
+                          updated.splice(index, 1);
+                          this._config = { ...this._config, persons_entities: updated };
+                          const strippedConfig = this._stripDefaults(this._config);
+                          this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: strippedConfig } }));
+                          this.requestUpdate();
+                        }}
+                      >
+                        <ha-icon icon="mdi:delete"></ha-icon>
+                      </mwc-icon-button>
+                    </div>
+                    
+                    <ha-entity-picker
+                      .hass=${this.hass}
+                      .value=${entityId}
+                      .label=${"Person Entity"}
+                      .includeDomains=${["person"]}
+                      @value-changed=${(e) => {
+                        const updated = [...this._config.persons_entities];
+                        if (typeof updated[index] === 'string') {
+                          updated[index] = {
+                            entity: e.detail.value,
+                            tap_action: { action: "more-info" },
+                            hold_action: { action: "none" },
+                            double_tap_action: { action: "none" }
+                          };
+                        } else {
+                          updated[index] = { ...updated[index], entity: e.detail.value };
+                        }
+                        this._config = { ...this._config, persons_entities: updated };
+                        const strippedConfig = this._stripDefaults(this._config);
+                        this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: strippedConfig } }));
+                        this.requestUpdate();
+                      }}
+                    ></ha-entity-picker>
+
+                    ${this._renderPersonActionEditors(index)}
+                  </div>
+                `;
+              })}
+
+              <mwc-button 
+                @click=${() => {
+                  const updated = [...(this._config.persons_entities || []), {
+                    entity: "",
+                    tap_action: { action: "more-info" },
+                    hold_action: { action: "none" },
+                    double_tap_action: { action: "none" }
+                  }];
+                  this._config = { ...this._config, persons_entities: updated };
+                  const strippedConfig = this._stripDefaults(this._config);
+                  this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: strippedConfig } }));
+                  this.requestUpdate();
+                }}
+              >
+                <ha-icon icon="mdi:plus"></ha-icon> Add Person
+              </mwc-button>
+
+              <div class="section" style="margin-top: 16px;">Alignment</div>
+              <ha-select label="Persons alignment" .value=${this._config.persons_align || "left"} data-field="persons_align" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+                <mwc-list-item value="left">Left</mwc-list-item>
+                <mwc-list-item value="center">Center</mwc-list-item>
+                <mwc-list-item value="right">Right</mwc-list-item>
+              </ha-select>
+
+              <ha-select label="Stack order" .value=${this._config.persons_stack_order || "ascending"} data-field="persons_stack_order" @selected=${this._changed} @closed=${this._changed} @value-changed=${this._changed}>
+                <mwc-list-item value="ascending">Ascending (last on top)</mwc-list-item>
+                <mwc-list-item value="descending">Descending (first on top)</mwc-list-item>
+              </ha-select>
+
+              <ha-formfield label="Dynamic order (home persons first)">
+                <ha-switch .checked=${!!this._config.persons_dynamic_order} data-field="persons_dynamic_order" @change=${this._changed}></ha-switch>
+              </ha-formfield>
+
+              <ha-formfield label="Hide away persons">
+                <ha-switch .checked=${!!this._config.persons_hide_away} data-field="persons_hide_away" @change=${this._changed}></ha-switch>
+              </ha-formfield>
+
+              <div class="section">Position</div>
+              <div class="inline-fields-2">
+                <ha-textfield label="Horizontal offset (px)" type="number" .value=${String(this._config.persons_offset_x || 5)} data-field="persons_offset_x" @input=${this._changed}></ha-textfield>
+                <ha-textfield label="Vertical offset (px)" type="number" .value=${String(this._config.persons_offset_y || 32)} data-field="persons_offset_y" @input=${this._changed}></ha-textfield>
+              </div>
+
+              <div class="section">Appearance</div>
+              <div class="inline-fields-2">
+                <ha-textfield label="Avatar size (px)" type="number" .value=${String(this._config.persons_size || 48)} data-field="persons_size" @input=${this._changed}></ha-textfield>
+                <ha-textfield label="Spacing (px)" helper="Negative = overlap" type="number" .value=${String(this._config.persons_spacing != null ? this._config.persons_spacing : -8)} data-field="persons_spacing" @input=${this._changed}></ha-textfield>
+              </div>
+
+              <div class="inline-fields-2">
+                <ha-textfield label="Border width (px)" type="number" .value=${String(this._config.persons_border_width || 1)} data-field="persons_border_width" @input=${this._changed}></ha-textfield>
+                <ha-textfield label="Border color" .value=${this._config.persons_border_color || "rgba(255,255,255,0.3)"} data-field="persons_border_color" @input=${this._changed}></ha-textfield>
+              </div>
+
+              <ha-textfield label="Border color (away)" .value=${this._config.persons_border_color_away || "rgba(255,100,100,0.5)"} data-field="persons_border_color_away" @input=${this._changed}></ha-textfield>
+
+              <ha-formfield label="Use entity picture (if available)">
+                <ha-switch .checked=${this._config.persons_use_entity_picture !== false} data-field="persons_use_entity_picture" @change=${this._changed}></ha-switch>
+              </ha-formfield>
+
+              <ha-formfield label="Grayscale when away">
+                <ha-switch .checked=${!!this._config.persons_grayscale_away} data-field="persons_grayscale_away" @change=${this._changed}></ha-switch>
+              </ha-formfield>
+            ` : ''}
           </div>
         </details>
 
@@ -2620,8 +3993,8 @@ class HkiHeaderCardEditor extends LitElement {
                     ${this._config.info_pill ? html`
                       <ha-textfield label="Pill Background" .value=${this._config.info_pill_background || "rgba(0,0,0,0.25)"} data-field="info_pill_background" @input=${this._changed}></ha-textfield>
                       <div class="inline-fields-2">
-                        <ha-textfield label="Padding X (px)" type="number" .value=${String(this._config.info_pill_padding_x ?? 10)} data-field="info_pill_padding_x" @input=${this._changed}></ha-textfield>
-                        <ha-textfield label="Padding Y (px)" type="number" .value=${String(this._config.info_pill_padding_y ?? 6)} data-field="info_pill_padding_y" @input=${this._changed}></ha-textfield>
+                        <ha-textfield label="Padding X (px)" type="number" .value=${String(this._config.info_pill_padding_x ?? 12)} data-field="info_pill_padding_x" @input=${this._changed}></ha-textfield>
+                        <ha-textfield label="Padding Y (px)" type="number" .value=${String(this._config.info_pill_padding_y ?? 8)} data-field="info_pill_padding_y" @input=${this._changed}></ha-textfield>
                       </div>
                       <div class="inline-fields-2">
                         <ha-textfield label="Border Radius (px)" type="number" .value=${String(this._config.info_pill_radius ?? 999)} data-field="info_pill_radius" @input=${this._changed}></ha-textfield>
