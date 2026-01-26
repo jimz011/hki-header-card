@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v2.0.1 ',
+  '%c HKI-HEADER-CARD %c v2.0.0 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -2717,7 +2717,7 @@ class HkiHeaderCardEditor extends LitElement {
 
   constructor() {
     super();
-    this._config = { ...DEFAULTS }; // Initialize with defaults to prevent undefined issues
+    this._config = {}; // Will be populated by setConfig
     // Cache for domain selection when ha-service-picker isn't available
     this._paDomainCache = {};
   }
@@ -2756,9 +2756,14 @@ class HkiHeaderCardEditor extends LitElement {
   }
 
   setConfig(config) {
-    // Ensure we have a valid config object
+    // Ensure we have a valid config object  
     if (!config || typeof config !== 'object') {
-      config = {};
+      config = { type: "custom:hki-header-card" };
+    }
+    
+    // Ensure type field exists
+    if (!config.type) {
+      config = { ...config, type: "custom:hki-header-card" };
     }
     
     // Detect format and convert if needed
