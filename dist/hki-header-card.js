@@ -1274,6 +1274,10 @@ class HkiHeaderCard extends LitElement {
           return {
             entity: item.entity || "",
             grayscale_entity: item.grayscale_entity || "",
+            icon_home: item.icon_home || "",
+            icon_away: item.icon_away || "",
+            picture_home: item.picture_home || "",
+            picture_away: item.picture_away || "",
             tap_action: item.tap_action || { action: "more-info" },
             hold_action: item.hold_action || { action: "none" },
             double_tap_action: item.double_tap_action || { action: "none" }
@@ -1284,6 +1288,10 @@ class HkiHeaderCard extends LitElement {
           return {
             entity: item,
             grayscale_entity: "",
+            icon_home: "",
+            icon_away: "",
+            picture_home: "",
+            picture_away: "",
             tap_action: { action: "more-info" },
             hold_action: { action: "none" },
             double_tap_action: { action: "none" }
@@ -1436,7 +1444,11 @@ class HkiHeaderCard extends LitElement {
         if (typeof person !== 'object' || !person) return null;
         
         const cleaned = { entity: person.entity || "" };
-          if (person.grayscale_entity) cleaned.grayscale_entity = person.grayscale_entity;
+        if (person.grayscale_entity) cleaned.grayscale_entity = person.grayscale_entity;
+        if (person.icon_home) cleaned.icon_home = person.icon_home;
+        if (person.icon_away) cleaned.icon_away = person.icon_away;
+        if (person.picture_home) cleaned.picture_home = person.picture_home;
+        if (person.picture_away) cleaned.picture_away = person.picture_away;
         if (person.tap_action) cleaned.tap_action = this._cleanupActionConfig(person.tap_action);
         if (person.hold_action) cleaned.hold_action = this._cleanupActionConfig(person.hold_action);
         if (person.double_tap_action) cleaned.double_tap_action = this._cleanupActionConfig(person.double_tap_action);
