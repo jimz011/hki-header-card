@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v2.0.4 ',
+  '%c HKI-HEADER-CARD %c v2.0.5 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -2425,13 +2425,33 @@ class HkiHeaderCard extends LitElement {
             }
           }
 
+          // Get per-person custom icons and pictures
+          const customIconHome = (typeof personConfig !== 'string' && personConfig.icon_home) || "";
+          const customIconAway = (typeof personConfig !== 'string' && personConfig.icon_away) || "";
+          const customPictureHome = (typeof personConfig !== 'string' && personConfig.picture_home) || "";
+          const customPictureAway = (typeof personConfig !== 'string' && personConfig.picture_away) || "";
+
+          // Determine which icon or picture to use based on state
+          let displayIcon = icon;
+          let displayPicture = entityPicture;
+
+          if (isHome) {
+            // Home state: use custom home icon/picture if available
+            if (customIconHome) displayIcon = customIconHome;
+            if (customPictureHome) displayPicture = customPictureHome;
+          } else {
+            // Away state: use custom away icon/picture if available
+            if (customIconAway) displayIcon = customIconAway;
+            if (customPictureAway) displayPicture = customPictureAway;
+          }
+
           // Get per-person actions (with fallback to defaults)
           const tapAction = personConfig.tap_action || { action: "more-info" };
           const holdAction = personConfig.hold_action || { action: "none" };
           const doubleTapAction = personConfig.double_tap_action || { action: "none" };
 
           // Use entity picture if available and enabled, otherwise use icon
-          const showPicture = useEntityPicture && entityPicture;
+          const showPicture = useEntityPicture && displayPicture;
           
           // Determine border color based on state
           const currentBorderColor = isHome ? borderColor : borderColorAway;
@@ -2454,7 +2474,7 @@ class HkiHeaderCard extends LitElement {
           let holdTimer = null;
           let holdActive = false;
 
-          const startHold = () => {
+          const startHold = (e) => {
             holdActive = false;
             if (holdAction && holdAction.action !== "none") {
               holdTimer = setTimeout(() => {
@@ -2464,7 +2484,7 @@ class HkiHeaderCard extends LitElement {
             }
           };
 
-          const endHold = () => {
+          const endHold = (e) => {
             if (holdTimer) {
               clearTimeout(holdTimer);
               holdTimer = null;
@@ -2483,6 +2503,16 @@ class HkiHeaderCard extends LitElement {
             holdActive = false;
           };
 
+          const handleTouchStart = (e) => {
+            e.preventDefault();
+            startHold(e);
+          };
+
+          const handleTouchEnd = (e) => {
+            e.preventDefault();
+            endHold(e);
+          };
+
           return html`
             <div 
               class="person-avatar" 
@@ -2490,8 +2520,9 @@ class HkiHeaderCard extends LitElement {
               @mousedown=${startHold}
               @mouseup=${endHold}
               @mouseleave=${cancelHold}
-              @touchstart=${startHold}
-              @touchend=${endHold}
+              @touchstart=${handleTouchStart}
+              @touchend=${handleTouchEnd}
+              @touchcancel=${cancelHold}
               @dblclick=${(e) => {
                 e.preventDefault();
                 cancelHold();
@@ -2500,8 +2531,8 @@ class HkiHeaderCard extends LitElement {
               @contextmenu=${(e) => e.preventDefault()}
             >
               ${showPicture 
-                ? html`<img src="${entityPicture}" alt="${entity.attributes?.friendly_name || entityId}" style="${contentFilter}" />`
-                : html`<ha-icon .icon="${icon}" style="${contentFilter}"></ha-icon>`
+                ? html`<img src="${displayPicture}" alt="${entity.attributes?.friendly_name || entityId}" style="${contentFilter}" />`
+                : html`<ha-icon .icon="${displayIcon}" style="${contentFilter}"></ha-icon>`
               }
             </div>
           `;
@@ -3981,6 +4012,111 @@ class HkiHeaderCardEditor extends LitElement {
                         }}
                       ></ha-entity-picker>
                     ` : ''}
+
+                    <details style="margin-top: 8px;">
+                      <summary style="cursor: pointer; font-weight: 500; padding: 8px 0;">Custom Icons & Pictures</summary>
+                      <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 8px;">
+                        <ha-icon-picker
+                          .hass=${this.hass}
+                          .value=${typeof personConfig !== 'string' ? (personConfig.icon_home || "") : ""}
+                          .label=${"Icon (Home)"}
+                          helper="Custom icon when home (overrides entity icon)"
+                          @value-changed=${(e) => {
+                            const updated = [...this._config.persons_entities];
+                            if (typeof updated[index] === 'string') {
+                              updated[index] = {
+                                entity: updated[index],
+                                icon_home: e.detail.value || "",
+                                tap_action: { action: "more-info" },
+                                hold_action: { action: "none" },
+                                double_tap_action: { action: "none" }
+                              };
+                            } else {
+                              updated[index] = { ...updated[index], icon_home: e.detail.value || "" };
+                            }
+                            this._config = { ...this._config, persons_entities: updated };
+                            const strippedConfig = this._stripDefaults(this._config);
+                            this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: strippedConfig } }));
+                            this.requestUpdate();
+                          }}
+                        ></ha-icon-picker>
+
+                        <ha-icon-picker
+                          .hass=${this.hass}
+                          .value=${typeof personConfig !== 'string' ? (personConfig.icon_away || "") : ""}
+                          .label=${"Icon (Away)"}
+                          helper="Custom icon when away (overrides entity icon)"
+                          @value-changed=${(e) => {
+                            const updated = [...this._config.persons_entities];
+                            if (typeof updated[index] === 'string') {
+                              updated[index] = {
+                                entity: updated[index],
+                                icon_away: e.detail.value || "",
+                                tap_action: { action: "more-info" },
+                                hold_action: { action: "none" },
+                                double_tap_action: { action: "none" }
+                              };
+                            } else {
+                              updated[index] = { ...updated[index], icon_away: e.detail.value || "" };
+                            }
+                            this._config = { ...this._config, persons_entities: updated };
+                            const strippedConfig = this._stripDefaults(this._config);
+                            this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: strippedConfig } }));
+                            this.requestUpdate();
+                          }}
+                        ></ha-icon-picker>
+
+                        <ha-textfield
+                          .hass=${this.hass}
+                          .value=${typeof personConfig !== 'string' ? (personConfig.picture_home || "") : ""}
+                          .label=${"Picture URL (Home)"}
+                          helper="Custom picture URL when home (e.g., /local/person_home.jpg)"
+                          @input=${(e) => {
+                            const updated = [...this._config.persons_entities];
+                            if (typeof updated[index] === 'string') {
+                              updated[index] = {
+                                entity: updated[index],
+                                picture_home: e.target.value || "",
+                                tap_action: { action: "more-info" },
+                                hold_action: { action: "none" },
+                                double_tap_action: { action: "none" }
+                              };
+                            } else {
+                              updated[index] = { ...updated[index], picture_home: e.target.value || "" };
+                            }
+                            this._config = { ...this._config, persons_entities: updated };
+                            const strippedConfig = this._stripDefaults(this._config);
+                            this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: strippedConfig } }));
+                            this.requestUpdate();
+                          }}
+                        ></ha-textfield>
+
+                        <ha-textfield
+                          .hass=${this.hass}
+                          .value=${typeof personConfig !== 'string' ? (personConfig.picture_away || "") : ""}
+                          .label=${"Picture URL (Away)"}
+                          helper="Custom picture URL when away (e.g., /local/person_away.jpg)"
+                          @input=${(e) => {
+                            const updated = [...this._config.persons_entities];
+                            if (typeof updated[index] === 'string') {
+                              updated[index] = {
+                                entity: updated[index],
+                                picture_away: e.target.value || "",
+                                tap_action: { action: "more-info" },
+                                hold_action: { action: "none" },
+                                double_tap_action: { action: "none" }
+                              };
+                            } else {
+                              updated[index] = { ...updated[index], picture_away: e.target.value || "" };
+                            }
+                            this._config = { ...this._config, persons_entities: updated };
+                            const strippedConfig = this._stripDefaults(this._config);
+                            this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: strippedConfig } }));
+                            this.requestUpdate();
+                          }}
+                        ></ha-textfield>
+                      </div>
+                    </details>
 
                     ${this._renderPersonActionEditors(index)}
                   </div>
