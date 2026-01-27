@@ -2976,6 +2976,20 @@ class HkiHeaderCardEditor extends LitElement {
             cleanedPerson.grayscale_entity = person.grayscale_entity;
           }
           
+          // Preserve custom icon and picture properties if present
+          if (person.icon_home) {
+            cleanedPerson.icon_home = person.icon_home;
+          }
+          if (person.icon_away) {
+            cleanedPerson.icon_away = person.icon_away;
+          }
+          if (person.picture_home) {
+            cleanedPerson.picture_home = person.picture_home;
+          }
+          if (person.picture_away) {
+            cleanedPerson.picture_away = person.picture_away;
+          }
+          
           // Clean up actions for each person
           if (person.tap_action) {
             cleanedPerson.tap_action = this._cleanupActionConfig(person.tap_action);
