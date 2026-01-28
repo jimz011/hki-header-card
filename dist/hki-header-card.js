@@ -1533,7 +1533,8 @@ class HkiHeaderCard extends LitElement {
       return;
     }
 
-    this._setRendered(key, raw);
+    // Don't show raw template - keep previous value or empty until render completes
+    // This prevents the flash of unrendered Jinja templates
 
     const vars = this._buildTemplateVariables();
     const sig = cacheKey(raw, vars);
@@ -1546,6 +1547,11 @@ class HkiHeaderCard extends LitElement {
     const seq = state.seq;
 
     const hadCache = this._applyCachedTemplate(key, sig);
+    
+    // If no cache was found, set to empty to avoid showing raw template
+    if (!hadCache) {
+      this._setRendered(key, "");
+    }
 
     if (!this._inPreview && this.hass?.connection?.subscribeMessage) {
       this._subscribeTemplateImmediate(key, seq, raw, vars, sig);
