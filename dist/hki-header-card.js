@@ -988,11 +988,12 @@ class HkiHeaderCard extends LitElement {
     this._urlChangeHandler = () => {
       this._detectKioskMode();
       this._detectEditMode();
-      // Reset badge element reference on navigation
-      this._resetBadgesZIndex();
-      // Re-apply badge positioning after DOM settles (100ms, 300ms delays)
+      // Clear cached badge element reference so it will be re-found on next apply
+      this._badgesEl = null;
+      // Re-apply badge positioning after DOM settles with multiple delays
       setTimeout(() => this._debouncedBadgesZIndex(), 100);
       setTimeout(() => this._debouncedBadgesZIndex(), 300);
+      setTimeout(() => this._debouncedBadgesZIndex(), 600);
     };
     window.addEventListener("popstate", this._urlChangeHandler);
     window.addEventListener("hashchange", this._urlChangeHandler);
@@ -1688,12 +1689,6 @@ class HkiHeaderCard extends LitElement {
 
     const el = this._findHaBadgesElement();
     if (!el) { this._resetBadgesZIndex(); return; }
-
-    // Verify element is still in DOM (prevent stale references)
-    if (!document.contains(el)) {
-      this._resetBadgesZIndex();
-      return;
-    }
 
     if (el !== this._badgesEl) {
       this._resetBadgesZIndex();
