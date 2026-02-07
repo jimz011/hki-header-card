@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v2.0.6-dev-08 ',
+  '%c HKI-HEADER-CARD %c v2.0.6-dev-09 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -632,6 +632,7 @@ class HkiHeaderCard extends LitElement {
     this._kioskCheckInterval = null;
     this._badgeCheckInterval = null;
     this._kioskMutationObserver = null;
+    this._viewChangeMutationObserver = null;
     this._badgeStyleObserver = null;
     this._urlChangeHandler = null;
     this._cachedHeader = null;
@@ -952,6 +953,7 @@ class HkiHeaderCard extends LitElement {
     if (this._kioskCheckInterval) clearInterval(this._kioskCheckInterval);
     if (this._badgeCheckInterval) clearInterval(this._badgeCheckInterval);
     if (this._kioskMutationObserver) this._kioskMutationObserver.disconnect();
+    if (this._viewChangeMutationObserver) this._viewChangeMutationObserver.disconnect();
     if (this._badgeStyleObserver) this._badgeStyleObserver.disconnect();
     if (this._urlChangeHandler) {
       window.removeEventListener("popstate", this._urlChangeHandler);
@@ -988,6 +990,30 @@ class HkiHeaderCard extends LitElement {
     this._kioskMutationObserver.observe(document.body, { attributes: true, attributeFilter: ["class"] });
     this._kioskMutationObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
 
+    // Watch for DOM changes that might indicate view navigation
+    this._viewChangeMutationObserver = new MutationObserver(() => {
+      // View might have changed, refresh badge positioning
+      if (this._config?.badges_fixed && this._config?.fixed && !this._inPreview) {
+        this._badgesEl = null;
+        setTimeout(() => {
+          this._measure(true);
+          this._debouncedBadgesZIndex();
+        }, 200);
+      }
+    });
+    // Watch for additions/removals in the main content area
+    const mainContent = document.querySelector('home-assistant')?.shadowRoot?.querySelector('home-assistant-main')?.shadowRoot?.querySelector('ha-panel-lovelace');
+    if (mainContent) {
+      try {
+        this._viewChangeMutationObserver.observe(mainContent, {
+          childList: true,
+          subtree: false
+        });
+      } catch (e) {
+        // Failed to set up observer
+      }
+    }
+
     // URL change handler
     this._urlChangeHandler = () => {
       this._detectKioskMode();
@@ -1019,12 +1045,35 @@ class HkiHeaderCard extends LitElement {
     window.addEventListener("popstate", this._urlChangeHandler);
     window.addEventListener("hashchange", this._urlChangeHandler);
 
-    // Periodic badge check (every 5 seconds) as fallback
+    // Periodic badge check (every 2 seconds) as fallback - aggressive
     this._badgeCheckInterval = setInterval(() => {
       if (this._config?.badges_fixed && this._config?.fixed && !this._inPreview) {
-        this._debouncedBadgesZIndex();
+        // Check if badge element still exists and has correct positioning
+        const currentEl = this._findHaBadgesElement();
+        if (currentEl && currentEl.isConnected) {
+          // Check if position is wrong
+          const computedStyle = window.getComputedStyle(currentEl);
+          if (computedStyle.position !== 'fixed') {
+            // Position was changed, force reapply
+            this._badgesEl = null;
+            this._measure(true);
+            this._debouncedBadgesZIndex();
+          } else if (currentEl !== this._badgesEl) {
+            // Element changed but position is fixed - update our reference
+            this._badgesEl = currentEl;
+            this._measure(true);
+            this._debouncedBadgesZIndex();
+          } else if (!this._badgeStyleObserver) {
+            // Observer is missing, set it up again
+            this._setupBadgeStyleWatcher(currentEl);
+          }
+        } else {
+          // Badge element disappeared or changed, search again
+          this._badgesEl = null;
+          this._debouncedBadgesZIndex();
+        }
       }
-    }, 5000);
+    }, 2000);
 
     // Visibility & focus handlers
     this._visibilityHandler = () => {
@@ -1769,9 +1818,11 @@ class HkiHeaderCard extends LitElement {
     // Watch for style/attribute changes on the badge element
     this._badgeStyleObserver = new MutationObserver((mutations) => {
       // Check if position was changed from fixed
-      if (el.style.position && el.style.position !== 'fixed') {
-        // Something changed our styles, reapply them
-        setTimeout(() => this._debouncedBadgesZIndex(), 50);
+      const currentPosition = el.style.position || window.getComputedStyle(el).position;
+      if (currentPosition && currentPosition !== 'fixed') {
+        // Something changed our styles, reapply them immediately
+        this._measure(true);
+        this._debouncedBadgesZIndex();
       }
     });
 
@@ -1782,8 +1833,9 @@ class HkiHeaderCard extends LitElement {
         attributeOldValue: true
       });
     } catch (e) {
-      // Failed to set up observer, fall back to periodic checks
+      // Failed to set up observer
       console.warn('Badge style observer setup failed:', e);
+      this._badgeStyleObserver = null;
     }
   }
 
