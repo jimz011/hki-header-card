@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v2.0.6 ',
+  '%c HKI-HEADER-CARD %c v2.0.6-dev-08 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -630,7 +630,9 @@ class HkiHeaderCard extends LitElement {
     this._rafMeasure = 0;
     this._rafBadges = 0;
     this._kioskCheckInterval = null;
+    this._badgeCheckInterval = null;
     this._kioskMutationObserver = null;
+    this._badgeStyleObserver = null;
     this._urlChangeHandler = null;
     this._cachedHeader = null;
     this._visibilityHandler = null;
@@ -948,7 +950,9 @@ class HkiHeaderCard extends LitElement {
     if (this._rafBadges) cancelAnimationFrame(this._rafBadges);
     if (this._tpl.timer) clearTimeout(this._tpl.timer);
     if (this._kioskCheckInterval) clearInterval(this._kioskCheckInterval);
+    if (this._badgeCheckInterval) clearInterval(this._badgeCheckInterval);
     if (this._kioskMutationObserver) this._kioskMutationObserver.disconnect();
+    if (this._badgeStyleObserver) this._badgeStyleObserver.disconnect();
     if (this._urlChangeHandler) {
       window.removeEventListener("popstate", this._urlChangeHandler);
       window.removeEventListener("hashchange", this._urlChangeHandler);
@@ -988,8 +992,12 @@ class HkiHeaderCard extends LitElement {
     this._urlChangeHandler = () => {
       this._detectKioskMode();
       this._detectEditMode();
-      // Clear cached badge element reference so it will be re-found on next apply
+      // Clear badge element cache and style observer on navigation
       this._badgesEl = null;
+      if (this._badgeStyleObserver) {
+        this._badgeStyleObserver.disconnect();
+        this._badgeStyleObserver = null;
+      }
       // Force remeasure and reapply badge positioning after DOM settles
       setTimeout(() => {
         this._measure(true);
@@ -1010,6 +1018,13 @@ class HkiHeaderCard extends LitElement {
     };
     window.addEventListener("popstate", this._urlChangeHandler);
     window.addEventListener("hashchange", this._urlChangeHandler);
+
+    // Periodic badge check (every 5 seconds) as fallback
+    this._badgeCheckInterval = setInterval(() => {
+      if (this._config?.badges_fixed && this._config?.fixed && !this._inPreview) {
+        this._debouncedBadgesZIndex();
+      }
+    }, 5000);
 
     // Visibility & focus handlers
     this._visibilityHandler = () => {
@@ -1732,6 +1747,9 @@ class HkiHeaderCard extends LitElement {
 
     if (cfg.badges_fixed) {
       el.style.cssText = `position:fixed;top:${topPosition}px;left:${this._offsetLeft}px;width:${this._contentWidth}px;z-index:2;`;
+      
+      // Set up persistent watcher for this badge element
+      this._setupBadgeStyleWatcher(el);
     } else {
       const kioskGapAdjustment = this._kioskMode ? 48 : 0;
       const effectiveGap = (cfg.badges_gap || 0) + kioskGapAdjustment;
@@ -1739,7 +1757,41 @@ class HkiHeaderCard extends LitElement {
     }
   }
 
+  _setupBadgeStyleWatcher(el) {
+    // Disconnect existing observer
+    if (this._badgeStyleObserver) {
+      this._badgeStyleObserver.disconnect();
+      this._badgeStyleObserver = null;
+    }
+
+    if (!el || !this._config.badges_fixed) return;
+
+    // Watch for style/attribute changes on the badge element
+    this._badgeStyleObserver = new MutationObserver((mutations) => {
+      // Check if position was changed from fixed
+      if (el.style.position && el.style.position !== 'fixed') {
+        // Something changed our styles, reapply them
+        setTimeout(() => this._debouncedBadgesZIndex(), 50);
+      }
+    });
+
+    try {
+      this._badgeStyleObserver.observe(el, {
+        attributes: true,
+        attributeFilter: ['style', 'class'],
+        attributeOldValue: true
+      });
+    } catch (e) {
+      // Failed to set up observer, fall back to periodic checks
+      console.warn('Badge style observer setup failed:', e);
+    }
+  }
+
   _resetBadgesZIndex() {
+    if (this._badgeStyleObserver) {
+      this._badgeStyleObserver.disconnect();
+      this._badgeStyleObserver = null;
+    }
     if (this._badgesEl) {
       try { this._badgesEl.style.cssText = ""; } catch (_) {}
       this._badgesEl = null;
