@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v2.0.5 ',
+  '%c HKI-HEADER-CARD %c v2.0.6-dev-01 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -936,6 +936,11 @@ class HkiHeaderCard extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
 
+
+    if (this._badgesRetryRaf) {
+      cancelAnimationFrame(this._badgesRetryRaf);
+      this._badgesRetryRaf = null;
+    }
     if (this._resizeHandler) {
       window.removeEventListener("resize", this._resizeHandler);
       this._resizeHandler = null;
@@ -988,6 +993,9 @@ class HkiHeaderCard extends LitElement {
     this._urlChangeHandler = () => {
       this._detectKioskMode();
       this._detectEditMode();
+
+      // Re-apply badge positioning after navigation/back
+      this._debouncedBadgesZIndex();
     };
     window.addEventListener("popstate", this._urlChangeHandler);
     window.addEventListener("hashchange", this._urlChangeHandler);
@@ -1682,7 +1690,12 @@ class HkiHeaderCard extends LitElement {
     if (!effectiveFixed) { this._resetBadgesZIndex(); return; }
 
     const el = this._findHaBadgesElement();
-    if (!el) { this._resetBadgesZIndex(); return; }
+    if (!el) {
+      // During navigation/back, hui-badges may not exist yet.
+      // Don't clear existing fixed styles; retry a few frames.
+      this._retryBadgesFix?.();
+      return;
+    }
 
     if (el !== this._badgesEl) {
       this._resetBadgesZIndex();
