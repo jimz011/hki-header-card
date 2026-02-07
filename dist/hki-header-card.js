@@ -990,10 +990,23 @@ class HkiHeaderCard extends LitElement {
       this._detectEditMode();
       // Clear cached badge element reference so it will be re-found on next apply
       this._badgesEl = null;
-      // Re-apply badge positioning after DOM settles with multiple delays
-      setTimeout(() => this._debouncedBadgesZIndex(), 100);
-      setTimeout(() => this._debouncedBadgesZIndex(), 300);
-      setTimeout(() => this._debouncedBadgesZIndex(), 600);
+      // Force remeasure and reapply badge positioning after DOM settles
+      setTimeout(() => {
+        this._measure(true);
+        this._debouncedBadgesZIndex();
+      }, 100);
+      setTimeout(() => {
+        this._measure(true);
+        this._debouncedBadgesZIndex();
+      }, 300);
+      setTimeout(() => {
+        this._measure(true);
+        this._debouncedBadgesZIndex();
+      }, 600);
+      setTimeout(() => {
+        this._measure(true);
+        this._debouncedBadgesZIndex();
+      }, 1000);
     };
     window.addEventListener("popstate", this._urlChangeHandler);
     window.addEventListener("hashchange", this._urlChangeHandler);
@@ -1004,6 +1017,16 @@ class HkiHeaderCard extends LitElement {
         this._cachedHeader = null;
         this._detectKioskMode();
         setTimeout(() => this._detectKioskMode(), 200);
+        // Also refresh badge positioning when view becomes visible
+        this._badgesEl = null;
+        setTimeout(() => {
+          this._measure(true);
+          this._debouncedBadgesZIndex();
+        }, 300);
+        setTimeout(() => {
+          this._measure(true);
+          this._debouncedBadgesZIndex();
+        }, 600);
       }
     };
     document.addEventListener("visibilitychange", this._visibilityHandler);
@@ -1687,13 +1710,21 @@ class HkiHeaderCard extends LitElement {
 
     if (!effectiveFixed) { this._resetBadgesZIndex(); return; }
 
+    // Always search for badge element fresh (don't cache to avoid stale references)
     const el = this._findHaBadgesElement();
     if (!el) { this._resetBadgesZIndex(); return; }
 
-    if (el !== this._badgesEl) {
-      this._resetBadgesZIndex();
-      this._badgesEl = el;
+    // Validate element is properly connected to DOM
+    if (!el.isConnected) {
+      // Element exists but isn't properly connected yet, retry later
+      return;
     }
+
+    // If this is a different element than before, reset the old one first
+    if (this._badgesEl && this._badgesEl !== el && this._badgesEl.style) {
+      try { this._badgesEl.style.cssText = ""; } catch (_) {}
+    }
+    this._badgesEl = el;
 
     const kioskAdjustment = this._kioskMode ? 0 : 48;
     const badgesOffset = cfg.badges_fixed ? (cfg.badges_offset_pinned || 48) : (cfg.badges_offset_unpinned || 100);
