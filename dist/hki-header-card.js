@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v2.0.6-dev-01 ',
+  '%c HKI-HEADER-CARD %c v2.0.6-dev-02 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -941,6 +941,11 @@ class HkiHeaderCard extends LitElement {
       cancelAnimationFrame(this._badgesRetryRaf);
       this._badgesRetryRaf = null;
     }
+    if (this._badgesMo) {
+      try { this._badgesMo.disconnect(); } catch (_) {}
+      this._badgesMo = null;
+      this._badgesMoRoot = null;
+    }
     if (this._resizeHandler) {
       window.removeEventListener("resize", this._resizeHandler);
       this._resizeHandler = null;
@@ -1697,6 +1702,8 @@ class HkiHeaderCard extends LitElement {
       return;
     }
 
+    this._ensureBadgesObserver?.(el);
+
     if (el !== this._badgesEl) {
       this._resetBadgesZIndex();
       this._badgesEl = el;
@@ -1712,6 +1719,39 @@ class HkiHeaderCard extends LitElement {
       const kioskGapAdjustment = this._kioskMode ? 48 : 0;
       const effectiveGap = (cfg.badges_gap || 0) + kioskGapAdjustment;
       el.style.cssText = `position:relative;z-index:0;margin-bottom:${effectiveGap}px;`;
+    }
+  }
+  _ensureBadgesObserver(el) {
+    // Attach a MutationObserver to a stable root so we notice when HA re-creates badges.
+    // We re-apply styles whenever the badges element changes.
+    const cfg = this._config || {};
+    const effectiveFixed = !!cfg.fixed && !this._inPreview;
+    if (!effectiveFixed) return;
+
+    const root = el?.getRootNode?.() || document;
+    // If we are already observing this root, nothing to do.
+    if (this._badgesMo && this._badgesMoRoot === root) return;
+
+    // Reset old observer
+    if (this._badgesMo) {
+      try { this._badgesMo.disconnect(); } catch (_) {}
+      this._badgesMo = null;
+      this._badgesMoRoot = null;
+    }
+
+    try {
+      this._badgesMo = new MutationObserver(() => {
+        // If badges got replaced, re-apply.
+        const current = this._findHaBadgesElement();
+        if (current && current !== this._badgesEl) {
+          this._badgesEl = null; // force re-style
+          this._debouncedBadgesZIndex();
+        }
+      });
+      this._badgesMo.observe(root === document ? document.documentElement : root, { childList: true, subtree: true });
+      this._badgesMoRoot = root;
+    } catch (_) {
+      // ignore
     }
   }
 
