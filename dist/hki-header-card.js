@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v2.0.6-dev-02 ',
+  '%c HKI-HEADER-CARD %c v2.0.6-dev-03 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -928,6 +928,10 @@ class HkiHeaderCard extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
+    // Keep badges fixed across HA navigation and scroll container swaps
+    window.addEventListener(\"location-changed\", this._onLocationChanged);
+    window.addEventListener(\"popstate\", this._onLocationChanged);
+    document.addEventListener(\"scroll\", this._onAnyScroll, true);
     this._detectKioskMode();
     // Fix for template reactivity: re-establish subscriptions when reconnected to DOM
     this._scheduleTemplateSetup(0);
@@ -936,21 +940,18 @@ class HkiHeaderCard extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
 
-
-    if (this._badgesRetryRaf) {
-      cancelAnimationFrame(this._badgesRetryRaf);
-      this._badgesRetryRaf = null;
-    }
-    if (this._badgesMo) {
-      try { this._badgesMo.disconnect(); } catch (_) {}
-      this._badgesMo = null;
-      this._badgesMoRoot = null;
-    }
+    window.removeEventListener(\"location-changed\", this._onLocationChanged);
+    window.removeEventListener(\"popstate\", this._onLocationChanged);
+    document.removeEventListener(\"scroll\", this._onAnyScroll, true);
     if (this._resizeHandler) {
       window.removeEventListener("resize", this._resizeHandler);
       this._resizeHandler = null;
     }
     if (this._ro) {
+    if (this._badgesRetryRaf) {
+      cancelAnimationFrame(this._badgesRetryRaf);
+      this._badgesRetryRaf = null;
+    }
       this._ro.disconnect();
       this._ro = null;
     }
@@ -998,9 +999,6 @@ class HkiHeaderCard extends LitElement {
     this._urlChangeHandler = () => {
       this._detectKioskMode();
       this._detectEditMode();
-
-      // Re-apply badge positioning after navigation/back
-      this._debouncedBadgesZIndex();
     };
     window.addEventListener("popstate", this._urlChangeHandler);
     window.addEventListener("hashchange", this._urlChangeHandler);
@@ -1695,14 +1693,12 @@ class HkiHeaderCard extends LitElement {
     if (!effectiveFixed) { this._resetBadgesZIndex(); return; }
 
     const el = this._findHaBadgesElement();
-    if (!el) {
-      // During navigation/back, hui-badges may not exist yet.
-      // Don't clear existing fixed styles; retry a few frames.
+    if (!el || !this._isElementVisible(el)) {
+      // During navigation/back, hui-badges may not exist yet or may be hidden.
+      // Retry a few frames and don't clear existing fixed styles.
       this._retryBadgesFix?.();
       return;
     }
-
-    this._ensureBadgesObserver?.(el);
 
     if (el !== this._badgesEl) {
       this._resetBadgesZIndex();
@@ -1721,60 +1717,68 @@ class HkiHeaderCard extends LitElement {
       el.style.cssText = `position:relative;z-index:0;margin-bottom:${effectiveGap}px;`;
     }
   }
-  _ensureBadgesObserver(el) {
-    // Attach a MutationObserver to a stable root so we notice when HA re-creates badges.
-    // We re-apply styles whenever the badges element changes.
-    const cfg = this._config || {};
-    const effectiveFixed = !!cfg.fixed && !this._inPreview;
-    if (!effectiveFixed) return;
-
-    const root = el?.getRootNode?.() || document;
-    // If we are already observing this root, nothing to do.
-    if (this._badgesMo && this._badgesMoRoot === root) return;
-
-    // Reset old observer
-    if (this._badgesMo) {
-      try { this._badgesMo.disconnect(); } catch (_) {}
-      this._badgesMo = null;
-      this._badgesMoRoot = null;
-    }
-
-    try {
-      this._badgesMo = new MutationObserver(() => {
-        // If badges got replaced, re-apply.
-        const current = this._findHaBadgesElement();
-        if (current && current !== this._badgesEl) {
-          this._badgesEl = null; // force re-style
-          this._debouncedBadgesZIndex();
-        }
-      });
-      this._badgesMo.observe(root === document ? document.documentElement : root, { childList: true, subtree: true });
-      this._badgesMoRoot = root;
-    } catch (_) {
-      // ignore
-    }
-  }
 
   _resetBadgesZIndex() {
+    this._badgesRetryCount = 0;
     if (this._badgesEl) {
       try { this._badgesEl.style.cssText = ""; } catch (_) {}
       this._badgesEl = null;
     }
   }
 
+  _isElementVisible(el) {
+    if (!el) return false;
+    // Visible in layout + not display:none/visibility:hidden and has size
+    const rect = el.getBoundingClientRect?.();
+    if (!rect || rect.width === 0 || rect.height === 0) return false;
+    const cs = window.getComputedStyle?.(el);
+    if (!cs) return true;
+    return cs.display !== "none" && cs.visibility !== "hidden" && cs.opacity !== "0";
+  }
+
   _findHaBadgesElement() {
     const selectors = "hui-badges, ha-badges, .badges, .header-badges";
+    const candidates = [];
+
+    // Walk up through shadow roots collecting ALL matches.
     let node = this;
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 16; i++) {
       const root = node.getRootNode?.();
-      if (!root || root === document) break;
+      if (!root) break;
+
+      // Search current root/document
+      try {
+        const rootEl = root === document ? document : (root instanceof ShadowRoot ? root : null);
+        const list = rootEl?.querySelectorAll?.(selectors);
+        if (list?.length) candidates.push(...list);
+      } catch (_) {}
+
+      if (root === document) break;
+
       const host = root.host;
       if (!host) break;
-      const sr = host.shadowRoot;
-      const hit = sr?.querySelector?.(selectors) || host.querySelector?.(selectors);
-      if (hit) return hit;
+
+      try {
+        const list1 = host.shadowRoot?.querySelectorAll?.(selectors);
+        if (list1?.length) candidates.push(...list1);
+      } catch (_) {}
+
+      try {
+        const list2 = host.querySelectorAll?.(selectors);
+        if (list2?.length) candidates.push(...list2);
+      } catch (_) {}
+
       node = host;
     }
+
+    // Prefer a visible element (HA can keep old views around but hidden).
+    for (const el of candidates) {
+      if (this._isElementVisible(el)) return el;
+    }
+
+    // Fall back to first candidate if none appear visible (better than null).
+    return candidates[0] || null;
+  }
     return null;
   }
 
