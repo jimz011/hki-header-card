@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v2.0.6-dev-03 ',
+  '%c HKI-HEADER-CARD %c v2.0.6-dev-04 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -928,10 +928,10 @@ class HkiHeaderCard extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
-    // Keep badges fixed across HA navigation and scroll container swaps
-    window.addEventListener(\"location-changed\", this._onLocationChanged);
-    window.addEventListener(\"popstate\", this._onLocationChanged);
-    document.addEventListener(\"scroll\", this._onAnyScroll, true);
+    // Keep badges fixed across HA navigation, subviews, and scroll container swaps
+    window.addEventListener("location-changed", this._onLocationChanged);
+    window.addEventListener("popstate", this._onLocationChanged);
+    document.addEventListener("scroll", this._onAnyScroll, true);
     this._detectKioskMode();
     // Fix for template reactivity: re-establish subscriptions when reconnected to DOM
     this._scheduleTemplateSetup(0);
@@ -940,18 +940,14 @@ class HkiHeaderCard extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
 
-    window.removeEventListener(\"location-changed\", this._onLocationChanged);
-    window.removeEventListener(\"popstate\", this._onLocationChanged);
-    document.removeEventListener(\"scroll\", this._onAnyScroll, true);
+    window.removeEventListener("location-changed", this._onLocationChanged);
+    window.removeEventListener("popstate", this._onLocationChanged);
+    document.removeEventListener("scroll", this._onAnyScroll, true);
     if (this._resizeHandler) {
       window.removeEventListener("resize", this._resizeHandler);
       this._resizeHandler = null;
     }
     if (this._ro) {
-    if (this._badgesRetryRaf) {
-      cancelAnimationFrame(this._badgesRetryRaf);
-      this._badgesRetryRaf = null;
-    }
       this._ro.disconnect();
       this._ro = null;
     }
@@ -999,7 +995,12 @@ class HkiHeaderCard extends LitElement {
     this._urlChangeHandler = () => {
       this._detectKioskMode();
       this._detectEditMode();
+
+      this._debouncedBadgesZIndex();
     };
+
+    this._onAnyScroll = () => this._debouncedBadgesZIndex();
+    this._onLocationChanged = () => this._debouncedBadgesZIndex();
     window.addEventListener("popstate", this._urlChangeHandler);
     window.addEventListener("hashchange", this._urlChangeHandler);
 
@@ -1691,19 +1692,18 @@ class HkiHeaderCard extends LitElement {
     const effectiveFixed = !!cfg.fixed && !this._inPreview;
 
     if (!effectiveFixed) { this._resetBadgesZIndex(); return; }
-
     const el = this._findHaBadgesElement();
     if (!el || !this._isElementVisible(el)) {
-      // During navigation/back, hui-badges may not exist yet or may be hidden.
-      // Retry a few frames and don't clear existing fixed styles.
-      this._retryBadgesFix?.();
+      // During navigation/back, HA may temporarily remove or hide the visible badges.
+      // Retry a few frames so we end up styling the visible (current) badges element.
+      if (effectiveFixed) {
+        this._badgesRetryCount = (this._badgesRetryCount || 0) + 1;
+        if (this._badgesRetryCount <= 24) this._debouncedBadgesZIndex();
+      }
       return;
     }
+    this._badgesRetryCount = 0;
 
-    if (el !== this._badgesEl) {
-      this._resetBadgesZIndex();
-      this._badgesEl = el;
-    }
 
     const kioskAdjustment = this._kioskMode ? 0 : 48;
     const badgesOffset = cfg.badges_fixed ? (cfg.badges_offset_pinned || 48) : (cfg.badges_offset_unpinned || 100);
@@ -1725,32 +1725,30 @@ class HkiHeaderCard extends LitElement {
       this._badgesEl = null;
     }
   }
-
   _isElementVisible(el) {
-    if (!el) return false;
-    // Visible in layout + not display:none/visibility:hidden and has size
-    const rect = el.getBoundingClientRect?.();
+    if (!el || !el.getBoundingClientRect) return false;
+    const rect = el.getBoundingClientRect();
     if (!rect || rect.width === 0 || rect.height === 0) return false;
-    const cs = window.getComputedStyle?.(el);
+    const cs = window.getComputedStyle ? window.getComputedStyle(el) : null;
     if (!cs) return true;
-    return cs.display !== "none" && cs.visibility !== "hidden" && cs.opacity !== "0";
+    if (cs.display === "none" || cs.visibility === "hidden") return false;
+    return true;
   }
 
   _findHaBadgesElement() {
     const selectors = "hui-badges, ha-badges, .badges, .header-badges";
     const candidates = [];
 
-    // Walk up through shadow roots collecting ALL matches.
+    // HA can keep old views around but hidden; collect all candidates and pick a visible one.
     let node = this;
     for (let i = 0; i < 16; i++) {
-      const root = node.getRootNode?.();
+      const root = node.getRootNode && node.getRootNode();
       if (!root) break;
 
-      // Search current root/document
       try {
-        const rootEl = root === document ? document : (root instanceof ShadowRoot ? root : null);
-        const list = rootEl?.querySelectorAll?.(selectors);
-        if (list?.length) candidates.push(...list);
+        const scope = (root === document) ? document : root;
+        const list = scope.querySelectorAll ? scope.querySelectorAll(selectors) : null;
+        if (list && list.length) candidates.push.apply(candidates, list);
       } catch (_) {}
 
       if (root === document) break;
@@ -1759,27 +1757,24 @@ class HkiHeaderCard extends LitElement {
       if (!host) break;
 
       try {
-        const list1 = host.shadowRoot?.querySelectorAll?.(selectors);
-        if (list1?.length) candidates.push(...list1);
+        const list1 = host.shadowRoot && host.shadowRoot.querySelectorAll ? host.shadowRoot.querySelectorAll(selectors) : null;
+        if (list1 && list1.length) candidates.push.apply(candidates, list1);
       } catch (_) {}
 
       try {
-        const list2 = host.querySelectorAll?.(selectors);
-        if (list2?.length) candidates.push(...list2);
+        const list2 = host.querySelectorAll ? host.querySelectorAll(selectors) : null;
+        if (list2 && list2.length) candidates.push.apply(candidates, list2);
       } catch (_) {}
 
       node = host;
     }
 
-    // Prefer a visible element (HA can keep old views around but hidden).
-    for (const el of candidates) {
+    for (let i = 0; i < candidates.length; i++) {
+      const el = candidates[i];
       if (this._isElementVisible(el)) return el;
     }
 
-    // Fall back to first candidate if none appear visible (better than null).
-    return candidates[0] || null;
-  }
-    return null;
+    return candidates.length ? candidates[0] : null;
   }
 
   _parseServiceData(serviceData) {
