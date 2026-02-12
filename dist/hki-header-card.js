@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v2.0.6-dev-11 ',
+  '%c HKI-HEADER-CARD %c v2.0.6-dev-12 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -849,7 +849,7 @@ class HkiHeaderCard extends LitElement {
         border-width: var(--hki-info-pill-border-width, 0);
         border-color: var(--hki-info-pill-border-color, rgba(255,255,255,0.1));
         box-sizing: border-box;
-        overflow: hidden;
+        overflow: visible;
       }
 
       hki-notification-card {
@@ -1991,6 +1991,17 @@ class HkiHeaderCard extends LitElement {
       case "toggle": {
         const toggleEntity = finalAction.entity;
         if (toggleEntity) this.hass.callService("homeassistant", "toggle", { entity_id: toggleEntity });
+        break;
+      }
+      case "fire-dom-event": {
+        // Support for fire-dom-event (browser_mod popup integration)
+        this.dispatchEvent(
+          new CustomEvent("ll-custom", {
+            bubbles: true,
+            composed: true,
+            detail: finalAction
+          })
+        );
         break;
       }
     }
