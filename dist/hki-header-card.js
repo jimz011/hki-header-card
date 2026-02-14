@@ -5,7 +5,7 @@ import { LitElement, html, css } from "https://unpkg.com/lit@2.8.0/index.js?modu
 const CARD_NAME = "hki-header-card";
 
 console.info(
-  '%c HKI-HEADER-CARD %c v2.0.6-dev-12 ',
+  '%c HKI-HEADER-CARD %c v2.0.7 ',
   'color: white; background: #17a2b8; font-weight: bold;',
   'color: #17a2b8; background: white; font-weight: bold;'
 );
@@ -630,11 +630,7 @@ class HkiHeaderCard extends LitElement {
     this._rafMeasure = 0;
     this._rafBadges = 0;
     this._kioskCheckInterval = null;
-    this._badgeCheckInterval = null;
     this._kioskMutationObserver = null;
-    this._viewChangeMutationObserver = null;
-    this._badgeStyleObserver = null;
-    this._badgeDomWatcher = null;
     this._urlChangeHandler = null;
     this._cachedHeader = null;
     this._visibilityHandler = null;
@@ -849,7 +845,7 @@ class HkiHeaderCard extends LitElement {
         border-width: var(--hki-info-pill-border-width, 0);
         border-color: var(--hki-info-pill-border-color, rgba(255,255,255,0.1));
         box-sizing: border-box;
-        overflow: visible;
+        overflow: hidden;
       }
 
       hki-notification-card {
@@ -952,11 +948,7 @@ class HkiHeaderCard extends LitElement {
     if (this._rafBadges) cancelAnimationFrame(this._rafBadges);
     if (this._tpl.timer) clearTimeout(this._tpl.timer);
     if (this._kioskCheckInterval) clearInterval(this._kioskCheckInterval);
-    if (this._badgeCheckInterval) clearInterval(this._badgeCheckInterval);
     if (this._kioskMutationObserver) this._kioskMutationObserver.disconnect();
-    if (this._viewChangeMutationObserver) this._viewChangeMutationObserver.disconnect();
-    if (this._badgeDomWatcher) this._badgeDomWatcher.disconnect();
-    if (this._badgeStyleObserver) this._badgeStyleObserver.disconnect();
     if (this._urlChangeHandler) {
       window.removeEventListener("popstate", this._urlChangeHandler);
       window.removeEventListener("hashchange", this._urlChangeHandler);
@@ -992,117 +984,13 @@ class HkiHeaderCard extends LitElement {
     this._kioskMutationObserver.observe(document.body, { attributes: true, attributeFilter: ["class"] });
     this._kioskMutationObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
 
-    // Aggressive badge DOM watcher - watches entire shadow DOM tree for badge changes
-    this._badgeDomWatcher = new MutationObserver((mutations) => {
-      if (!this._config?.badges_fixed || !this._config?.fixed || this._inPreview) return;
-      
-      // Check if any mutations involve badge elements
-      let badgeRelated = false;
-      for (const mutation of mutations) {
-        // Check if badge element was added
-        if (mutation.addedNodes.length > 0) {
-          for (const node of mutation.addedNodes) {
-            if (node.nodeType === 1) { // Element node
-              const tagName = node.tagName?.toLowerCase();
-              if (tagName === 'hui-badges' || tagName === 'ha-badges' || 
-                  node.classList?.contains('badges') || node.classList?.contains('header-badges') ||
-                  node.querySelector?.('hui-badges, ha-badges, .badges, .header-badges')) {
-                badgeRelated = true;
-                break;
-              }
-            }
-          }
-        }
-        // Check if badge element was removed
-        if (mutation.removedNodes.length > 0) {
-          for (const node of mutation.removedNodes) {
-            if (node === this._badgesEl || 
-                (node.nodeType === 1 && (
-                  node.tagName?.toLowerCase() === 'hui-badges' || 
-                  node.tagName?.toLowerCase() === 'ha-badges' ||
-                  node.classList?.contains('badges') ||
-                  node.classList?.contains('header-badges')))) {
-              badgeRelated = true;
-              this._badgesEl = null;
-              if (this._badgeStyleObserver) {
-                this._badgeStyleObserver.disconnect();
-                this._badgeStyleObserver = null;
-              }
-              break;
-            }
-          }
-        }
-      }
-      
-      if (badgeRelated) {
-        // Badge element was added or removed, reapply positioning with delays
-        [50, 150, 400, 800].forEach(delay => {
-          setTimeout(() => {
-            this._measure(true);
-            this._debouncedBadgesZIndex();
-          }, delay);
-        });
-      }
-    });
-
-    // Watch entire document for badge changes (broad but catches everything)
-    this._badgeDomWatcher.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
-
     // URL change handler
     this._urlChangeHandler = () => {
       this._detectKioskMode();
       this._detectEditMode();
-      // Clear badge element cache and style observer on navigation
-      this._badgesEl = null;
-      if (this._badgeStyleObserver) {
-        this._badgeStyleObserver.disconnect();
-        this._badgeStyleObserver = null;
-      }
-      
-      // Force remeasure and reapply badge positioning after DOM settles
-      // Use longer delays for better reliability
-      [50, 200, 400, 800, 1500].forEach(delay => {
-        setTimeout(() => {
-          this._measure(true);
-          this._debouncedBadgesZIndex();
-        }, delay);
-      });
     };
     window.addEventListener("popstate", this._urlChangeHandler);
     window.addEventListener("hashchange", this._urlChangeHandler);
-
-    // Periodic badge check (every 3 seconds) as fallback
-    this._badgeCheckInterval = setInterval(() => {
-      if (this._config?.badges_fixed && this._config?.fixed && !this._inPreview) {
-        // Check if badge element still exists and has correct positioning
-        const currentEl = this._findHaBadgesElement();
-        if (currentEl && currentEl.isConnected) {
-          // Check if position is wrong
-          const computedStyle = window.getComputedStyle(currentEl);
-          if (computedStyle.position !== 'fixed') {
-            // Position was changed, force reapply
-            this._badgesEl = null;
-            this._measure(true);
-            this._debouncedBadgesZIndex();
-          } else if (currentEl !== this._badgesEl) {
-            // Element changed but position is fixed - update our reference
-            this._badgesEl = currentEl;
-            this._measure(true);
-            this._debouncedBadgesZIndex();
-          } else if (!this._badgeStyleObserver) {
-            // Observer is missing, set it up again
-            this._setupBadgeStyleWatcher(currentEl);
-          }
-        } else {
-          // Badge element disappeared or changed, search again
-          this._badgesEl = null;
-          this._debouncedBadgesZIndex();
-        }
-      }
-    }, 3000);
 
     // Visibility & focus handlers
     this._visibilityHandler = () => {
@@ -1110,16 +998,6 @@ class HkiHeaderCard extends LitElement {
         this._cachedHeader = null;
         this._detectKioskMode();
         setTimeout(() => this._detectKioskMode(), 200);
-        // Also refresh badge positioning when view becomes visible
-        this._badgesEl = null;
-        setTimeout(() => {
-          this._measure(true);
-          this._debouncedBadgesZIndex();
-        }, 300);
-        setTimeout(() => {
-          this._measure(true);
-          this._debouncedBadgesZIndex();
-        }, 600);
       }
     };
     document.addEventListener("visibilitychange", this._visibilityHandler);
@@ -1803,21 +1681,13 @@ class HkiHeaderCard extends LitElement {
 
     if (!effectiveFixed) { this._resetBadgesZIndex(); return; }
 
-    // Always search for badge element fresh (don't cache to avoid stale references)
     const el = this._findHaBadgesElement();
     if (!el) { this._resetBadgesZIndex(); return; }
 
-    // Validate element is properly connected to DOM
-    if (!el.isConnected) {
-      // Element exists but isn't properly connected yet, retry later
-      return;
+    if (el !== this._badgesEl) {
+      this._resetBadgesZIndex();
+      this._badgesEl = el;
     }
-
-    // If this is a different element than before, reset the old one first
-    if (this._badgesEl && this._badgesEl !== el && this._badgesEl.style) {
-      try { this._badgesEl.style.cssText = ""; } catch (_) {}
-    }
-    this._badgesEl = el;
 
     const kioskAdjustment = this._kioskMode ? 0 : 48;
     const badgesOffset = cfg.badges_fixed ? (cfg.badges_offset_pinned || 48) : (cfg.badges_offset_unpinned || 100);
@@ -1825,9 +1695,6 @@ class HkiHeaderCard extends LitElement {
 
     if (cfg.badges_fixed) {
       el.style.cssText = `position:fixed;top:${topPosition}px;left:${this._offsetLeft}px;width:${this._contentWidth}px;z-index:2;`;
-      
-      // Set up persistent watcher for this badge element
-      this._setupBadgeStyleWatcher(el);
     } else {
       const kioskGapAdjustment = this._kioskMode ? 48 : 0;
       const effectiveGap = (cfg.badges_gap || 0) + kioskGapAdjustment;
@@ -1835,44 +1702,7 @@ class HkiHeaderCard extends LitElement {
     }
   }
 
-  _setupBadgeStyleWatcher(el) {
-    // Disconnect existing observer
-    if (this._badgeStyleObserver) {
-      this._badgeStyleObserver.disconnect();
-      this._badgeStyleObserver = null;
-    }
-
-    if (!el || !this._config.badges_fixed) return;
-
-    // Watch for style/attribute changes on the badge element
-    this._badgeStyleObserver = new MutationObserver((mutations) => {
-      // Check if position was changed from fixed
-      const currentPosition = el.style.position || window.getComputedStyle(el).position;
-      if (currentPosition && currentPosition !== 'fixed') {
-        // Something changed our styles, reapply them immediately
-        this._measure(true);
-        this._debouncedBadgesZIndex();
-      }
-    });
-
-    try {
-      this._badgeStyleObserver.observe(el, {
-        attributes: true,
-        attributeFilter: ['style', 'class'],
-        attributeOldValue: true
-      });
-    } catch (e) {
-      // Failed to set up observer
-      console.warn('Badge style observer setup failed:', e);
-      this._badgeStyleObserver = null;
-    }
-  }
-
   _resetBadgesZIndex() {
-    if (this._badgeStyleObserver) {
-      this._badgeStyleObserver.disconnect();
-      this._badgeStyleObserver = null;
-    }
     if (this._badgesEl) {
       try { this._badgesEl.style.cssText = ""; } catch (_) {}
       this._badgesEl = null;
@@ -1991,17 +1821,6 @@ class HkiHeaderCard extends LitElement {
       case "toggle": {
         const toggleEntity = finalAction.entity;
         if (toggleEntity) this.hass.callService("homeassistant", "toggle", { entity_id: toggleEntity });
-        break;
-      }
-      case "fire-dom-event": {
-        // Support for fire-dom-event (browser_mod popup integration)
-        this.dispatchEvent(
-          new CustomEvent("ll-custom", {
-            bubbles: true,
-            composed: true,
-            detail: finalAction
-          })
-        );
         break;
       }
     }
@@ -3536,6 +3355,8 @@ class HkiHeaderCardEditor extends LitElement {
 
       if (subField === "action" && value === "perform-action") {
         next[rootField] = { ...next[rootField], perform_action: next[rootField].perform_action ?? "" };
+      } else if (subField === "action" && value === "fire-dom-event") {
+        next[rootField] = { ...next[rootField], browser_id: next[rootField].browser_id ?? "", command: next[rootField].command ?? "" };
       } else if (subField === "action" && value === "call-service") {
         // Legacy support for old call-service action
         next[rootField] = { ...next[rootField], service: next[rootField].service ?? "", service_data: next[rootField].service_data ?? "entity_id: \n" };
@@ -3793,6 +3614,7 @@ class HkiHeaderCardEditor extends LitElement {
         <mwc-list-item value="more-info">More Info</mwc-list-item>
         <mwc-list-item value="toggle">Toggle Entity</mwc-list-item>
         <mwc-list-item value="perform-action">Perform Action</mwc-list-item>
+        <mwc-list-item value="fire-dom-event">Fire DOM Event</mwc-list-item>
       </ha-select>
       ${actionType === "navigate" ? html`
         ${this._renderNavigationPathPicker("Navigation path", action.navigation_path || "", (v) => patchAction({ navigation_path: v }))}
@@ -3802,6 +3624,10 @@ class HkiHeaderCardEditor extends LitElement {
       ` : ''}
       ${actionType === "more-info" || actionType === "toggle" ? html`
         <ha-entity-picker .hass=${this.hass} .value=${action.entity || ""} @value-changed=${(e) => this._changed(e, field + ".entity")}></ha-entity-picker>
+      ` : ''}
+      ${actionType === "fire-dom-event" ? html`
+        <ha-textfield label="Browser ID" .value=${action.browser_id || ""} data-field="${field}.browser_id" @input=${this._changed}></ha-textfield>
+        <ha-textfield label="Command" .value=${action.command || ""} data-field="${field}.command" @input=${this._changed}></ha-textfield>
       ` : ''}
       ${actionType === "perform-action" ? html`
         ${customElements.get("ha-service-picker") ? html`
