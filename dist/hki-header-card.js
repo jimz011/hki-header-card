@@ -1485,6 +1485,14 @@ class HkiHeaderCard extends LitElement {
         if (action.data) cleaned.data = action.data;
         if (action.target) cleaned.target = action.target;
         break;
+      case "fire-dom-event":
+        // Preserve all properties for fire-dom-event (browser_mod integration)
+        Object.keys(action).forEach(key => {
+          if (key !== 'action') {
+            cleaned[key] = action[key];
+          }
+        });
+        break;
       case "call-service":
         // Legacy support
         if (action.service) cleaned.service = action.service;
@@ -2914,6 +2922,14 @@ class HkiHeaderCardEditor extends LitElement {
         if (action.data) cleaned.data = action.data;
         if (action.target) cleaned.target = action.target;
         break;
+      case "fire-dom-event":
+        // Preserve all properties for fire-dom-event (browser_mod integration)
+        Object.keys(action).forEach(key => {
+          if (key !== 'action') {
+            cleaned[key] = action[key];
+          }
+        });
+        break;
       case "call-service":
         // Legacy support
         if (action.service) cleaned.service = action.service;
@@ -3355,8 +3371,6 @@ class HkiHeaderCardEditor extends LitElement {
 
       if (subField === "action" && value === "perform-action") {
         next[rootField] = { ...next[rootField], perform_action: next[rootField].perform_action ?? "" };
-      } else if (subField === "action" && value === "fire-dom-event") {
-        next[rootField] = { ...next[rootField], browser_id: next[rootField].browser_id ?? "", command: next[rootField].command ?? "" };
       } else if (subField === "action" && value === "call-service") {
         // Legacy support for old call-service action
         next[rootField] = { ...next[rootField], service: next[rootField].service ?? "", service_data: next[rootField].service_data ?? "entity_id: \n" };
@@ -3614,7 +3628,6 @@ class HkiHeaderCardEditor extends LitElement {
         <mwc-list-item value="more-info">More Info</mwc-list-item>
         <mwc-list-item value="toggle">Toggle Entity</mwc-list-item>
         <mwc-list-item value="perform-action">Perform Action</mwc-list-item>
-        <mwc-list-item value="fire-dom-event">Fire DOM Event</mwc-list-item>
       </ha-select>
       ${actionType === "navigate" ? html`
         ${this._renderNavigationPathPicker("Navigation path", action.navigation_path || "", (v) => patchAction({ navigation_path: v }))}
@@ -3624,10 +3637,6 @@ class HkiHeaderCardEditor extends LitElement {
       ` : ''}
       ${actionType === "more-info" || actionType === "toggle" ? html`
         <ha-entity-picker .hass=${this.hass} .value=${action.entity || ""} @value-changed=${(e) => this._changed(e, field + ".entity")}></ha-entity-picker>
-      ` : ''}
-      ${actionType === "fire-dom-event" ? html`
-        <ha-textfield label="Browser ID" .value=${action.browser_id || ""} data-field="${field}.browser_id" @input=${this._changed}></ha-textfield>
-        <ha-textfield label="Command" .value=${action.command || ""} data-field="${field}.command" @input=${this._changed}></ha-textfield>
       ` : ''}
       ${actionType === "perform-action" ? html`
         ${customElements.get("ha-service-picker") ? html`
