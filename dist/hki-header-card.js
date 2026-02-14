@@ -1831,6 +1831,21 @@ class HkiHeaderCard extends LitElement {
         if (toggleEntity) this.hass.callService("homeassistant", "toggle", { entity_id: toggleEntity });
         break;
       }
+      case "fire-dom-event": {
+        // Fire a custom DOM event with all properties except 'action'
+        const eventDetail = {};
+        Object.keys(finalAction).forEach(key => {
+          if (key !== 'action') {
+            eventDetail[key] = finalAction[key];
+          }
+        });
+        this.dispatchEvent(new CustomEvent("ll-custom", { 
+          bubbles: true, 
+          composed: true, 
+          detail: eventDetail 
+        }));
+        break;
+      }
     }
   }
 
