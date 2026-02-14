@@ -791,7 +791,7 @@ class HkiHeaderCard extends LitElement {
         align-items: center;
         justify-content: center;
         flex-shrink: 0;
-        overflow: hidden;
+        overflow: visible;
         line-height: 0;
         box-sizing: border-box;
       }
@@ -816,7 +816,7 @@ class HkiHeaderCard extends LitElement {
         max-height: 100%;
         min-width: 0;
         min-height: 0;
-        overflow: hidden;
+        overflow: visible;
         display: block;
         line-height: 0;
       }
@@ -845,7 +845,7 @@ class HkiHeaderCard extends LitElement {
         border-width: var(--hki-info-pill-border-width, 0);
         border-color: var(--hki-info-pill-border-color, rgba(255,255,255,0.1));
         box-sizing: border-box;
-        overflow: hidden;
+        overflow: visible;
       }
 
       hki-notification-card {
